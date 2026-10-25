@@ -198,6 +198,10 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Explicit default (7 days): topic data is the operational buffer, NOT
+      # the archive. The archive is the outbox itself - a lost warehouse
+      # replays from order_events (see apps/worker/README.md).
+      KAFKA_LOG_RETENTION_HOURS: "168"
       # Topic data must survive container recreation: the relay's offset
       # (relay_state in Postgres) persists, so an ephemeral broker would
       # leave the bus silently empty while the database says "published".
