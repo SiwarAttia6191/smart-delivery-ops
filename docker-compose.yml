@@ -13,6 +13,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    restart: unless-stopped
 
   postgres:
     image: postgres:16-alpine
@@ -31,6 +32,7 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+    restart: unless-stopped
 
   worker:
     # Same image as the API — only the entrypoint differs. Relays the
@@ -122,6 +124,9 @@ services:
     volumes: &airflow-volumes
       - ./dags:/opt/airflow/dags
       - ./data/transform:/opt/transform
+      # LocalExecutor writes task logs into the SCHEDULER's filesystem; the
+      # webserver needs the same volume or every "View log" in the UI fails.
+      - airflow-logs:/opt/airflow/logs
     depends_on:
       postgres:
         condition: service_healthy
@@ -212,3 +217,4 @@ services:
 volumes:
   pgdata:
   kafkadata:
+  airflow-logs:

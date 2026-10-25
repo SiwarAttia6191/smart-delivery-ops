@@ -6,7 +6,7 @@ run — no incremental state), which is exactly what makes Airflow's
 catchup/backfill machinery safe to lean on.
 """
 
-from datetime import datetime, timedelta
+import pendulum
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
@@ -25,8 +25,10 @@ default_args = {
 with DAG(
     dag_id="warehouse_daily_build",
     description="dbt build of the warehouse marts + source freshness check",
-    start_date=datetime(2026, 10, 24),
-    schedule="0 3 * * *",  # 03:00 daily, after the previous evening's orders
+    # Timezone-aware on purpose: 03:00 means 03:00 in this zone, not the
+    # container's interpretation of a naive datetime.
+    start_date=pendulum.datetime(2026, 10, 24, tz="UTC"),
+    schedule="0 3 * * *",  # 03:00 UTC daily, after the previous evening's orders
     catchup=False,
     default_args=default_args,
     tags=["warehouse", "dbt", "phase2"],
