@@ -27,8 +27,14 @@ class PriceBreakdown:
 
 
 def surge_multiplier(demand_ratio: float, settings: Settings | None = None) -> float:
-    """Demand ratio (current load / expected load) to surge multiplier."""
+    """Demand ratio (current load / expected load) to surge multiplier.
+
+    Three tiers benchmarked against modern platforms (surge caps 1.2×–2.5×);
+    tier 3 acts as the hard cap so extreme demand can never exceed 2×.
+    """
     s = settings or get_settings()
+    if demand_ratio >= s.pricing_surge_tier3_ratio:
+        return s.pricing_surge_tier3_multiplier
     if demand_ratio >= s.pricing_surge_tier2_ratio:
         return s.pricing_surge_tier2_multiplier
     if demand_ratio >= s.pricing_surge_tier1_ratio:
