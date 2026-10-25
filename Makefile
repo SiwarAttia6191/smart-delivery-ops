@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow clean
 
 API_PORT ?= 8010
 
@@ -41,6 +41,12 @@ smoke:           ## end-to-end smoke test against a running API (make api first)
 dbt:             ## build + test the warehouse marts, then check source freshness
 	docker compose run --rm dbt build
 	docker compose run --rm dbt source freshness
+
+airflow-trigger: ## trigger the warehouse DAG immediately (UI: http://localhost:8081)
+	docker compose exec airflow-scheduler airflow dags trigger warehouse_daily_build
+
+airflow-state:   ## show recent runs and task states of the warehouse DAG
+	docker compose exec airflow-scheduler airflow dags list-runs -d warehouse_daily_build
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__

@@ -89,6 +89,73 @@ services:
       DBT_PORT: "5432"
     command: ["build", "--profiles-dir", "/usr/app"]
 
+  airflow-init:
+    # One-shot: creates the airflow metadata database on the shared Postgres
+    # instance (existing volumes predate it), migrates the schema, seeds an
+    # admin user for the UI. Dev credentials only — real deployments use
+    # secrets management (documented in the roadmap).
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.airflow
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - |
+        set -e
+        psql -h postgres -U smartops -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'airflow'" | grep -q 1 || \
+          psql -h postgres -U smartops -d postgres -c "CREATE DATABASE airflow"
+        airflow db migrate
+        airflow users create --username admin --password admin --firstname Data --lastname Engineering --role Admin --email admin@localhost || true
+    environment: &airflow-env
+      AIRFLOW__CORE__EXECUTOR: LocalExecutor
+      # Airflow 2.10 pins SQLAlchemy 1.4 — psycopg2 dialect, not psycopg 3.
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://smartops:smartops@postgres:5432/airflow
+      PGPASSWORD: smartops  # for the init service's psql bootstrap
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__FERNET_KEY: ""
+      AIRFLOW__WEBSERVER__SECRET_KEY: "dev-only-change-me"
+      AIRFLOW__SCHEDULER__DAG_DIR_LIST_INTERVAL: 10
+      # Consumed by the DAG's dbt tasks (profiles.yml reads these env vars);
+      # inside the compose network Postgres is postgres:5432.
+      DBT_HOST: postgres
+      DBT_PORT: "5432"
+    volumes: &airflow-volumes
+      - ./dags:/opt/airflow/dags
+      - ./data/transform:/opt/transform
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  airflow-webserver:
+    # Airflow UI on host 8081 (8080 is a common conflict): trigger runs, watch
+    # task logs, inspect the dbt task graph.
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.airflow
+    command: webserver
+    ports:
+      - "8081:8080"
+    environment: *airflow-env
+    volumes: *airflow-volumes
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  airflow-scheduler:
+    # Runs the warehouse_daily_build DAG on schedule (03:00 daily) and
+    # executes tasks locally via LocalExecutor.
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.airflow
+    command: scheduler
+    environment: *airflow-env
+    volumes: *airflow-volumes
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   kafka-init:
     # One-shot topic provisioning. Production disables auto-create (typos
     # would silently produce to dead topics, partition counts drift
