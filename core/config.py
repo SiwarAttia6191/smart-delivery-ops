@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     # ── Database ───────────────────────────────────────────────
     # Production stack: PostgreSQL (matches docker-compose.yml credentials).
     # Zero-dependency fallback for quick experiments: DATABASE_URL=sqlite:///./local.db
-    database_url: str = "postgresql+psycopg://smartops:smartops@localhost:5433/smart_delivery_ops"
+    database_url: str = "postgresql+psycopg://smartops:smartops@localhost:5434/smart_delivery_ops"
 
     # ── Pricing engine ─────────────────────────────────────────
     pricing_base_fee: float = 2.00

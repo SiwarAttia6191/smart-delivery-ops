@@ -7,6 +7,8 @@ services:
       - "8010:8000"  # host 8010 (8000 conflicts with common local tooling) → container 8000
     environment:
       ENVIRONMENT: docker
+      # Inside Docker's network the postgres service listens on its internal
+      # port 5432 — the host-side 5434 mapping does not apply here.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
     depends_on:
       postgres:
@@ -19,7 +21,7 @@ services:
       POSTGRES_PASSWORD: smartops
       POSTGRES_DB: smart_delivery_ops
     ports:
-      - "5433:5432"  # host 5433 (local PG18 service occupies 5432) → container 5432
+      - "5434:5432"  # host 5434 (local PG18 service occupies 5432) → container 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
