@@ -50,9 +50,11 @@ class FakePublisher:
             raise RuntimeError("produce queue full")
         if self.fail_produce_event_ids:
             for hdr_key, hdr_val in headers or []:
-                if hdr_key == "event_id" and int(
-                    hdr_val.decode() if isinstance(hdr_val, bytes) else str(hdr_val)
-                ) in self.fail_produce_event_ids:
+                if (
+                    hdr_key == "event_id"
+                    and int(hdr_val.decode() if isinstance(hdr_val, bytes) else str(hdr_val))
+                    in self.fail_produce_event_ids
+                ):
                     raise RuntimeError("payload rejected at serialization")
         self.sent.append((topic, key, value, headers))
 

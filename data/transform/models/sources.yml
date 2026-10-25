@@ -8,13 +8,16 @@ sources:
       touches — never the operational database the API serves.
     schema: raw
     # Staleness alarm: ingested_at is the load timestamp written by the
-    # consumer. If the newest row is older than these bounds, the pipeline
-    # itself is broken (broker down, consumer stopped, relay stuck) — surface
-    # that as a pipeline incident, not a silently stale dashboard.
+    # consumer. Bounds are set for a LOW-TRAFFIC demo: a quiet day must not
+    # page anyone, so warn fires after 24h and error after 72h. The
+    # production answer is a periodic heartbeat event per partition (the
+    # kafka_partition/kafka_offset provenance columns on the raw layer are
+    # already in place for per-partition freshness) - deferred until real
+    # traffic exists to tune it against.
     # `dbt source freshness` (part of `make dbt`) checks max(ingested_at).
     freshness:
-      warn_after: {count: 12, period: hour}
-      error_after: {count: 24, period: hour}
+      warn_after: {count: 24, period: hour}
+      error_after: {count: 72, period: hour}
     loaded_at_field: ingested_at
     tables:
       - name: order_events
