@@ -30,11 +30,12 @@ analytics in one system.
 
 ## 🧱 Tech stack
 
-- **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0
-- **Database** — SQLite (zero-config local) / PostgreSQL (Docker)
-- **Testing** — pytest (unit + integration via TestClient)
-- **Quality** — Ruff (lint + format) · GitHub Actions CI · Dependabot
-- **Roadmap** — Redis, Kafka/RabbitMQ event pipeline, Prophet/XGBoost forecasting, Streamlit dashboard, OpenTelemetry + Prometheus/Grafana (see [docs/roadmap.md](docs/roadmap.md))
+- **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
+- **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
+- **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
+- **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
+- **Observability** — Prometheus metrics at `/analytics/metrics`
+- **Roadmap** — Kafka event pipeline, dbt warehouse + Airflow, Prophet/XGBoost forecasting, Streamlit dashboard, OpenTelemetry + Grafana (see [docs/roadmap.md](docs/roadmap.md))
 
 ## 🚀 Quickstart
 
