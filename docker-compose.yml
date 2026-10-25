@@ -74,6 +74,21 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  dbt:
+    # Transformation layer: staging + marts over the warehouse raw layer.
+    # On-demand only (not part of `up -d`): docker compose run --rm dbt build
+    # Official dbt image — local Python is 3.14, dbt needs <= 3.12.
+    image: ghcr.io/dbt-labs/dbt-postgres:1.9.latest
+    profiles: ["tools"]
+    volumes:
+      - ./data/transform:/usr/app
+    working_dir: /usr/app
+    environment:
+      DBT_PROFILES_DIR: /usr/app
+      DBT_HOST: postgres
+      DBT_PORT: "5432"
+    command: ["build", "--profiles-dir", "/usr/app"]
+
   kafka-init:
     # One-shot topic provisioning. Production disables auto-create (typos
     # would silently produce to dead topics, partition counts drift

@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: mart_daily_order_summary
+    description: Daily funnel — orders created vs delivered, revenue, speed.
+    columns:
+      - name: order_date
+        tests: [unique, not_null]
+      - name: orders_created
+        tests: [not_null]
+
+  - name: mart_demand_by_zone_hour
+    description: Demand heatmap input — orders per ~1 km dropoff zone per hour.
+    columns:
+      - name: dropoff_zone_lat
+        tests: [not_null]
+      - name: dropoff_zone_lon
+        tests: [not_null]
+      - name: order_hour
+        tests: [not_null]
+
+  - name: mart_driver_utilization
+    description: Per-courier workload and match efficiency.
+    columns:
+      - name: driver_id
+        tests: [unique, not_null]
+
+  - name: mart_pricing_history
+    description: Every quote the pricing engine issued, from the event stream.
+    columns:
+      - name: order_id
+        tests: [unique, not_null]

@@ -1,0 +1,13 @@
+version: 2
+
+models:
+  - name: stg_order_events
+    description: Typed, flattened view over the raw event log. The only JSON
+      unwrapping in the project happens here.
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: order_id
+        tests: [not_null]
+      - name: event_type
+        tests: [not_null]
