@@ -33,7 +33,7 @@ analytics in one system.
 
 - **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
-- **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (staging + marts, official Docker image)
+- **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (medallion: raw → staging → marts, official Docker image) · **Airflow** (LocalExecutor, scheduled dbt builds + freshness)
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`
@@ -210,11 +210,13 @@ Design notes:
 - Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
   containers on `kafka:19092`.
 
-### 🏭 Warehouse transformations (dbt)
+### 🏭 Warehouse transformations (dbt) — medallion architecture
 
-`data/transform/` is a dbt project over the raw layer — the only JSON
-unwrapping happens once in `staging`, and four marts answer the business
-questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
+The warehouse is layered exactly like the medallion pattern: **bronze** =
+`raw.order_events` (append-only landings), **silver** = `staging.stg_order_events`
+(cleaned, typed, one JSON-flattening point), **gold** = `analytics.*` marts
+(business answers). `data/transform/` is a dbt project over the raw layer,
+and four marts answer the business questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
 official dbt-postgres image since dbt needs Python ≤ 3.12):
 
 | Mart (schema `analytics`) | Answers |
@@ -258,6 +260,21 @@ Done. PASS=42  WARN=0  ERROR=3  SKIP=0  TOTAL=45
 # 3 · a stalled pipeline (no fresh rows in 25h)
 ERROR STALE freshness of raw.order_events
 ```
+
+### ⏰ Orchestration (Airflow)
+
+The whole warehouse routine is scheduled: **Airflow 2.10 (LocalExecutor)**
+runs the `warehouse_daily_build` DAG daily at 03:00 — `dbt build` (all 45
+checks) followed by `dbt source freshness`, with retries and exponential
+backoff. UI at `localhost:8081` (admin/admin in dev); CLI shortcuts:
+`make airflow-trigger`, `make airflow-state`.
+
+- dbt lives in an **isolated venv** inside the Airflow image — dbt-core and
+  apache-airflow have conflicting transitive pins; the venv sidesteps them.
+- Tasks are **idempotent by construction** (marts fully rebuilt per run), so
+  Airflow's re-run/backfill machinery is safe to lean on.
+- The Airflow metadata database lives on the same Postgres instance and is
+  self-provisioned on first boot, like everything else in this stack.
 
 ## 🗂️ Project structure
 
