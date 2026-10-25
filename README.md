@@ -10,7 +10,6 @@ analytics in one system.
 [![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white)](https://www.sqlalchemy.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8A2BE2.svg)](LICENSE)
 [![CI](https://github.com/SiwarAttia6191/smart-delivery-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/SiwarAttia6191/smart-delivery-ops/actions/workflows/ci.yml)
-[![Built with AI 🤖](https://img.shields.io/badge/Built_with-AI_🤖-ff69b4)](https://github.com/features/copilot)
 
 > From order to doorstep, optimized by AI — a portfolio project that connects
 > backend engineering, data engineering, and machine learning in one realistic
