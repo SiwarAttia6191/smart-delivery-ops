@@ -1,0 +1,13 @@
+FROM apache/airflow:2.10.5-python3.12
+
+# dbt lives in its own virtualenv: dbt-core and apache-airflow have history
+# of conflicting transitive pins, and an isolated venv sidesteps the problem
+# entirely while keeping `dbt` on PATH for the DAG's BashOperators.
+# (Image runs as the `airflow` user — /opt is not writable, home dir is.)
+RUN python -m venv /home/airflow/dbt-venv \
+    && /home/airflow/dbt-venv/bin/pip install --no-cache-dir "dbt-postgres==1.9.*"
+ENV PATH="/home/airflow/dbt-venv/bin:${PATH}"
+
+# psycopg is needed for the LocalExecutor metadata connection (airflow image
+# ships psycopg2; our stack standardizes on psycopg 3 elsewhere).
+RUN pip install --no-cache-dir "psycopg[binary]>=3.3.6"
