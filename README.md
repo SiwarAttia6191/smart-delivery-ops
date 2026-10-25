@@ -22,7 +22,7 @@ analytics in one system.
 | Domain | What it does |
 |---|---|
 | 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
-| 📡 **Event streaming** | Transactional-outbox relay publishes every order event to Kafka (`orders.events`, keyed by order id) — at-least-once, restart-safe, drains history on first boot |
+| 📡 **Event streaming** | Transactional-outbox relay → Kafka (`orders.events`, keyed by order id) → warehouse raw layer with primary-key dedupe — at-least-once end to end, offsets commit only after the DB commit |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
 | ⏱️ **ETA estimation** | Prep + travel + buffer heuristic (Phase 1), upgrade path to an ML regression model |
@@ -33,7 +33,7 @@ analytics in one system.
 
 - **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
-- **Streaming** — Apache Kafka (KRaft, Docker) · confluent-kafka producer
+- **Streaming** — Apache Kafka (KRaft, Docker) · confluent-kafka producer · warehouse ingestion consumer
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`
@@ -160,8 +160,9 @@ database transaction (source of truth), and a relay worker copies the log onto
 the topic without ever touching the API's hot path:
 
 ```
-POST /orders ──► PostgreSQL (orders + order_events)  ──►  Kafka topic orders.events
-                     (transactional outbox)     worker         (keyed by order id)
+POST /orders ──► PostgreSQL (orders + order_events) ──► Kafka orders.events ──► warehouse raw layer
+                     (transactional outbox)    worker    (keyed by order id)  ingest consumer
+                                                                                    (dedupe by event_id)
 ```
 
 Start the broker and the relay (the API comes up as before):
@@ -197,6 +198,12 @@ Design notes:
   `UPDATE order_events SET published_at = NULL` away.
 - **Wire format:** versioned JSON (`schema_version: 1`) with `event_type` as a
   Kafka header.
+- **Warehouse ingestion:** an `ingest` consumer (group `warehouse-ingest`)
+  lands every event into `raw.order_events` in a **separate warehouse
+  database** — analytics never reads or writes the operational tables. Kafka
+  offsets commit only after the database commit, and the raw table's
+  `event_id` primary key turns replays into no-ops: at-least-once end to end,
+  zero duplicates. dbt builds its marts on this raw layer (next).
 - Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
   containers on `kafka:19092`.
 
