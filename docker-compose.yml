@@ -32,6 +32,24 @@ services:
       timeout: 3s
       retries: 10
 
+  worker:
+    # Same image as the API — only the entrypoint differs. Relays the
+    # order_events outbox onto the Kafka bus (see apps/worker/relay.py).
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    command: python -m apps.worker.relay
+    environment:
+      ENVIRONMENT: docker
+      DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
   kafka:
     # Official Apache Kafka image, KRaft mode (no ZooKeeper) — a single node
     # acting as both broker and controller, which is all a dev/demo stack needs.
