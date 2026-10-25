@@ -4,7 +4,7 @@ uvicorn[standard]>=0.32
 sqlalchemy>=2.0.43
 pydantic>=2.12
 pydantic-settings>=2.7
-psycopg[binary]>=3.2
+psycopg[binary]>=3.3.6
 
 # HTTP client (smoke tests / demo scripts)
 httpx>=0.28
