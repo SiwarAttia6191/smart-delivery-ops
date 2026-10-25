@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # containers override it with kafka:19092.
     kafka_bootstrap_servers: str = "localhost:9094"
     kafka_orders_topic: str = "orders.events"
+    # Outbox relay tuning: batch drain, idle poll, and the cap the loop
+    # backs off to when the broker or database is unreachable.
+    relay_batch_size: int = 100
+    relay_poll_seconds: float = 2.0
+    relay_backoff_seconds: float = 60.0
 
 
 @lru_cache
