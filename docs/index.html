@@ -3,10 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<!-- ════════════════════════════════════════════════════════════════
-     EDIT ME — page title / brand
-     ════════════════════════════════════════════════════════════════ -->
 <title>Smart Delivery Ops — AI-Powered Delivery Operations Platform</title>
+<meta name="description" content="Open-source, production-inspired delivery operations platform: order lifecycle, geographic dispatch, dynamic pricing, forecasting and analytics." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cff'/%3E%3Cstop offset='1' stop-color='%2338e1ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='url(%23g)'/%3E%3C/svg%3E" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -14,21 +12,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
 
 <style>
-/* ══════════════════════════════════════════════════════════════════
-   THEME — change the three accents here; the 3D scene reads them too
-   ══════════════════════════════════════════════════════════════════ */
 :root {
   --bg: #05060e;
   --text: #eef0ff;
   --muted: rgba(230, 233, 255, 0.62);
-  --accent-a: #7c6cff;   /* indigo  — primary   */
-  --accent-b: #38e1ff;   /* cyan    — secondary */
-  --accent-c: #b06cff;   /* violet  — tertiary  */
+  --accent-a: #7c6cff;
+  --accent-b: #38e1ff;
+  --accent-c: #b06cff;
+  --line: rgba(255, 255, 255, 0.09);
+  --card: rgba(255, 255, 255, 0.035);
   --nav-h: 76px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
-
 html { scroll-behavior: smooth; }
 
 body {
@@ -58,13 +54,11 @@ body {
 @keyframes drift-a { to { transform: translate(-6rem, 4rem) scale(1.12); } }
 @keyframes drift-b { to { transform: translate(7rem, -5rem) scale(0.92); } }
 
-/* film-grain overlay */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0.05;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
-/* CSS-only fallback blob, shown when three.js or WebGL is unavailable */
 .fallback-blob {
   display: none; position: absolute; z-index: 1; right: 6vw; top: 50%;
   width: min(46vw, 560px); aspect-ratio: 1; border-radius: 50%;
@@ -122,7 +116,7 @@ body.no3d .fallback-blob { display: block; }
   box-shadow: 0 10px 34px -10px rgba(124, 108, 255, 0.55);
 }
 .btn-primary:hover { box-shadow: 0 16px 46px -10px rgba(56, 225, 255, 0.6); }
-.btn-primary::after {          /* shine sweep */
+.btn-primary::after {
   content: ""; position: absolute; inset: 0;
   background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
   transform: translateX(-120%); transition: transform 0.7s ease;
@@ -142,8 +136,10 @@ body.no3d .fallback-blob { display: block; }
   content: ""; width: 0; height: 0; margin-left: 2px;
   border-left: 6px solid var(--text); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
 }
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.btn-sm { padding: 0.55rem 1.15rem; font-size: 0.85rem; }
 
-/* ── hero layout ─────────────────────────────────────────────────── */
+/* ── hero ────────────────────────────────────────────────────────── */
 .hero {
   position: relative; z-index: 1;
   min-height: 100vh; min-height: 100svh;
@@ -160,7 +156,6 @@ body.no3d .fallback-blob { display: block; }
 }
 .copy { position: relative; max-width: 640px; }
 
-/* readability scrim — keeps text legible over the 3D glow at any size */
 .copy::before {
   content: ""; position: absolute; inset: -20% -12%; z-index: -1;
   background: radial-gradient(closest-side, rgba(5, 6, 14, 0.74), rgba(5, 6, 14, 0.38) 55%, transparent 78%);
@@ -213,16 +208,13 @@ h1 {
 .stat .l { color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem; }
 .stat + .stat { border-left: 1px solid rgba(255, 255, 255, 0.1); padding-left: clamp(1.4rem, 4vw, 3.2rem); }
 
-/* scroll cue */
 .scroll-cue {
   position: absolute; left: 50%; bottom: 1.9rem; transform: translateX(-50%); z-index: 2;
   display: flex; flex-direction: column; align-items: center; gap: 0.7rem;
   color: var(--muted); font-size: 0.66rem; letter-spacing: 0.32em; text-transform: uppercase;
+  text-decoration: none;
 }
-.scroll-cue .line {
-  width: 1px; height: 46px; overflow: hidden;
-  background: rgba(255, 255, 255, 0.12);
-}
+.scroll-cue .line { width: 1px; height: 46px; overflow: hidden; background: rgba(255, 255, 255, 0.12); }
 .scroll-cue .line::after {
   content: ""; display: block; width: 100%; height: 46px;
   background: linear-gradient(180deg, transparent, var(--accent-b));
@@ -230,7 +222,6 @@ h1 {
 }
 @keyframes cue { 0% { transform: translateY(-100%); } 55%, 100% { transform: translateY(100%); } }
 
-/* entrance choreography */
 .reveal { opacity: 0; animation: fade-up 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; }
 .reveal:nth-child(1) { animation-delay: 0.08s; }
 .reveal:nth-child(2) { animation-delay: 0.18s; }
@@ -242,12 +233,196 @@ h1 {
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* ── sections (shared) ───────────────────────────────────────────── */
+.section {
+  position: relative; z-index: 2;
+  max-width: 1160px; margin: 0 auto;
+  padding: 6.5rem clamp(1.25rem, 4vw, 2.5rem) 0.5rem;
+  scroll-margin-top: calc(var(--nav-h) + 12px);
+}
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  font-size: 0.72rem; font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase;
+  color: var(--accent-b); margin-bottom: 1rem;
+}
+.eyebrow::before { content: ""; width: 22px; height: 1px; background: var(--accent-b); }
+.section h2 {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(1.7rem, 3.4vw, 2.5rem); letter-spacing: -0.02em;
+  margin-bottom: 0.8rem;
+}
+.section .lead { color: var(--muted); max-width: 640px; line-height: 1.7; margin-bottom: 2.8rem; }
+
+.swoosh { opacity: 0; transform: translateY(28px); transition: opacity 0.7s ease, transform 0.7s ease; }
+.swoosh.in { opacity: 1; transform: none; }
+
+/* ── features ────────────────────────────────────────────────────── */
+.cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+.card {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  padding: 1.6rem 1.5rem; transition: transform 0.35s ease, border-color 0.35s ease, background 0.35s ease;
+}
+.card:hover { transform: translateY(-4px); border-color: rgba(124, 108, 255, 0.4); background: rgba(255, 255, 255, 0.055); }
+.card .ico {
+  width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+  background: linear-gradient(135deg, rgba(124, 108, 255, 0.18), rgba(56, 225, 255, 0.14));
+  border: 1px solid rgba(124, 108, 255, 0.3);
+  font-size: 1.15rem; margin-bottom: 1rem;
+}
+.card h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.05rem; margin-bottom: 0.5rem; }
+.card p { color: var(--muted); font-size: 0.9rem; line-height: 1.62; }
+
+/* ── demo ────────────────────────────────────────────────────────── */
+.demo-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 1.2rem; align-items: start; }
+.panel {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  padding: 1.6rem;
+}
+.panel h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.05rem; margin-bottom: 1.2rem; }
+.field { margin-bottom: 1.3rem; }
+.field label { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.55rem; }
+.field label b { color: var(--text); font-weight: 600; }
+input[type="range"] {
+  width: 100%; appearance: none; height: 4px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b)); outline: none;
+}
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--text); border: 3px solid var(--accent-a); cursor: pointer;
+}
+input[type="range"]:disabled { opacity: 0.4; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.4rem; }
+.seg button {
+  padding: 0.5rem 0.3rem; border-radius: 10px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.03); color: var(--muted);
+  border: 1px solid var(--line); font: inherit; font-size: 0.8rem; font-weight: 500;
+  transition: all 0.25s ease;
+}
+.seg button.on { background: rgba(124, 108, 255, 0.18); border-color: rgba(124, 108, 255, 0.55); color: var(--text); }
+.seg button:disabled { opacity: 0.4; cursor: not-allowed; }
+.breakdown { border-top: 1px dashed var(--line); margin-top: 0.4rem; }
+.breakdown .row {
+  display: flex; justify-content: space-between; padding: 0.5rem 0;
+  font-size: 0.88rem; color: var(--muted);
+  border-bottom: 1px dashed var(--line);
+}
+.breakdown .row i { font-style: normal; opacity: 0.6; font-size: 0.78rem; }
+.breakdown .row.total { color: var(--text); font-weight: 700; font-size: 1.05rem; border-bottom: none; }
+.breakdown .row.total b { font-family: "Space Grotesk", sans-serif; color: var(--accent-b); }
+.flow-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1.3rem; }
+.order-state {
+  display: inline-flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem;
+  padding: 0.4rem 0.95rem; border-radius: 999px; font-size: 0.82rem; font-weight: 600;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); color: var(--muted);
+}
+.order-state.pulse { animation: state-pulse 0.5s ease; }
+@keyframes state-pulse { 0% { transform: scale(0.92); } 100% { transform: scale(1); } }
+.eventlog {
+  list-style: none; max-height: 320px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.55rem;
+}
+.eventlog li {
+  display: flex; gap: 0.7rem; align-items: baseline;
+  font-size: 0.82rem; color: var(--muted); line-height: 1.5;
+  animation: fade-up 0.4s ease;
+}
+.eventlog .t { font-family: ui-monospace, monospace; font-size: 0.72rem; opacity: 0.7; white-space: nowrap; }
+.eventlog .tag {
+  font-family: ui-monospace, monospace; font-size: 0.7rem; padding: 0.1rem 0.45rem;
+  border-radius: 6px; white-space: nowrap;
+  background: rgba(124, 108, 255, 0.15); color: var(--accent-a); border: 1px solid rgba(124, 108, 255, 0.3);
+}
+.eventlog li.sys .tag { background: rgba(56, 225, 255, 0.12); color: var(--accent-b); border-color: rgba(56, 225, 255, 0.3); }
+.eventlog li.ok .tag { background: rgba(74, 222, 128, 0.12); color: #4ade80; border-color: rgba(74, 222, 128, 0.3); }
+.demo-note { font-size: 0.78rem; color: var(--muted); margin-top: 1rem; line-height: 1.55; }
+.demo-note a { color: var(--accent-b); }
+
+/* ── architecture ────────────────────────────────────────────────── */
+.arch-wrap {
+  background: rgba(255, 255, 255, 0.02); border: 1px solid var(--line); border-radius: 18px;
+  padding: 1.8rem 1.4rem; overflow-x: auto;
+}
+.arch-wrap .mermaid { display: flex; justify-content: center; min-width: 620px; }
+.phases { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.8rem; margin-top: 1.6rem; }
+.phase {
+  border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.1rem;
+  background: var(--card);
+}
+.phase .n { font-family: "Space Grotesk", sans-serif; font-weight: 700; color: var(--accent-a); font-size: 0.8rem; }
+.phase h4 { font-size: 0.92rem; margin: 0.3rem 0 0.4rem; }
+.phase p { color: var(--muted); font-size: 0.78rem; line-height: 1.55; }
+.phase.done { border-color: rgba(74, 222, 128, 0.35); }
+.phase.done .n::after { content: " ✓"; color: #4ade80; }
+
+/* ── analytics ───────────────────────────────────────────────────── */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.9rem; margin-bottom: 1.4rem; }
+.kpi {
+  border: 1px solid var(--line); border-radius: 14px; padding: 1.1rem 1.2rem; background: var(--card);
+}
+.kpi .v { font-family: "Space Grotesk", sans-serif; font-size: 1.55rem; font-weight: 700; }
+.kpi .v span { color: var(--accent-b); font-size: 1rem; }
+.kpi .l { color: var(--muted); font-size: 0.78rem; margin-top: 0.25rem; }
+.chart-panel {
+  border: 1px solid var(--line); border-radius: 14px; padding: 1.4rem 1.4rem 1rem; background: var(--card);
+}
+.chart-panel h3 { font-size: 0.95rem; font-family: "Space Grotesk", sans-serif; margin-bottom: 1rem; }
+.bars { display: flex; align-items: flex-end; gap: clamp(4px, 1.2vw, 12px); height: 150px; }
+.bars .b {
+  flex: 1; border-radius: 5px 5px 2px 2px; min-height: 6px;
+  background: linear-gradient(180deg, var(--accent-b), var(--accent-a));
+  opacity: 0.85; transition: opacity 0.25s ease;
+  position: relative; cursor: default;
+}
+.bars .b:hover { opacity: 1; }
+.bars .b.peak { background: linear-gradient(180deg, #fbbf24, #f97316); }
+.bars .b .tip {
+  position: absolute; bottom: calc(100% + 6px); left: 50%; transform: translateX(-50%) scale(0.9);
+  background: #14162a; border: 1px solid var(--line); border-radius: 8px;
+  padding: 0.25rem 0.55rem; font-size: 0.68rem; white-space: nowrap; opacity: 0;
+  transition: all 0.2s ease; pointer-events: none; color: var(--text);
+}
+.bars .b:hover .tip { opacity: 1; transform: translateX(-50%) scale(1); }
+.axis { display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.7rem; color: var(--muted); }
+.chart-note { color: var(--muted); font-size: 0.78rem; margin-top: 0.9rem; }
+
+/* ── footer ──────────────────────────────────────────────────────── */
+footer {
+  position: relative; z-index: 2; margin-top: 6rem;
+  border-top: 1px solid var(--line);
+  background: rgba(5, 6, 14, 0.6);
+}
+.foot-inner {
+  max-width: 1160px; margin: 0 auto; padding: 3rem clamp(1.25rem, 4vw, 2.5rem) 2.5rem;
+  display: flex; flex-wrap: wrap; gap: 2.5rem 4rem; justify-content: space-between; align-items: flex-start;
+}
+.foot-brand { max-width: 300px; }
+.foot-brand .logo { margin-bottom: 0.9rem; }
+.foot-brand p { color: var(--muted); font-size: 0.85rem; line-height: 1.65; }
+.foot-col h5 { font-size: 0.75rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.9rem; }
+.foot-col a { display: block; color: var(--muted); text-decoration: none; font-size: 0.88rem; padding: 0.28rem 0; transition: color 0.25s ease; }
+.foot-col a:hover { color: var(--text); }
+.foot-base {
+  max-width: 1160px; margin: 0 auto; padding: 1.1rem clamp(1.25rem, 4vw, 2.5rem);
+  border-top: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 1rem; justify-content: space-between;
+  color: var(--muted); font-size: 0.78rem;
+}
+
+/* ── responsive ──────────────────────────────────────────────────── */
 @media (max-width: 920px) {
   .nav-links { display: none; }
   .hero-inner { text-align: center; }
   .copy { margin: 0 auto; }
   .sub { margin-left: auto; margin-right: auto; }
   .cta-row, .stats { justify-content: center; }
+  .cards { grid-template-columns: 1fr 1fr; }
+  .demo-grid { grid-template-columns: 1fr; }
+  .kpis { grid-template-columns: 1fr 1fr; }
+  .phases { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .cards { grid-template-columns: 1fr; }
+  .phases { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -255,7 +430,7 @@ h1 {
     animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .reveal { opacity: 1; }
+  .reveal, .swoosh { opacity: 1; transform: none; }
   html { scroll-behavior: auto; }
 }
 </style>
@@ -268,9 +443,6 @@ h1 {
 </div>
 <div class="fallback-blob" aria-hidden="true"></div>
 
-<!-- ════════════════════════════════════════════════════════════════
-     NAV — brand name + links
-     ════════════════════════════════════════════════════════════════ -->
 <header class="nav" id="nav">
   <div class="nav-inner">
     <a class="logo" href="https://github.com/SiwarAttia6191/smart-delivery-ops" aria-label="Smart Delivery Ops on GitHub">
@@ -287,20 +459,17 @@ h1 {
     </a>
     <nav aria-label="Primary">
       <ul class="nav-links">
-        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops">Platform</a></li>
-        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops#-features">Features</a></li>
-        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/architecture.md">Architecture</a></li>
-        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md">Docs</a></li>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#demo">Live demo</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#analytics">Analytics</a></li>
       </ul>
     </nav>
     <a class="btn btn-primary nav-cta" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
   </div>
 </header>
 
-<!-- ════════════════════════════════════════════════════════════════
-     HERO — headline, sub, CTAs, stats  ← edit copy here
-     ════════════════════════════════════════════════════════════════ -->
-<section class="hero" id="hero">
+<section class="hero" id="top">
   <canvas id="scene" aria-hidden="true"></canvas>
 
   <div class="hero-inner">
@@ -317,29 +486,232 @@ h1 {
 
       <div class="cta-row reveal">
         <a class="btn btn-primary" id="cta-primary" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
-        <a class="btn btn-ghost" href="https://github.com/SiwarAttia6191/smart-delivery-ops#-try-it-live--swagger-walkthrough"><span class="play" aria-hidden="true"></span>Watch the demo</a>
+        <a class="btn btn-ghost" href="#demo"><span class="play" aria-hidden="true"></span>Run the live demo</a>
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">5+</div><div class="l">core service domains</div></div>
-        <div class="stat"><div class="v">24/7</div><div class="l">event-driven pipeline</div></div>
+        <div class="stat"><div class="v">19</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">92%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
     </div>
   </div>
 
-  <div class="scroll-cue" aria-hidden="true">
-    <span>Scroll</span>
+  <a class="scroll-cue" href="#features" aria-label="Scroll to features">
+    <span>Explore</span>
     <span class="line"></span>
+  </a>
+</section>
+
+<!-- ── FEATURES ─────────────────────────────────────────────────── -->
+<section class="section" id="features">
+  <div class="swoosh">
+    <span class="eyebrow">Platform</span>
+    <h2>Everything a delivery operation runs on</h2>
+    <p class="lead">
+      One system of record for orders, drivers, pricing and analytics — every state
+      change event-logged, every rule unit-tested, every endpoint documented.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <div class="ico">📦</div>
+        <h3>Order management</h3>
+        <p>Create orders and track the full lifecycle — pending → assigned → in transit → delivered — with an immutable event history per order.</p>
+      </div>
+      <div class="card">
+        <div class="ico">📍</div>
+        <h3>Driver dispatch</h3>
+        <p>Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats. Drivers free up automatically on delivery.</p>
+      </div>
+      <div class="card">
+        <div class="ico">💸</div>
+        <h3>Dynamic pricing</h3>
+        <p>Distance-based fees with demand-surge tiers and a minimum-fee floor. Every quote returns a full, auditable breakdown.</p>
+      </div>
+      <div class="card">
+        <div class="ico">⏱️</div>
+        <h3>ETA estimation</h3>
+        <p>Prep + travel + buffer heuristics today, with a benchmarked ML model on the roadmap that has to beat the baseline to ship.</p>
+      </div>
+      <div class="card">
+        <div class="ico">📊</div>
+        <h3>Operational analytics</h3>
+        <p>KPI summaries — status mix, revenue, average delivery time, fleet availability — plus a Prometheus metrics endpoint for alerting.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🛡️</div>
+        <h3>Production discipline</h3>
+        <p>Fully typed (mypy), 92% coverage enforced in CI, dependency CVE audits, Docker packaging, and a protected main branch with required checks.</p>
+      </div>
+    </div>
   </div>
 </section>
+
+<!-- ── DEMO ─────────────────────────────────────────────────────── -->
+<section class="section" id="demo">
+  <div class="swoosh">
+    <span class="eyebrow">Live demo</span>
+    <h2>Run a delivery, right here</h2>
+    <p class="lead">
+      This simulator executes the platform's real business rules — the same pricing
+      formula, surge tiers and lifecycle state machine that power the API — right in
+      your browser. No signup, no waiting.
+    </p>
+    <div class="demo-grid">
+      <div class="panel">
+        <h3>1 · Configure the order</h3>
+        <div class="field">
+          <label><span>Delivery distance</span><b><span id="km-val">6.0</span> km</b></label>
+          <input type="range" id="km" min="0.5" max="20" step="0.5" value="6" />
+        </div>
+        <div class="field">
+          <label><span>Zone demand</span><b><span id="demand-val">1.0×</span> normal</b></label>
+          <div class="seg" id="demand">
+            <button type="button" data-r="0.8">Calm</button>
+            <button type="button" data-r="1.0" class="on">Normal</button>
+            <button type="button" data-r="1.3">Busy</button>
+            <button type="button" data-r="1.6">Rush</button>
+          </div>
+        </div>
+        <div class="breakdown">
+          <div class="row"><span>Base fee</span><span>$2.00</span></div>
+          <div class="row"><span>Distance fee <i>(0.90 × km)</i></span><span id="q-dist">$5.40</span></div>
+          <div class="row"><span>Surge multiplier</span><span id="q-surge">×1.00</span></div>
+          <div class="row"><span>Estimated delivery</span><span id="q-eta">32 min</span></div>
+          <div class="row total"><span>Total fee <i>(min $3.00)</i></span><b id="q-total">$7.40</b></div>
+        </div>
+        <div class="flow-actions">
+          <button class="btn btn-primary btn-sm" id="btn-create" type="button">Create order</button>
+          <button class="btn btn-ghost btn-sm" id="btn-assign" type="button" disabled>Assign nearest driver</button>
+          <button class="btn btn-ghost btn-sm" id="btn-transit" type="button" disabled>Start delivery</button>
+          <button class="btn btn-ghost btn-sm" id="btn-deliver" type="button" disabled>Mark delivered</button>
+          <button class="btn btn-ghost btn-sm" id="btn-reset" type="button" disabled>Reset</button>
+        </div>
+        <p class="demo-note">
+          Identical logic to
+          <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/rules/pricing_rules.py" target="_blank" rel="noopener">domain/rules/pricing_rules.py</a>
+          and the order state machine in the services layer.
+        </p>
+      </div>
+      <div class="panel">
+        <h3>2 · Watch the lifecycle</h3>
+        <div class="order-state" id="order-state">no active order</div>
+        <ul class="eventlog" id="eventlog">
+          <li class="sys"><span class="t">--:--</span><span class="tag">idle</span><span>Configure an order and press "Create order" to generate the event stream.</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ARCHITECTURE ─────────────────────────────────────────────── -->
+<section class="section" id="architecture">
+  <div class="swoosh">
+    <span class="eyebrow">Architecture</span>
+    <h2>Built in layers, growing in phases</h2>
+    <p class="lead">
+      A modular monolith today — pure business rules behind stable service interfaces —
+      with a data and ML roadmap that slots in without rewriting the domain.
+    </p>
+    <div class="arch-wrap">
+      <pre class="mermaid">
+flowchart LR
+  U[Client] --> API[FastAPI REST API]
+  API --> ORD[Order service]
+  API --> DRV[Driver matching]
+  API --> PRC[Pricing engine]
+  API --> ANA[Analytics + Prometheus]
+  ORD --> PG[(PostgreSQL)]
+  DRV --> PG
+  PRC --> PG
+  ORD --> EV[order_events log]
+  EV --> P2[Phase 2 · event pipeline + dbt]
+  P2 --> P3[Phase 3 · forecasting + ML ETA]
+  P3 -. feeds .-> PRC
+      </pre>
+    </div>
+    <div class="phases">
+      <div class="phase done"><div class="n">Phase 1</div><h4>Core platform</h4><p>Orders, dispatch, pricing, ETA, analytics — live, typed, tested.</p></div>
+      <div class="phase"><div class="n">Phase 2</div><h4>Data engineering</h4><p>Event pipeline, warehouse models with dbt, orchestration, quality checks.</p></div>
+      <div class="phase"><div class="n">Phase 3</div><h4>AI / ML</h4><p>Demand forecasting by zone, ML ETA, forecast-driven dynamic pricing.</p></div>
+      <div class="phase"><div class="n">Phase 4</div><h4>Dashboard</h4><p>Operational KPIs, demand vs supply, drill-downs for the ops team.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── ANALYTICS ────────────────────────────────────────────────── -->
+<section class="section" id="analytics">
+  <div class="swoosh">
+    <span class="eyebrow">Analytics</span>
+    <h2>The numbers an operator opens every morning</h2>
+    <p class="lead">
+      The analytics endpoint already serves these live from PostgreSQL; the dashboard
+      experience ships in Phase 4. Figures below are sample data.
+    </p>
+    <div class="kpis">
+      <div class="kpi"><div class="v">1,284</div><div class="l">orders this month</div></div>
+      <div class="kpi"><div class="v">96<span>%</span></div><div class="l">fulfillment rate</div></div>
+      <div class="kpi"><div class="v">27<span>min</span></div><div class="l">avg delivery time</div></div>
+      <div class="kpi"><div class="v">81<span>%</span></div><div class="l">driver utilization</div></div>
+    </div>
+    <div class="chart-panel">
+      <h3>Orders by hour — a tale of two peaks</h3>
+      <div class="bars" id="bars"></div>
+      <div class="axis"><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>23:00</span></div>
+      <p class="chart-note">Hover the bars — lunch and dinner peaks are exactly what Phase 3 forecasting learns to predict.</p>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-inner">
+    <div class="foot-brand">
+      <a class="logo" href="https://github.com/SiwarAttia6191/smart-delivery-ops" aria-label="Smart Delivery Ops on GitHub">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7c6cff"/><stop offset="1" stop-color="#38e1ff"/>
+            </linearGradient>
+          </defs>
+          <path d="M16 2 30 16 16 30 2 16Z" fill="url(#lg2)"/>
+          <path d="M16 9 23 16 16 23 9 16Z" fill="#05060e"/>
+        </svg>
+        <span>Smart Delivery Ops</span>
+      </a>
+      <p>An open-source, production-inspired delivery operations platform — order lifecycle, dispatch, pricing, forecasting and analytics in one system.</p>
+    </div>
+    <div class="foot-col">
+      <h5>Project</h5>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops" target="_blank" rel="noopener">GitHub repository</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/roadmap.md" target="_blank" rel="noopener">Roadmap</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
+    </div>
+    <div class="foot-col">
+      <h5>Documentation</h5>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md" target="_blank" rel="noopener">API reference</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/architecture.md" target="_blank" rel="noopener">Architecture</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/data_model.md" target="_blank" rel="noopener">Data model</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/ml_design.md" target="_blank" rel="noopener">ML design</a>
+    </div>
+    <div class="foot-col">
+      <h5>Try it</h5>
+      <a href="#demo">Interactive demo</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops#-try-it-live--swagger-walkthrough" target="_blank" rel="noopener">Swagger walkthrough</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/scripts/smoke_test.py" target="_blank" rel="noopener">End-to-end smoke test</a>
+    </div>
+  </div>
+  <div class="foot-base">
+    <span>© 2026 Smart Delivery Ops · MIT License</span>
+    <span>PostgreSQL · FastAPI · SQLAlchemy 2.0 · mypy · 92% coverage</span>
+  </div>
+</footer>
 
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
 
 <script type="module">
-/* ── load three.js, degrade gracefully if offline / no WebGL ────── */
+/* ── 3D hero scene ───────────────────────────────────────────────── */
 let THREE;
 try { THREE = await import("three"); }
 catch { document.body.classList.add("no3d"); }
@@ -353,7 +725,7 @@ if (THREE) {
   const COL_C = new THREE.Color(cssVar("--accent-c"));
 
   const canvas = document.getElementById("scene");
-  const hero = document.getElementById("hero");
+  const hero = document.getElementById("top");
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
@@ -365,7 +737,6 @@ if (THREE) {
     const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
     camera.position.set(0, 0.35, 7.4);
 
-    /* ── soft-dot sprite texture (round particles, no squares) ──── */
     function dotTexture(size = 64) {
       const c = document.createElement("canvas"); c.width = c.height = size;
       const g = c.getContext("2d");
@@ -378,7 +749,6 @@ if (THREE) {
     }
     const dot = dotTexture();
 
-    /* ── the core: holographic fresnel-glass icosahedron ────────── */
     const core = new THREE.Group();
 
     const fresnelMat = new THREE.ShaderMaterial({
@@ -387,7 +757,7 @@ if (THREE) {
         uColorB: { value: COL_B },
         uTime:   { value: 0 },
       },
-      vertexShader: /* glsl */`
+      vertexShader: `
         varying vec3 vN; varying vec3 vV;
         void main() {
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -395,7 +765,7 @@ if (THREE) {
           vV = normalize(-mv.xyz);
           gl_Position = projectionMatrix * mv;
         }`,
-      fragmentShader: /* glsl */`
+      fragmentShader: `
         uniform vec3 uColorA; uniform vec3 uColorB; uniform float uTime;
         varying vec3 vN; varying vec3 vV;
         void main() {
@@ -432,13 +802,12 @@ if (THREE) {
 
     core.add(glow, shellIn, shellOut, edges);
 
-    /* ── orbiting satellites on tilted rings ─────────────────────── */
     const satGroup = new THREE.Group();
     const SATS = [
-      { r: 2.25, speed:  0.55, tilt: [0.52, 0.40, 0.14], color: COL_A,        size: 0.11 },
-      { r: 2.75, speed: -0.40, tilt: [-0.34, 2.10, -0.50], color: COL_B,      size: 0.08 },
-      { r: 3.20, speed:  0.30, tilt: [1.02, 4.20, 0.40], color: COL_C,        size: 0.095 },
-      { r: 1.95, speed:  0.85, tilt: [-0.85, 5.50, 0.55], color: 0xffffff,    size: 0.055 },
+      { r: 2.25, speed:  0.55, tilt: [0.52, 0.40, 0.14], color: COL_A,     size: 0.11 },
+      { r: 2.75, speed: -0.40, tilt: [-0.34, 2.10, -0.50], color: COL_B,   size: 0.08 },
+      { r: 3.20, speed:  0.30, tilt: [1.02, 4.20, 0.40], color: COL_C,     size: 0.095 },
+      { r: 1.95, speed:  0.85, tilt: [-0.85, 5.50, 0.55], color: 0xffffff, size: 0.055 },
     ];
     const circlePts = (r) => {
       const p = [];
@@ -465,7 +834,6 @@ if (THREE) {
       s.pivot = pivot; s.sat = sat;
     }
 
-    /* ── starfield ───────────────────────────────────────────────── */
     const mobile = matchMedia("(max-width: 920px)").matches;
     const N = mobile ? 400 : 1100;
     const pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
@@ -491,7 +859,6 @@ if (THREE) {
     world.add(core, satGroup, stars);
     scene.add(world);
 
-    /* ── layout: orb right of copy on wide screens ───────────────── */
     function layout() {
       const w = hero.clientWidth, h = hero.clientHeight;
       renderer.setSize(w, h, false);
@@ -503,22 +870,18 @@ if (THREE) {
     layout();
     addEventListener("resize", layout);
 
-    /* ── pointer parallax ────────────────────────────────────────── */
     const target = { x: 0, y: 0 };
     addEventListener("pointermove", (e) => {
       target.x = (e.clientX / innerWidth) * 2 - 1;
       target.y = (e.clientY / innerHeight) * 2 - 1;
     });
 
-    /* ── click pulse on the primary CTA ──────────────────────────── */
+    const clock = new THREE.Clock();
+    const ease = { x: 0, y: 0 };
     let pulseAt = -10;
-    document.getElementById("cta-primary").addEventListener("click", (e) => {
-      e.preventDefault();
-      pulseAt = clock.elapsedTime;
-    });
 
-    /* magnetic hover for the primary button */
     const mag = document.getElementById("cta-primary");
+    mag.addEventListener("click", () => { pulseAt = clock.elapsedTime; });
     mag.addEventListener("pointermove", (e) => {
       const r = mag.getBoundingClientRect();
       const x = (e.clientX - r.left - r.width / 2) / r.width;
@@ -527,10 +890,6 @@ if (THREE) {
     });
     mag.addEventListener("pointerleave", () => { mag.style.transform = ""; });
 
-    /* ── render loop ─────────────────────────────────────────────── */
-    const clock = new THREE.Clock();
-    const ease = { x: 0, y: 0 };
-
     function tick() {
       const dt = Math.min(clock.getDelta(), 0.05);
       const t = clock.elapsedTime;
@@ -538,7 +897,6 @@ if (THREE) {
       ease.x += (target.x - ease.x) * 0.05;
       ease.y += (target.y - ease.y) * 0.05;
 
-      // click ripple: damped oscillation
       const since = t - pulseAt;
       const pulse = since > 0 && since < 3
         ? Math.exp(-2.2 * since) * Math.sin(9 * since) * 0.16 : 0;
@@ -561,7 +919,6 @@ if (THREE) {
       stars.rotation.y += 0.016 * dt;
       stars.rotation.x  = ease.y * 0.03;
 
-      // idle float + parallax
       core.position.y = Math.sin(t * 0.8) * 0.12;
       world.rotation.y = ease.x * 0.14;
       world.rotation.x = ease.y * 0.08;
@@ -577,11 +934,181 @@ if (THREE) {
     }
     tick();
 
-    /* nav glass after scroll */
     const nav = document.getElementById("nav");
     addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
   }
 }
+</script>
+
+<script type="module">
+/* ── section reveal on scroll ────────────────────────────────────── */
+const io = new IntersectionObserver(
+  (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
+  { threshold: 0.12 }
+);
+document.querySelectorAll(".swoosh").forEach((el) => io.observe(el));
+
+/* ── demand-by-hour chart (sample data) ──────────────────────────── */
+const HOURS = [
+  ["08", 3], ["09", 6], ["10", 5], ["11", 7], ["12", 14], ["13", 16], ["14", 9],
+  ["15", 7], ["16", 8], ["17", 11], ["18", 15], ["19", 21], ["20", 24], ["21", 17],
+  ["22", 10], ["23", 6],
+];
+const maxV = Math.max(...HOURS.map((h) => h[1]));
+const bars = document.getElementById("bars");
+for (const [h, v] of HOURS) {
+  const b = document.createElement("div");
+  b.className = "b" + (v >= 20 ? " peak" : "");
+  b.style.height = `${(v / maxV) * 100}%`;
+  b.innerHTML = `<span class="tip">${h}:00 — ${v} orders</span>`;
+  bars.appendChild(b);
+}
+
+/* ── interactive order simulator (mirrors the real rules) ────────── */
+const PRICING = { base: 2.0, perKm: 0.9, min: 3.0 };
+const surge = (r) => (r >= 1.5 ? 1.5 : r >= 1.2 ? 1.25 : 1.0);
+
+const $ = (id) => document.getElementById(id);
+const kmEl = $("km"), demandEl = $("demand");
+let demand = 1.0;
+
+const fmt = (n) => `$${n.toFixed(2)}`;
+
+function computeQuote() {
+  const km = parseFloat(kmEl.value);
+  const distanceFee = +(km * PRICING.perKm).toFixed(2);
+  const s = surge(demand);
+  const total = Math.max(PRICING.min, +((PRICING.base + distanceFee) * s).toFixed(2));
+  const eta = Math.ceil(12 + (km / 25) * 60 + 5);
+  $("km-val").textContent = km.toFixed(1);
+  $("demand-val").textContent = `${demand.toFixed(1)}×`;
+  $("q-dist").textContent = fmt(distanceFee);
+  $("q-surge").textContent = `×${s.toFixed(2)}`;
+  $("q-eta").textContent = `${eta} min`;
+  $("q-total").textContent = fmt(total);
+  return { km, distanceFee, s, total, eta };
+}
+computeQuote();
+
+/* lifecycle state machine — mirrors domain/services/order_service.py */
+const DRIVERS = [
+  { name: "Karim · motorcycle", base: 0.4 },
+  { name: "Mongi · motorcycle", base: 1.2 },
+  { name: "Sami · car", base: 2.6 },
+  { name: "Hédi · bicycle", base: 3.1 },
+];
+let state = null;   // null | 'pending' | 'assigned' | 'in_transit' | 'delivered'
+let quote = null;
+
+function log(tag, text, cls = "") {
+  const t = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const li = document.createElement("li");
+  li.className = cls;
+  li.innerHTML = `<span class="t">${t}</span><span class="tag">${tag}</span><span>${text}</span>`;
+  const el = $("eventlog");
+  const idle = el.querySelector(".sys");
+  if (idle && state === "pending") idle.remove();
+  el.appendChild(li);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setState(label) {
+  const el = $("order-state");
+  el.textContent = label;
+  el.classList.remove("pulse");
+  void el.offsetWidth;
+  el.classList.add("pulse");
+}
+
+function buttons() {
+  const map = {
+    null:       { create: true,  assign: false, transit: false, deliver: false, reset: false },
+    pending:    { create: false, assign: true,  transit: false, deliver: false, reset: true },
+    assigned:   { create: false, assign: false, transit: true,  deliver: false, reset: true },
+    in_transit: { create: false, assign: false, transit: false, deliver: true,  reset: true },
+    delivered:  { create: false, assign: false, transit: false, deliver: false, reset: true },
+  }[state ?? "null"];
+  $("btn-create").disabled = !map.create;
+  $("btn-assign").disabled = !map.assign;
+  $("btn-transit").disabled = !map.transit;
+  $("btn-deliver").disabled = !map.deliver;
+  $("btn-reset").disabled = !map.reset;
+  kmEl.disabled = !!state;
+  demandEl.querySelectorAll("button").forEach((b) => (b.disabled = !!state));
+}
+
+kmEl.addEventListener("input", () => { if (!state) computeQuote(); });
+demandEl.addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b || state) return;
+  demandEl.querySelectorAll("button").forEach((x) => x.classList.remove("on"));
+  b.classList.add("on");
+  demand = parseFloat(b.dataset.r);
+  computeQuote();
+});
+
+$("btn-create").addEventListener("click", () => {
+  quote = computeQuote();
+  state = "pending";
+  setState("order · pending");
+  log("created", `distance ${quote.km.toFixed(1)} km · fee ${fmt(quote.total)} · eta ${quote.eta} min`);
+  buttons();
+});
+
+$("btn-assign").addEventListener("click", () => {
+  const ranked = DRIVERS
+    .map((d) => ({ ...d, dist: +(d.base + quote.km * 0.18).toFixed(1) }))
+    .sort((a, b) => a.dist - b.dist);
+  state = "assigned";
+  setState("order · assigned");
+  log("assigned", `${ranked[0].name} matched — ${ranked[0].dist} km from pickup`, "sys");
+  buttons();
+});
+
+$("btn-transit").addEventListener("click", () => {
+  state = "in_transit";
+  setState("order · in transit");
+  log("status", "handoff complete — driver en route to the customer", "sys");
+  buttons();
+});
+
+$("btn-deliver").addEventListener("click", () => {
+  state = "delivered";
+  setState("order · delivered ✓");
+  log("status", "delivered — driver freed, event history sealed", "ok");
+  log("analytics", `revenue ${fmt(quote.total)} · avg delivery ${(quote.eta * 0.82).toFixed(0)} min`, "ok");
+  buttons();
+});
+
+$("btn-reset").addEventListener("click", () => {
+  state = null;
+  quote = null;
+  setState("no active order");
+  $("eventlog").innerHTML =
+    `<li class="sys"><span class="t">--:--</span><span class="tag">idle</span><span>Configure an order and press "Create order" to generate the event stream.</span></li>`;
+  buttons();
+  computeQuote();
+});
+
+buttons();
+
+/* ── mermaid architecture diagram ────────────────────────────────── */
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+mermaid.initialize({
+  startOnLoad: true,
+  theme: "base",
+  themeVariables: {
+    darkMode: true,
+    background: "transparent",
+    primaryColor: "#14162a",
+    primaryTextColor: "#eef0ff",
+    primaryBorderColor: "#7c6cff",
+    lineColor: "#5a5f8a",
+    secondaryColor: "#101224",
+    tertiaryColor: "#0c0e1e",
+    fontSize: "14px",
+  },
+});
 </script>
 </body>
 </html>
