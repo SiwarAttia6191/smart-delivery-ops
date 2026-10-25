@@ -1,0 +1,83 @@
+# Data Model
+
+## Entity relationship
+
+```mermaid
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    RESTAURANT ||--o{ ORDER : "picked up at"
+    DRIVER |o--o{ ORDER : delivers
+    ORDER ||--o{ ORDER_EVENT : emits
+
+    CUSTOMER {
+        int id PK
+        string name
+        string phone
+        float latitude
+        float longitude
+        datetime created_at
+    }
+    RESTAURANT {
+        int id PK
+        string name
+        float latitude
+        float longitude
+        bool is_active
+        datetime created_at
+    }
+    DRIVER {
+        int id PK
+        string name
+        string vehicle
+        float latitude
+        float longitude
+        bool is_available
+        datetime created_at
+    }
+    ORDER {
+        string id PK "UUID"
+        string status
+        float pickup_latitude
+        float pickup_longitude
+        float dropoff_latitude
+        float dropoff_longitude
+        float distance_km
+        float delivery_fee
+        float surge_multiplier
+        int eta_minutes
+        datetime delivered_at
+    }
+    ORDER_EVENT {
+        int id PK
+        string order_id FK
+        string event_type "created | assigned | status"
+        json payload
+        datetime created_at
+    }
+```
+
+## Order lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending : POST /orders
+    pending --> assigned : POST /orders/{id}/assign
+    pending --> cancelled : cancel
+    assigned --> in_transit : status update
+    assigned --> cancelled : cancel (driver freed)
+    in_transit --> delivered : status update
+    in_transit --> cancelled : cancel (driver freed)
+    delivered --> [*]
+    cancelled --> [*]
+```
+
+Notes:
+
+- `assigned` can only be reached through the dispatch endpoint — the status
+  schema rejects it on `POST /orders/{id}/status`.
+- Driver availability is a transactional side-effect: assigning marks the
+  driver busy; delivery or cancellation frees them.
+- Pickup coordinates are **snapshotted** at creation so later restaurant
+  edits never mutate historical orders.
+- Phase 2 warehouse tables (`demand_forecast`, `pricing_history`,
+  `assignment_history`) derive from `order_events`.
