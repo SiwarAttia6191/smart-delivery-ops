@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt clean
 
 API_PORT ?= 8010
 
@@ -37,6 +37,9 @@ audit:           ## dependency vulnerability audit (production requirements)
 
 smoke:           ## end-to-end smoke test against a running API (make api first)
 	.venv/Scripts/python scripts/smoke_test.py
+
+dbt:             ## build + test the warehouse marts (staging views + analytics tables)
+	docker compose run --rm dbt build
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__
