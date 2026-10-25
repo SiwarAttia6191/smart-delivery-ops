@@ -49,6 +49,12 @@ class Settings(BaseSettings):
     relay_batch_size: int = 100
     relay_poll_seconds: float = 2.0
     relay_backoff_seconds: float = 60.0
+    # Warehouse ingestion (Phase 2): where the consumer lands events and how.
+    warehouse_database_url: str = (
+        "postgresql+psycopg://smartops:smartops@localhost:5434/smart_delivery_warehouse"
+    )
+    kafka_group_id: str = "warehouse-ingest"
+    ingest_batch_size: int = 500
 
 
 @lru_cache

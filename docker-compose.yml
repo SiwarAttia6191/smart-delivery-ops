@@ -52,6 +52,28 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  ingest:
+    # Same image as the API — warehouse leg of the pipeline: subscribes to
+    # orders.events and lands events into the raw layer of the separate
+    # warehouse database (see apps/worker/ingest.py). Offsets commit only
+    # after the DB commit; replays dedupe on the event_id primary key.
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    command: python -m apps.worker.ingest
+    environment:
+      ENVIRONMENT: docker
+      WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_warehouse
+      KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   kafka-init:
     # One-shot topic provisioning. Production disables auto-create (typos
     # would silently produce to dead topics, partition counts drift
