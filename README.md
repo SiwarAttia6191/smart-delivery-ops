@@ -183,6 +183,27 @@ smart-delivery-ops/
 
 Details: [docs/roadmap.md](docs/roadmap.md) · Architecture: [docs/architecture.md](docs/architecture.md)
 
+## 🏗️ How this repo was built
+
+The git history is organized as one task per commit — each stage below maps to
+one commit and explains what landed and why.
+
+1. **`chore: initialize repository foundation`** — repo tooling first: `.gitignore`/`.gitattributes`, MIT `LICENSE`, `pyproject.toml` (pytest + ruff configuration), dependency manifests, a `Makefile` as the single developer entrypoint, and `.env.example` establishing the env-driven configuration convention.
+2. **`feat(core)`** — the support layer: pydantic-settings configuration (pricing, ETA, and database all tunable via environment), the SQLAlchemy engine + session factory, structured logging, and typed domain exceptions (`NotFound`, `InvalidTransition`, `NoDriverAvailable`) that the API maps to consistent HTTP error envelopes.
+3. **`feat(domain)`** — the business heart, framework-free: SQLAlchemy 2.0 entities including an immutable `OrderEvent` log (the raw feed for the Phase 2 pipeline, present from day one), *pure* business rules (haversine geo, surge tiers, driver eligibility — side-effect-free so they're exhaustively testable and swappable for ML later), and services orchestrating the order state machine, nearest-driver dispatch, quoting, and ETA.
+4. **`feat(api)`** — the FastAPI surface over the domain: 19 endpoints, Pydantic v2 request/response contracts, Swagger/Redoc out of the box, CORS, and a Prometheus text metrics endpoint.
+5. **`test`** — unit tests for the pure rules and state machine plus integration tests driving the full HTTP flow (create → assign → deliver → analytics) against an isolated in-memory database — 30 tests, hermetic by design.
+6. **`feat(scripts)`** — demo seed data (Tunis metro area) and a scripted smoke test that exercises a *live* server end-to-end.
+7. **`build(infra)`** — Docker packaging: the API image, a PostgreSQL 16 service with a persistent volume and healthcheck, and placeholders for the Phase 5 Kubernetes/monitoring assets.
+8. **`ci`** — GitHub Actions running ruff + pytest on every push and PR, plus weekly Dependabot updates.
+9. **`chore: scaffold future-phase layers`** — directory structure and guidance for the Phase 2 data layer, Phase 3 ML layer, event worker, and dashboard, so the roadmap has a concrete home.
+10. **`docs`** — architecture (Mermaid system diagram), data model (ER + order state machine), API catalogue, ML design, and the phased roadmap.
+11. **`fix: run API on port 8010`** — port 8000 was occupied by another local project; the port became configurable (`API_PORT`) across the Makefile, scripts, and compose.
+12. **`feat(db): switch default database to PostgreSQL`** — production stack by default: the Postgres container, the psycopg driver in core deps, `make db-up/db-shell` targets; tests pinned to throwaway SQLite so CI stays hermetic.
+13. **`fix(db): move PostgreSQL host port to 5434`** — 5433 was taken by another Docker project; also documents that the compose-internal URL stays on `postgres:5432` (host mappings only apply outside Docker's network).
+14. **`fix(db): healthcheck probes the real database`** — `pg_isready -d smart_delivery_ops` stops a harmless but noisy `FATAL` in the logs every 5 seconds.
+15. **`docs: README + live Swagger walkthrough`** — this README, including the step-by-step "Try it out" guide with genuine captures of executed requests.
+
 ## 📖 Documentation
 
 - [Architecture overview](docs/architecture.md) — system diagram and design decisions
