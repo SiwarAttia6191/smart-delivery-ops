@@ -6,7 +6,7 @@ with created as (
 
     select
         order_id,
-        source_created_at,
+        source_created_at_local,
         distance_km,
         delivery_fee,
         surge_multiplier
@@ -43,7 +43,7 @@ per_order as (
 )
 
 select
-    source_created_at::date                       as order_date,
+    source_created_at_local::date                 as order_date,
     count(*)                                      as orders_created,
     count(delivered_at)                           as orders_delivered,
     round(avg(actual_delivery_minutes), 1)        as avg_delivery_minutes,
