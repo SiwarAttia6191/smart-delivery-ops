@@ -93,6 +93,12 @@ def create_order(
             "delivery_fee": quote.breakdown.total,
             "surge_multiplier": quote.breakdown.surge_multiplier,
             "eta_minutes": order.eta_minutes,
+            # Coordinates ride on the event so downstream consumers (zone
+            # demand marts, dispatch analytics) never need the ops tables.
+            "pickup_latitude": restaurant.latitude,
+            "pickup_longitude": restaurant.longitude,
+            "dropoff_latitude": dropoff_lat,
+            "dropoff_longitude": dropoff_lon,
         },
     )
     session.add(order)
