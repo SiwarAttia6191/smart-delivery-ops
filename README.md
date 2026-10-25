@@ -174,18 +174,29 @@ Watch the live stream — every order transition appears as a JSON event:
 
 ```bash
 docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
-  --bootstrap-server localhost:19092 --topic orders.events --from-beginning
+  --bootstrap-server kafka:19092 --topic orders.events --from-beginning
 ```
 
 Design notes:
 
-- **Delivery guarantee: at-least-once.** The relay's offset (`relay_state`)
-  advances only after a successful producer flush, so a crash replays a short
-  tail; consumers dedupe by `event_id`.
+- **Delivery guarantee: at-least-once.** Due rows are *claimed*
+  (`published_at IS NULL`, `FOR UPDATE SKIP LOCKED`) and marked published only
+  after the producer's delivery reports confirm the broker acknowledged every
+  message — a crash anywhere before that replays the batch, and consumers
+  dedupe by `event_id`. Claiming rows instead of tracking an id offset also
+  removes the classic sequence-gap race (ids are assigned at INSERT but become
+  visible at COMMIT) and makes concurrent relay instances safe.
 - **Ordering:** messages are keyed by order id, so all events of one order land
-  in the same partition, in order.
-- **The relay is restart-safe and retroactive** — on first boot it drains the
-  entire historical `order_events` log, then tails it (poll interval 2 s).
+  in the same partition, in order (`orders.events` is provisioned with 3
+  partitions by the one-shot `kafka-init` service; auto-create is off).
+- **The relay is restart-safe and retroactive** — it tails `order_events`
+  continuously (idle poll 2 s) and treats broker/database outages as expected
+  events: exponential backoff up to a 60 s cap, then resume. Topic data
+  persists in the `kafkadata` volume, and full replay from the source of truth
+  is always one `UPDATE relay_state SET last_relayed_event_id = 0` +
+  `UPDATE order_events SET published_at = NULL` away.
+- **Wire format:** versioned JSON (`schema_version: 1`) with `event_type` as a
+  Kafka header.
 - Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
   containers on `kafka:19092`.
 
