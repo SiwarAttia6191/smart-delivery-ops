@@ -1,0 +1,15 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+*.db
+*.sqlite3
+.env
+data/raw/*
+ml/artifacts/*
+docs
+tests
+.github
