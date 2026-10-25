@@ -4,14 +4,23 @@
 
 with assignments as (
 
+    -- Latest assignment per order: the state machine currently forbids
+    -- reassignment, but if Phase 3 allocation ever introduces it, a naive
+    -- join would fan out and double-count. Attribute to the LAST courier.
     select
         order_id,
         driver_id,
         match_distance_km,
         vehicle,
         source_created_at as assigned_at
-    from {{ ref('stg_order_events') }}
-    where event_type = 'assigned'
+    from (
+        select
+            *,
+            row_number() over (partition by order_id order by event_id desc) as rn
+        from {{ ref('stg_order_events') }}
+        where event_type = 'assigned'
+    ) ranked
+    where rn = 1
 
 ),
 

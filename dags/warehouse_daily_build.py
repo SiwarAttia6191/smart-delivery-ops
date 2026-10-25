@@ -6,6 +6,8 @@ run — no incremental state), which is exactly what makes Airflow's
 catchup/backfill machinery safe to lean on.
 """
 
+import logging
+import os
 from datetime import timedelta
 
 import pendulum
@@ -14,6 +16,31 @@ from airflow.operators.bash import BashOperator
 
 DBT_DIR = "/opt/transform"
 
+logger = logging.getLogger(__name__)
+
+
+def _alert_on_failure(context) -> None:  # noqa: ANN001 - Airflow context dict
+    """Failure surface for the pipeline (review finding 5): a DAG/task failure
+    must leave the log-only boundary. POSTs to the webhook when configured;
+    otherwise logs loudly so the gap is at least discoverable."""
+    webhook = os.environ.get("AIRFLOW_ALERT_WEBHOOK")
+    payload = {
+        "dag": context.get("dag").dag_id if context.get("dag") else None,
+        "task": context.get("task").task_id if context.get("task") else None,
+        "run_id": context.get("run_id"),
+        "exception": str(context.get("exception")),
+    }
+    if not webhook:
+        logger.error("PIPELINE FAILURE and AIRFLOW_ALERT_WEBHOOK is not set: %s", payload)
+        return
+    import requests
+
+    try:
+        requests.post(webhook, json=payload, timeout=10)
+    except Exception:
+        logger.exception("failed to deliver the pipeline failure alert: %s", payload)
+
+
 default_args = {
     "owner": "data-engineering",
     "retries": 2,
@@ -21,6 +48,7 @@ default_args = {
     "retry_exponential_backoff": True,
     "max_retry_delay": timedelta(minutes=15),
     "execution_timeout": timedelta(minutes=30),
+    "on_failure_callback": _alert_on_failure,
 }
 
 with DAG(

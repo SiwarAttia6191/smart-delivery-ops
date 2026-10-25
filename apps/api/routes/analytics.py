@@ -1,12 +1,14 @@
 """Analytics endpoints — Phase 1 operational summary + Prometheus text metrics."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db
 from apps.api.schemas.analytics import AnalyticsSummary
-from domain.models import Driver, Order, OrderStatus, Restaurant
+from domain.models import Driver, Order, OrderEvent, OrderStatus, RelayDeadLetter, Restaurant
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -82,5 +84,37 @@ def metrics(db: Session = Depends(get_db)) -> Response:
         "# HELP sdo_delivered_revenue_total Revenue from delivered orders",
         "# TYPE sdo_delivered_revenue_total gauge",
         f"sdo_delivered_revenue_total {s.delivered_revenue}",
+        # ── Event-pipeline health (Phase 2 review finding 5): the relay and
+        # ingest workers run without their own metrics endpoints, but the
+        # pipeline's source of truth IS this database — so its delivery state
+        # is surfaced here for the same Prometheus scraper.
+        "# HELP sdo_outbox_unpublished Events awaiting relay to Kafka (backlog)",
+        "# TYPE sdo_outbox_unpublished gauge",
+        f"sdo_outbox_unpublished {_outbox_backlog(db)}",
+        "# HELP sdo_outbox_quarantined Events quarantined by the relay (dead letters)",
+        "# TYPE sdo_outbox_quarantined gauge",
+        f"sdo_outbox_quarantined {db.scalar(select(func.count(RelayDeadLetter.id))) or 0}",
+        "# HELP sdo_outbox_last_relay_age_seconds Seconds since the last successful relay (-1 = never)",
+        "# TYPE sdo_outbox_last_relay_age_seconds gauge",
+        f"sdo_outbox_last_relay_age_seconds {_last_relay_age(db)}",
     ]
     return Response(media_type="text/plain; version=0.0.4", content="\n".join(lines) + "\n")
+
+
+def _outbox_backlog(db: Session) -> int:
+    """Events not yet on the bus and not quarantined - the relay's backlog."""
+    return (
+        db.scalar(
+            select(func.count(OrderEvent.id)).where(
+                OrderEvent.published_at.is_(None), OrderEvent.quarantined_at.is_(None)
+            )
+        )
+        or 0
+    )
+
+
+def _last_relay_age(db: Session) -> float:
+    last = db.scalar(select(func.max(OrderEvent.published_at)))
+    if last is None:
+        return -1.0
+    return round((datetime.now(UTC) - last).total_seconds(), 1)
