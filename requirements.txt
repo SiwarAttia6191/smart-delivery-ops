@@ -9,6 +9,9 @@ psycopg[binary]>=3.3.6
 # HTTP client (smoke tests / demo scripts)
 httpx>=0.28.1
 
+# Event pipeline (Phase 2): outbox relay publishes order events to Kafka
+confluent-kafka>=2.7
+
 # ── Later phases (not required for Phase 1) ─────────────────────
 # redis>=5            # Phase 2/5 — cache & availability state
 # pandas>=2.2         # Phase 3 — feature engineering

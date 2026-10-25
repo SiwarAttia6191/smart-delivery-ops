@@ -22,6 +22,7 @@ analytics in one system.
 | Domain | What it does |
 |---|---|
 | 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
+| 📡 **Event streaming** | Transactional-outbox relay publishes every order event to Kafka (`orders.events`, keyed by order id) — at-least-once, restart-safe, drains history on first boot |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
 | ⏱️ **ETA estimation** | Prep + travel + buffer heuristic (Phase 1), upgrade path to an ML regression model |
@@ -32,10 +33,11 @@ analytics in one system.
 
 - **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
+- **Streaming** — Apache Kafka (KRaft, Docker) · confluent-kafka producer
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`
-- **Roadmap** — Kafka event pipeline, dbt warehouse + Airflow, Prophet/XGBoost forecasting, Streamlit dashboard, OpenTelemetry + Grafana (see [docs/roadmap.md](docs/roadmap.md))
+- **Roadmap** — dbt warehouse + Airflow, Prophet/XGBoost forecasting, Streamlit dashboard, OpenTelemetry + Grafana (see [docs/roadmap.md](docs/roadmap.md))
 
 ## 🚀 Quickstart
 
@@ -149,6 +151,43 @@ docker compose exec postgres psql -U smartops -d smart_delivery_ops \
 Data persists in the `pgdata` Docker volume across restarts. A zero-config
 SQLite fallback remains available via `DATABASE_URL=sqlite:///./local.db`
 (tests always run on isolated in-memory SQLite).
+
+## 📡 Event pipeline (Phase 2)
+
+Order lifecycle events now flow onto a Kafka bus using the **transactional
+outbox** pattern — the API commits domain state and its event rows in one
+database transaction (source of truth), and a relay worker copies the log onto
+the topic without ever touching the API's hot path:
+
+```
+POST /orders ──► PostgreSQL (orders + order_events)  ──►  Kafka topic orders.events
+                     (transactional outbox)     worker         (keyed by order id)
+```
+
+Start the broker and the relay (the API comes up as before):
+
+```bash
+docker compose up -d
+```
+
+Watch the live stream — every order transition appears as a JSON event:
+
+```bash
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server localhost:19092 --topic orders.events --from-beginning
+```
+
+Design notes:
+
+- **Delivery guarantee: at-least-once.** The relay's offset (`relay_state`)
+  advances only after a successful producer flush, so a crash replays a short
+  tail; consumers dedupe by `event_id`.
+- **Ordering:** messages are keyed by order id, so all events of one order land
+  in the same partition, in order.
+- **The relay is restart-safe and retroactive** — on first boot it drains the
+  entire historical `order_events` log, then tails it (poll interval 2 s).
+- Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
+  containers on `kafka:19092`.
 
 ## 🗂️ Project structure
 

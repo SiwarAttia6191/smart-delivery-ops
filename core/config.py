@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     eta_restaurant_prep_minutes: int = 12
     eta_buffer_minutes: int = 5
 
+    # ── Event pipeline (Phase 2) ───────────────────────────────
+    # Host default points at the compose host mapping (localhost:9094);
+    # containers override it with kafka:19092.
+    kafka_bootstrap_servers: str = "localhost:9094"
+    kafka_orders_topic: str = "orders.events"
+
 
 @lru_cache
 def get_settings() -> Settings:
