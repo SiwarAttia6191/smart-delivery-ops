@@ -16,6 +16,8 @@ def settings() -> Settings:
         pricing_surge_tier1_multiplier=1.25,
         pricing_surge_tier2_ratio=1.5,
         pricing_surge_tier2_multiplier=1.5,
+        pricing_surge_tier3_ratio=2.0,
+        pricing_surge_tier3_multiplier=2.0,
     )
 
 
@@ -30,7 +32,11 @@ class TestSurgeMultiplier:
 
     def test_tier2_at_threshold(self, settings):
         assert pricing_rules.surge_multiplier(1.5, settings) == 1.5
-        assert pricing_rules.surge_multiplier(3.0, settings) == 1.5
+        assert pricing_rules.surge_multiplier(1.99, settings) == 1.5
+
+    def test_tier3_caps_extreme_demand(self, settings):
+        assert pricing_rules.surge_multiplier(2.0, settings) == 2.0
+        assert pricing_rules.surge_multiplier(5.0, settings) == 2.0  # hard cap
 
 
 class TestComputePrice:
