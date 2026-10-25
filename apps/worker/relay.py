@@ -180,21 +180,18 @@ def relay_once(
 def migrate_legacy_deployment(engine) -> None:
     """One-time shim for databases created before the claim column existed
     (Alembic migrations arrive in Phase 5; until then compose deployments
-    self-heal here). Adds ``order_events.published_at`` and backfills it for
-    everything the previous offset-based relay already confirmed delivered,
-    so the upgrade does not replay history as duplicates."""
+    self-heal here). Only adds missing columns.
+
+    Deliberately NO backfill: marking old rows published from the legacy
+    offset counter would institutionalize that counter's sequence-gap bug
+    (it could advance past an uncommitted event). Replay is free - the
+    warehouse dedupes by event_id - so leaving legacy rows NULL and
+    re-relaying them is strictly safer than trusting the old state."""
     if engine.dialect.name != "postgresql":
         return
     with engine.begin() as conn:
         conn.execute(
             text("ALTER TABLE order_events ADD COLUMN IF NOT EXISTS published_at timestamptz")
-        )
-        conn.execute(
-            text(
-                "UPDATE order_events SET published_at = now() "
-                "WHERE published_at IS NULL AND id <= ("
-                "  SELECT COALESCE(last_relayed_event_id, 0) FROM relay_state WHERE id = 1)"
-            )
         )
 
 
