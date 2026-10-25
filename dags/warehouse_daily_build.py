@@ -6,8 +6,9 @@ run — no incremental state), which is exactly what makes Airflow's
 catchup/backfill machinery safe to lean on.
 """
 
-import pendulum
+from datetime import timedelta
 
+import pendulum
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 
