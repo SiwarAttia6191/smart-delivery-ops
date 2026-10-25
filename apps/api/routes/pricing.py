@@ -21,8 +21,10 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
             raise NotFoundError(f"restaurant {payload.restaurant_id} not found")
         pickup_lat, pickup_lon = restaurant.latitude, restaurant.longitude
     else:
-        pickup_lat = float(payload.pickup_latitude)
-        pickup_lon = float(payload.pickup_longitude)
+        # exactly one of restaurant_id / pickup coordinates is set (schema validator)
+        assert payload.pickup_latitude is not None and payload.pickup_longitude is not None
+        pickup_lat = payload.pickup_latitude
+        pickup_lon = payload.pickup_longitude
 
     quote = pricing_service.quote_delivery(
         pickup_lat,

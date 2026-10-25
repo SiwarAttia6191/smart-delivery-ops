@@ -13,10 +13,10 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 def _summary(db: Session) -> AnalyticsSummary:
     total = db.scalar(select(func.count(Order.id))) or 0
-    by_status = dict(
+    raw_counts = dict(
         db.execute(select(Order.status, func.count(Order.id)).group_by(Order.status)).all()
     )
-    by_status = {status.value: count for status, count in by_status.items()}
+    counts_by_status = {status.value: count for status, count in raw_counts.items()}
 
     delivered_rows = db.execute(
         select(func.count(Order.id), func.coalesce(func.sum(Order.delivery_fee), 0.0)).where(
@@ -34,8 +34,12 @@ def _summary(db: Session) -> AnalyticsSummary:
         )
     ).all()
     if delivered_orders:
-        minutes = [(o.delivered_at - o.created_at).total_seconds() / 60 for o in delivered_orders]
-        avg_minutes = sum(minutes) / len(minutes)
+        minutes = [
+            (o.delivered_at - o.created_at).total_seconds() / 60
+            for o in delivered_orders
+            if o.delivered_at is not None
+        ]
+        avg_minutes = sum(minutes) / len(minutes) if minutes else None
     else:
         avg_minutes = None
 
@@ -47,7 +51,7 @@ def _summary(db: Session) -> AnalyticsSummary:
 
     return AnalyticsSummary(
         orders_total=total,
-        orders_by_status=by_status,
+        orders_by_status=counts_by_status,
         delivered_revenue=round(float(delivered_revenue), 2),
         average_fee=round(float(avg_fee), 2) if avg_fee is not None else 0.0,
         average_delivery_minutes=(
