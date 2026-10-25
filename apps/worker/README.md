@@ -20,12 +20,18 @@ order id so per-order ordering is preserved inside a partition.
 - **Run:** `docker compose up -d worker` (entrypoint `python -m apps.worker.relay`).
   Hosts reach the broker on `localhost:9094`, containers on `kafka:19092`.
 
-Planned next:
+The warehouse consumer is also live: `ingest.py` subscribes to `orders.events`
+(group `warehouse-ingest`, `enable.auto.commit=false`) and lands events into
+`raw.order_events` in the **separate warehouse database**. Dedupe contract:
+`event_id` is the primary key with ON CONFLICT DO NOTHING, so the relay's
+at-least-once replays are no-ops; Kafka offsets commit only after the database
+commit. Malformed messages are logged with a preview and skipped (dead-letter
+topic deferred). dbt builds its marts on this raw layer.
 
 ```
 apps/worker/
 ├── relay.py           # shipped — outbox → Kafka
-├── consumer.py        # warehouse ingestion consumer (Phase 2)
+├── ingest.py          # shipped — Kafka → warehouse raw layer (dedupe by event_id)
 ├── tasks.py           # scheduled jobs (aggregations, reprocessing)
 └── event_handlers.py  # per-event-type handlers (order.created, order.assigned…)
 ```
