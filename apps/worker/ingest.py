@@ -38,6 +38,7 @@ from typing import Any
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine, make_url
+from sqlalchemy.exc import DataError, IntegrityError
 
 from core.config import Settings, get_settings
 
@@ -56,6 +57,28 @@ CREATE TABLE IF NOT EXISTS {table} (
     ingested_at TIMESTAMPTZ NOT NULL,
     kafka_partition SMALLINT,
     kafka_offset BIGINT
+)
+"""
+
+_PG_DDL_DEAD = """
+CREATE TABLE IF NOT EXISTS {table} (
+    event_id BIGINT PRIMARY KEY,
+    order_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(64),
+    payload TEXT,
+    error TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+)
+"""
+
+_SQLITE_DDL_DEAD = """
+CREATE TABLE IF NOT EXISTS {table} (
+    event_id INTEGER PRIMARY KEY,
+    order_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(64),
+    payload TEXT,
+    error TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL
 )
 """
 
@@ -136,17 +159,53 @@ class RawEventStore:
         if self._engine.dialect.name == "postgresql":
             self._ensure_database()
         ddl = _PG_DDL if self._engine.dialect.name == "postgresql" else _SQLITE_DDL
+        is_pg = self._engine.dialect.name == "postgresql"
+        dead_ddl = _PG_DDL_DEAD if is_pg else _SQLITE_DDL_DEAD
         with self._engine.begin() as conn:
             if self._schema:
                 conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {self._schema}"))
             conn.execute(text(ddl.format(table=self._qualified())))
-            if self._engine.dialect.name == "postgresql":
+            conn.execute(text(dead_ddl.format(table=self._dead_letter_table())))
+            if is_pg:
                 # Tables created before a column existed (Alembic lands in
                 # Phase 5): additively self-heal instead of failing inserts.
                 for col in ("kafka_partition SMALLINT", "kafka_offset BIGINT"):
                     conn.execute(
                         text(f"ALTER TABLE {self._qualified()} ADD COLUMN IF NOT EXISTS {col}")
                     )
+
+    def _dead_letter_table(self) -> str:
+        return f"{self._schema}.ingest_dead_letters" if self._schema else "ingest_dead_letters"
+
+    def _quarantine(self, conn, record: dict[str, Any], error: Exception) -> None:
+        """Preserve a permanently-rejected event instead of retrying it forever.
+
+        Row-level failures (type/length violations, constraint breaks) are the
+        poison-pill case: quarantine the record so offsets can move past it.
+        Connection-level failures never reach here - they abort the batch."""
+        if not isinstance(error, DataError | IntegrityError):
+            raise error
+        conn.execute(
+            text(
+                f"INSERT INTO {self._dead_letter_table()} "
+                "(event_id, order_id, event_type, payload, error, created_at) "
+                "VALUES (:event_id, :order_id, :event_type, :payload, :error, :created_at)"
+            ),
+            {
+                "event_id": record["event_id"],
+                "order_id": record["order_id"],
+                "event_type": (record.get("event_type") or "unknown")[:64],
+                "payload": record.get("payload"),
+                "error": str(error)[:500],
+                "created_at": datetime.now(UTC),
+            },
+        )
+        logger.error(
+            "quarantined event %s (%s) to the ingest dead-letter table: %s",
+            record["event_id"],
+            record["event_type"],
+            error,
+        )
 
     def _ensure_database(self) -> None:
         url = make_url(self._engine.url)
@@ -163,34 +222,38 @@ class RawEventStore:
         finally:
             admin_engine.dispose()
 
-    def store(self, records: Sequence[dict[str, Any]]) -> int:
-        """Insert a batch, skipping event_ids already present. Returns the
-        number of NEW rows — replays dedupe to zero by primary key."""
+    def store(self, records: Sequence[dict[str, Any]]) -> tuple[int, int]:
+        """Insert a batch, skipping event_ids already present. Row-level
+        rejections are quarantined to the dead-letter table instead of
+        blocking the batch. Returns (new rows, quarantined) - replays dedupe
+        to zero by primary key."""
         ingested_at = datetime.now(UTC)
         inserted = 0
+        quarantined = 0
         with self._engine.begin() as conn:
             for record in records:
-                if self._engine.dialect.name == "sqlite":
-                    stmt = text(
-                        f"INSERT OR IGNORE INTO {self._qualified()} "
-                        "(event_id, order_id, event_type, schema_version, payload, "
-                        "source_created_at, ingested_at) "
-                        "VALUES (:event_id, :order_id, :event_type, :schema_version, "
-                        ":payload, :source_created_at, :ingested_at)"
-                    )
-                else:
-                    stmt = text(
-                        f"INSERT INTO {self._qualified()} "
-                        "(event_id, order_id, event_type, schema_version, payload, "
-                        "source_created_at, ingested_at, kafka_partition, kafka_offset) "
-                        "VALUES (:event_id, :order_id, :event_type, :schema_version, "
-                        ":payload, :source_created_at, :ingested_at, "
-                        ":kafka_partition, :kafka_offset) "
-                        "ON CONFLICT (event_id) DO NOTHING"
-                    )
-                result = conn.execute(stmt, record | {"ingested_at": ingested_at})
-                inserted += max(result.rowcount, 0)
-        return inserted
+                # Same statement on both dialects: only the PK conflict is
+                # ignored (replays); other row-level violations RAISE so the
+                # quarantine path can preserve them. (INSERT OR IGNORE would
+                # silently swallow NOT NULL/CHECK violations too.)
+                stmt = text(
+                    f"INSERT INTO {self._qualified()} "
+                    "(event_id, order_id, event_type, schema_version, payload, "
+                    "source_created_at, ingested_at, kafka_partition, kafka_offset) "
+                    "VALUES (:event_id, :order_id, :event_type, :schema_version, "
+                    ":payload, :source_created_at, :ingested_at, "
+                    ":kafka_partition, :kafka_offset) "
+                    "ON CONFLICT (event_id) DO NOTHING"
+                )
+                try:
+                    result = conn.execute(stmt, record | {"ingested_at": ingested_at})
+                    inserted += max(result.rowcount, 0)
+                except Exception as exc:
+                    # Re-raises connection-level failures (aborting the batch);
+                    # quarantines row-level ones.
+                    self._quarantine(conn, record, exc)
+                    quarantined += 1
+        return inserted, quarantined
 
 
 def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-running loop
@@ -219,6 +282,7 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
         s.kafka_group_id,
     )
 
+    consecutive_failures = 0
     while not _shutdown:
         batch = consumer.consume(num_messages=s.ingest_batch_size, timeout=s.relay_poll_seconds)
         if not batch:
@@ -235,19 +299,33 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
                 records.append(record)
         try:
             if records:
-                inserted = store.store(records)
+                inserted, quarantined = store.store(records)
                 logger.info(
-                    "ingested %d new event(s) — %d received, %d deduped or malformed",
-                    inserted,
+                    "ingested %d new event(s) — %d received, %d deduped/malformed/quarantined",
+                    inserted + quarantined,
                     len(batch),
-                    len(batch) - inserted,
+                    len(batch) - inserted - quarantined,
                 )
+                if quarantined:
+                    logger.error(
+                        "%d event(s) quarantined to the ingest dead-letter table", quarantined
+                    )
             consumer.commit(asynchronous=False)
         except Exception:
             # Offsets were not committed: the group re-reads this batch —
             # the primary key turns the replay into no-ops.
+            consecutive_failures += 1
             logger.exception("ingest cycle failed; will re-consume after backoff")
+            if consecutive_failures >= 5:
+                # A dropped warehouse database would otherwise retry forever:
+                # re-run the idempotent bootstrap (the restart policy can't
+                # help because the loop never exits).
+                logger.warning("%d consecutive failures; re-running ensure()", consecutive_failures)
+                store.ensure()
+                consecutive_failures = 0
             time.sleep(s.relay_poll_seconds * 2)
+        else:
+            consecutive_failures = 0
 
     consumer.close()
     logger.info("ingest consumer stopped cleanly")

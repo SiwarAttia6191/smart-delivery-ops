@@ -31,5 +31,12 @@ class OrderEvent(Base):
     published_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True, default=None, index=True
     )
+    # Delivery metadata (like published_at): set when the relay gives up on an
+    # event after repeated permanent failures - it is quarantined to
+    # relay_dead_letters and excluded from claiming, so one poison event can
+    # never stall the outbox (head-of-line blocking).
+    quarantined_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None, index=True
+    )
 
     order = relationship("Order", back_populates="events")

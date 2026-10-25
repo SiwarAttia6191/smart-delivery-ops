@@ -15,17 +15,29 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from apps.worker.relay import SCHEMA_VERSION, relay_once
-from domain.models import OrderEvent, RelayState
+from domain.models import OrderEvent, RelayDeadLetter, RelayState
 
 
 class FakePublisher:
-    """In-memory stand-in. Can simulate the failure modes that matter:
-    produce() raising mid-batch, and flush() failing to confirm delivery."""
+    """In-memory stand-in. Simulates the failure modes that matter:
+    produce() raising mid-batch, flush() failing as a broker outage
+    (fail_flush), and permanent per-event delivery failures (fail_event_ids,
+    reported via take_delivery_failures exactly like delivery reports)."""
 
-    def __init__(self, fail_flush: bool = False, fail_produce_after: int | None = None) -> None:
+    def __init__(
+        self,
+        fail_flush: bool = False,
+        fail_produce_after: int | None = None,
+        fail_event_ids: tuple[int, ...] = (),
+        fail_produce_event_ids: tuple[int, ...] = (),
+    ) -> None:
         self.sent: list[tuple[str, str, str, list[tuple[str, str | bytes | None]] | None]] = []
         self.fail_flush = fail_flush
         self.fail_produce_after = fail_produce_after  # raise on the Nth produce call
+        self.fail_event_ids = set(fail_event_ids)
+        self.fail_produce_event_ids = set(fail_produce_event_ids)
+        self._reported: list[int] = []
+        self._reported_once = False
 
     def produce(
         self,
@@ -36,11 +48,28 @@ class FakePublisher:
     ) -> None:
         if self.fail_produce_after is not None and len(self.sent) >= self.fail_produce_after:
             raise RuntimeError("produce queue full")
+        if self.fail_produce_event_ids:
+            for hdr_key, hdr_val in headers or []:
+                if hdr_key == "event_id" and int(
+                    hdr_val.decode() if isinstance(hdr_val, bytes) else str(hdr_val)
+                ) in self.fail_produce_event_ids:
+                    raise RuntimeError("payload rejected at serialization")
         self.sent.append((topic, key, value, headers))
 
     def flush(self) -> None:
+        if self.fail_event_ids and not self._reported_once:
+            # Permanent failures only: the poisoned messages are removed from
+            # the queue, so a re-flush of the survivors succeeds.
+            self._reported = sorted(self.fail_event_ids)
+            self._reported_once = True
+            raise RuntimeError("delivery not confirmed")
         if self.fail_flush:
             raise RuntimeError("delivery not confirmed")
+
+    def take_delivery_failures(self) -> list[int]:
+        failed = self._reported
+        self._reported = []
+        return failed
 
 
 def add_event(session: Session, order_id: str, event_type: str = "created") -> OrderEvent:
@@ -110,6 +139,51 @@ class TestClaimBasedSelection:
         assert (first, second) == (2, 1)
         assert len(publisher.sent) == 3
 
+    def test_permanently_failed_delivery_is_quarantined_and_survivors_relayed(self, db: Session):
+        add_event(db, "ORD-1")
+        add_event(db, "ORD-2")
+        add_event(db, "ORD-3")
+        publisher = FakePublisher(fail_event_ids=(2,))
+
+        relayed = relay_once(db, publisher, "orders.events")
+
+        assert relayed == 2  # 1 and 3 delivered; 2 quarantined
+        assert published_ids(db) == [1, 3]
+        dead = db.query(RelayDeadLetter).one()
+        assert dead.event_id == 2
+        assert "permanent failure" in dead.error
+        # The quarantined row is never claimed again
+        assert relay_once(db, publisher, "orders.events") == 0
+
+    def test_produce_failure_quarantines_one_row_not_the_batch(self, db: Session):
+        add_event(db, "ORD-1")
+        add_event(db, "ORD-2")
+        add_event(db, "ORD-3")
+        publisher = FakePublisher(fail_produce_event_ids=(2,))  # only event 2 rejects
+
+        relayed = relay_once(db, publisher, "orders.events")
+
+        assert relayed == 2
+        assert published_ids(db) == [1, 3]
+        assert db.query(RelayDeadLetter).one().event_id == 2
+
+    def test_broker_outage_rolls_back_entire_batch(self, db: Session):
+        add_event(db, "ORD-1")
+        add_event(db, "ORD-2")
+        publisher = FakePublisher(fail_flush=True)
+
+        try:
+            relay_once(db, publisher, "orders.events")
+        except RuntimeError:
+            pass
+        db.rollback()
+
+        assert published_ids(db) == []
+        assert db.query(RelayDeadLetter).count() == 0  # outage quarantines nothing
+        # and the batch replays later
+        healthy = FakePublisher()
+        assert relay_once(db, healthy, "orders.events") == 2
+
     def test_empty_log_writes_no_state_row(self, db: Session):
         publisher = FakePublisher()
 
@@ -135,20 +209,6 @@ class TestDeliveryGating:
 
         assert published_ids(db) == []  # nothing marked → the batch will replay
         assert db.get(RelayState, 1) is None
-
-    def test_produce_failure_mid_batch_marks_nothing(self, db: Session):
-        add_event(db, "ORD-1")
-        add_event(db, "ORD-2")
-        publisher = FakePublisher(fail_produce_after=1)
-
-        try:
-            relay_once(db, publisher, "orders.events")
-        except RuntimeError:
-            pass
-        db.rollback()
-
-        assert published_ids(db) == []
-        assert len(publisher.sent) == 1  # first produce succeeded, batch still aborts
 
     def test_failed_batch_replays_fully_on_retry(self, db: Session):
         add_event(db, "ORD-1")
@@ -176,7 +236,7 @@ class TestWireFormat:
 
         record = json.loads(publisher.sent[0][2])
         assert record["schema_version"] == SCHEMA_VERSION
-        assert publisher.sent[0][3] == [("event_type", b"assigned")]
+        assert publisher.sent[0][3] == [("event_type", b"assigned"), ("event_id", b"1")]
 
     def test_state_row_tracks_last_published_for_observability(self, db: Session):
         add_event(db, "ORD-1")
