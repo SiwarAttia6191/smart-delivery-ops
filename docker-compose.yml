@@ -25,7 +25,9 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U smartops"]
+      # -d matters: without it pg_isready probes a database named after the
+      # user, and Postgres logs a harmless-but-noisy FATAL every 5 seconds.
+      test: ["CMD-SHELL", "pg_isready -U smartops -d smart_delivery_ops"]
       interval: 5s
       timeout: 3s
       retries: 10
