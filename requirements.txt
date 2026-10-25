@@ -7,7 +7,7 @@ pydantic-settings>=2.7
 psycopg[binary]>=3.3.6
 
 # HTTP client (smoke tests / demo scripts)
-httpx>=0.28
+httpx>=0.28.1
 
 # ── Later phases (not required for Phase 1) ─────────────────────
 # redis>=5            # Phase 2/5 — cache & availability state
