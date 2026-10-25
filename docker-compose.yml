@@ -48,7 +48,25 @@ services:
         condition: service_healthy
       kafka:
         condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
     restart: unless-stopped
+
+  kafka-init:
+    # One-shot topic provisioning. Production disables auto-create (typos
+    # would silently produce to dead topics, partition counts drift
+    # uncontrolled) and declares topics explicitly — we do the same even in
+    # dev. Partition count on a keyed topic is effectively permanent: raising
+    # it later re-shuffles the key→partition mapping and breaks per-order
+    # ordering between old and new data, so orders.events starts at 3.
+    image: apache/kafka:3.9.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic orders.events --partitions 3 --replication-factor 1"
 
   kafka:
     # Official Apache Kafka image, KRaft mode (no ZooKeeper) — a single node
@@ -70,7 +88,16 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      # Topic data must survive container recreation: the relay's offset
+      # (relay_state in Postgres) persists, so an ephemeral broker would
+      # leave the bus silently empty while the database says "published".
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # Dev-stack friendly heap — the default (~1G) is overkill next to
+      # Postgres + API + worker on one machine.
+      KAFKA_HEAP_OPTS: "-Xmx512M -Xms256M"
+    volumes:
+      - kafkadata:/var/lib/kafka/data
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:19092 >/dev/null 2>&1"]
       interval: 10s
@@ -80,3 +107,4 @@ services:
 
 volumes:
   pgdata:
+  kafkadata:
