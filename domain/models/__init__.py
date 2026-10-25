@@ -5,6 +5,7 @@ from domain.models.customer import Customer
 from domain.models.driver import Driver
 from domain.models.order import Order, OrderStatus
 from domain.models.order_event import OrderEvent
+from domain.models.relay_state import RelayState
 from domain.models.restaurant import Restaurant
 
 __all__ = [
@@ -14,5 +15,6 @@ __all__ = [
     "Order",
     "OrderEvent",
     "OrderStatus",
+    "RelayState",
     "Restaurant",
 ]
