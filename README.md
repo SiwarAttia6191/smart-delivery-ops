@@ -1,0 +1,201 @@
+# 🚚 Smart Delivery Ops
+
+**AI-Powered Smart Delivery Operations Platform** — an open-source, production-inspired
+backend that models a food-delivery / local-logistics startup: order lifecycle,
+geographic driver dispatch, dynamic pricing, demand forecasting, and operational
+analytics in one system.
+
+[![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-2.0-D71F00?logo=sqlalchemy&logoColor=white)](https://www.sqlalchemy.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-8A2BE2.svg)](LICENSE)
+[![CI](https://github.com/SiwarAttia6191/smart-delivery-ops/actions/workflows/ci.yml/badge.svg)](https://github.com/SiwarAttia6191/smart-delivery-ops/actions/workflows/ci.yml)
+[![Built with AI 🤖](https://img.shields.io/badge/Built_with-AI_🤖-ff69b4)](https://github.com/features/copilot)
+
+> From order to doorstep, optimized by AI — a portfolio project that connects
+> backend engineering, data engineering, and machine learning in one realistic
+> startup scenario.
+
+---
+
+## ✨ Features
+
+| Domain | What it does |
+|---|---|
+| 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
+| 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
+| 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
+| ⏱️ **ETA estimation** | Prep + travel + buffer heuristic (Phase 1), upgrade path to an ML regression model |
+| 📊 **Operational analytics** | KPI summary (status mix, revenue, average delivery time) + Prometheus metrics endpoint |
+| 📚 **OpenAPI / Swagger** | Typed Pydantic contracts, interactive docs at `/docs` and `/redoc` out of the box |
+
+## 🧱 Tech stack
+
+- **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0
+- **Database** — SQLite (zero-config local) / PostgreSQL (Docker)
+- **Testing** — pytest (unit + integration via TestClient)
+- **Quality** — Ruff (lint + format) · GitHub Actions CI · Dependabot
+- **Roadmap** — Redis, Kafka/RabbitMQ event pipeline, Prophet/XGBoost forecasting, Streamlit dashboard, OpenTelemetry + Prometheus/Grafana (see [docs/roadmap.md](docs/roadmap.md))
+
+## 🚀 Quickstart
+
+```bash
+git clone https://github.com/SiwarAttia6191/smart-delivery-ops.git
+cd smart-delivery-ops
+
+# 1) install (Windows: make setup · Linux/macOS: ./scripts/bootstrap.sh)
+make setup
+
+# 2) start PostgreSQL (production database) + seed demo data
+make db-up
+make seed
+
+# 3) run the API
+make api
+```
+
+Open **http://127.0.0.1:8010/docs** for the interactive Swagger UI, then try:
+
+```bash
+# quote a delivery
+curl -X POST localhost:8010/pricing/quote -H "Content-Type: application/json" \
+  -d '{"restaurant_id": 1, "dropoff_latitude": 36.8381, "dropoff_longitude": 10.2385, "demand_ratio": 1.3}'
+
+# place + dispatch + deliver an order
+curl -X POST localhost:8010/orders -H "Content-Type: application/json" \
+  -d '{"customer_id": 1, "restaurant_id": 1, "dropoff_latitude": 36.8381, "dropoff_longitude": 10.2385}'
+curl -X POST localhost:8010/orders/<ORDER_ID>/assign
+curl -X POST localhost:8010/orders/<ORDER_ID>/status -H "Content-Type: application/json" -d '{"status": "in_transit"}'
+curl -X POST localhost:8010/orders/<ORDER_ID>/status -H "Content-Type: application/json" -d '{"status": "delivered"}'
+
+# KPIs
+curl localhost:8010/analytics/summary
+```
+
+Or run the full end-to-end scenario: `make smoke`.
+
+## 🎮 Try it live — Swagger walkthrough
+
+The fastest way to feel the whole lifecycle is the interactive docs at
+**http://127.0.0.1:8010/docs** (start the API first: `make api`). Every step
+below was executed against the real API with PostgreSQL behind it — the
+captures are genuine responses, not mockups.
+
+**1 · Open the docs** — all endpoint groups are listed by tag (health,
+customers, restaurants, drivers, orders, pricing, analytics):
+
+![Swagger UI overview](docs/images/swagger-1-overview.png)
+
+**2 · Create an order** — expand `POST /orders`, press **Try it out**, set the
+body (a customer, a restaurant, a drop-off point, and a demand ratio of 1.3 to
+trigger surge pricing), then **Execute**. The response returns the order in
+`pending` with the computed distance, fee — surged to ×1.25 — and ETA:
+
+![Create order](docs/images/swagger-2-create-order.png)
+
+**3 · Assign the nearest driver** — copy the order `id` from the response,
+open `POST /orders/{order_id}/assign`, paste it, **Execute**. The dispatcher
+picks the closest available driver and the order moves to `assigned` (the
+driver becomes busy):
+
+![Assign driver](docs/images/swagger-3-assign-driver.png)
+
+**4 · Advance the lifecycle** — in `POST /orders/{order_id}/status`, execute
+first with `{"status": "in_transit"}` …:
+
+![Order in transit](docs/images/swagger-4-in-transit.png)
+
+… then with `{"status": "delivered"}`. The response now carries a
+`delivered_at` timestamp, `delivery_minutes`, and the full event history
+(`created → assigned → status → status`); the driver is automatically freed:
+
+![Order delivered](docs/images/swagger-5-delivered.png)
+
+**5 · Watch the analytics update** — execute `GET /analytics/summary` and see
+the platform totals reflect the order you just delivered (status mix, revenue,
+average delivery time, fleet availability):
+
+![Analytics summary](docs/images/swagger-6-analytics.png)
+
+> Invalid moves are rejected by the state machine — e.g. delivering a
+> `pending` order returns `409 invalid_transition`, and going straight to
+> `assigned` via the status endpoint is blocked at the schema level (use
+> `/assign`).
+
+The local port is configurable: `make api API_PORT=9090` (default **8010**, chosen to avoid the crowded 8000).
+
+**Docker (PostgreSQL profile):** `docker compose up --build` → API on **http://127.0.0.1:8010**, Postgres on :5434.
+
+## 🗄️ Database
+
+The default database is **PostgreSQL 16**, running as a Docker container
+(`make db-up`) with credentials from `docker-compose.yml`:
+
+| | |
+|---|---|
+| Host | `localhost:5434` (5432 in-container; host port avoids conflicts with a local PG install) |
+| Database | `smart_delivery_ops` |
+| User / password | `smartops` / `smartops` |
+| Connection string | `postgresql+psycopg://smartops:smartops@localhost:5434/smart_delivery_ops` |
+
+Connect with any client — `make db-shell` (psql inside the container), pgAdmin,
+DBeaver, TablePlus — or run SQL directly:
+
+```bash
+docker compose exec postgres psql -U smartops -d smart_delivery_ops \
+  -c "SELECT status, COUNT(*) FROM orders GROUP BY status;"
+```
+
+Data persists in the `pgdata` Docker volume across restarts. A zero-config
+SQLite fallback remains available via `DATABASE_URL=sqlite:///./local.db`
+(tests always run on isolated in-memory SQLite).
+
+## 🗂️ Project structure
+
+```
+smart-delivery-ops/
+├── apps/
+│   ├── api/            # FastAPI app: routes, Pydantic schemas, deps
+│   ├── dashboard/      # Phase 4 — Streamlit operations dashboard
+│   └── worker/         # Phase 2 — event bus consumers
+├── core/               # config, database, logging, exceptions
+├── domain/
+│   ├── models/         # SQLAlchemy entities (Customer, Driver, Restaurant, Order, OrderEvent)
+│   ├── rules/          # pure business rules (geo, pricing tiers, driver eligibility)
+│   └── services/       # use-cases (order lifecycle, dispatch, pricing, ETA)
+├── data/               # Phase 2 — ingestion, ETL, warehouse
+├── ml/                 # Phase 3 — features, training, model registry
+├── infra/              # docker, kubernetes, monitoring
+├── tests/              # unit + integration
+├── scripts/            # seed, smoke test, bootstrap
+└── docs/               # architecture, data model, API, ML design, roadmap
+```
+
+## 🧭 Roadmap
+
+| Phase | Goal | Status |
+|---|---|---|
+| 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
+| 2 | Data engineering — event ingestion, warehouse, ETL | 🔜 |
+| 3 | AI/ML — demand forecasting, ETA model, smart allocation | 🔜 |
+| 4 | Dashboard & BI — KPIs, trends, drill-downs | 🔜 |
+| 5 | Production readiness — Docker, CI/CD, observability, auth | 🟡 partially (CI, Docker, metrics already in) |
+
+Details: [docs/roadmap.md](docs/roadmap.md) · Architecture: [docs/architecture.md](docs/architecture.md)
+
+## 📖 Documentation
+
+- [Architecture overview](docs/architecture.md) — system diagram and design decisions
+- [API reference](docs/api.md) — endpoint catalogue (also live at `/docs`)
+- [Data model](docs/data_model.md) — tables, relationships, order state machine
+- [ML design](docs/ml_design.md) — forecasting and ETA modelling plan
+
+## 📄 License
+
+[MIT](LICENSE) © 2026 Siwar Attia
+
+---
+
+*This project is an independent, from-scratch implementation inspired by common
+delivery-startup system-design exercises; it reuses no code from any third-party
+repository.*
