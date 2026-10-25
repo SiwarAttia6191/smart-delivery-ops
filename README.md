@@ -227,6 +227,38 @@ official dbt-postgres image since dbt needs Python ≤ 3.12):
 Every build also runs the data tests: unique/not-null keys on the source and
 marts, accepted-values checks on event types and `schema_version`.
 
+### 🛡️ Data quality — three lines of defense
+
+1. **Source gates** — unique/not-null `event_id`, accepted-values on
+   `event_type` and `schema_version`. Source-level failures *block* the build:
+   bad data never reaches the marts.
+2. **Mart guards** — reusable `non_negative` / `between` macros: revenue and
+   counts can't go negative, `order_hour` is bounded 0–23, and the surge
+   multiplier is bounded to the engine's legal band **1.0–2.0** (the tier-3
+   cap). Singular business-rule tests: daily revenue must reconcile between
+   the funnel and pricing marts, delivered orders must have a prior
+   assignment, delivered can never exceed created.
+3. **Freshness** — `dbt source freshness` on `max(ingested_at)` (warn 12 h /
+   error 24 h) turns a silently-stalled pipeline into a loud incident.
+   `make dbt` runs build + freshness.
+
+Every failure mode below was demonstrated live by injecting bad rows:
+
+```text
+# 1 · a corrupt event_type halts the build before any model runs
+FAIL 1 source_accepted_values_raw_order_events_event_type__created__assigned__status
+Done. PASS=5  WARN=0  ERROR=1  SKIP=39  TOTAL=45
+
+# 2 · a "created" event with a negative fee and an out-of-band surge
+FAIL 1 between_mart_pricing_history_surge_multiplier__2_0__1_0
+FAIL 1 non_negative_mart_pricing_history_delivery_fee
+FAIL 1 non_negative_mart_pricing_history_fee_per_km
+Done. PASS=42  WARN=0  ERROR=3  SKIP=0  TOTAL=45
+
+# 3 · a stalled pipeline (no fresh rows in 25h)
+ERROR STALE freshness of raw.order_events
+```
+
 ## 🗂️ Project structure
 
 ```
