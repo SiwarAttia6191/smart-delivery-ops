@@ -1,0 +1,17 @@
+# Core API
+fastapi>=0.115
+uvicorn[standard]>=0.32
+sqlalchemy>=2.0.43
+pydantic>=2.12
+pydantic-settings>=2.7
+
+# HTTP client (smoke tests / demo scripts)
+httpx>=0.28
+
+# ── Later phases (not required for Phase 1) ─────────────────────
+# redis>=5            # Phase 2/5 — cache & availability state
+# psycopg[binary]     # Phase 5 — PostgreSQL driver (compose)
+# pandas>=2.2         # Phase 3 — feature engineering
+# scikit-learn>=1.6   # Phase 3 — ETA / baseline models
+# prophet             # Phase 3 — demand forecasting
+# streamlit           # Phase 4 — operations dashboard
