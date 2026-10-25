@@ -40,3 +40,8 @@ ml/artifacts/*
 
 # Local learning notes (personal study guide, never committed)
 LEARNING.md
+
+# dbt build artifacts (generated on every run)
+data/transform/target/
+data/transform/logs/
+data/transform/.user.yml

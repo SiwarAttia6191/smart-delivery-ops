@@ -7,7 +7,13 @@ models:
       - name: order_date
         tests: [unique, not_null]
       - name: orders_created
-        tests: [not_null]
+        tests: [not_null, non_negative]
+      - name: orders_delivered
+        tests:
+          - not_null
+          - non_negative
+      - name: revenue
+        tests: [not_null, non_negative]
 
   - name: mart_demand_by_zone_hour
     description: Demand heatmap input — orders per ~1 km dropoff zone per hour.
@@ -17,16 +23,39 @@ models:
       - name: dropoff_zone_lon
         tests: [not_null]
       - name: order_hour
-        tests: [not_null]
+        tests:
+          - not_null
+          - between:
+              min: 0
+              max: 23
+      - name: orders
+        tests: [non_negative]
 
   - name: mart_driver_utilization
     description: Per-courier workload and match efficiency.
     columns:
       - name: driver_id
         tests: [unique, not_null]
+      - name: orders_assigned
+        tests: [not_null, non_negative]
+      - name: orders_delivered
+        tests: [not_null, non_negative]
+      - name: avg_match_distance_km
+        tests: [non_negative]
 
   - name: mart_pricing_history
     description: Every quote the pricing engine issued, from the event stream.
     columns:
       - name: order_id
         tests: [unique, not_null]
+      - name: delivery_fee
+        tests: [not_null, non_negative]
+      - name: surge_multiplier
+        # 1.0 (no surge) through 2.0 (tier-3 cap) — the engine's legal band
+        tests:
+          - not_null
+          - between:
+              min: 1.0
+              max: 2.0
+      - name: fee_per_km
+        tests: [non_negative]
