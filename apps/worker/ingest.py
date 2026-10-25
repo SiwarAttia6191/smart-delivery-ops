@@ -53,7 +53,9 @@ CREATE TABLE IF NOT EXISTS {table} (
     schema_version INTEGER NOT NULL,
     payload JSONB,
     source_created_at TIMESTAMPTZ,
-    ingested_at TIMESTAMPTZ NOT NULL
+    ingested_at TIMESTAMPTZ NOT NULL,
+    kafka_partition SMALLINT,
+    kafka_offset BIGINT
 )
 """
 
@@ -65,7 +67,9 @@ CREATE TABLE IF NOT EXISTS {table} (
     schema_version INTEGER NOT NULL,
     payload TEXT,
     source_created_at VARCHAR(64),
-    ingested_at TIMESTAMP NOT NULL
+    ingested_at TIMESTAMP NOT NULL,
+    kafka_partition INTEGER,
+    kafka_offset BIGINT
 )
 """
 
@@ -103,6 +107,9 @@ def parse_message(value: bytes | str | None) -> dict[str, Any] | None:
         "schema_version": int(raw["schema_version"]),
         "payload": json.dumps(raw["payload"]),
         "source_created_at": raw.get("created_at"),
+        # Kafka lineage - filled in by the consumer loop from the message
+        "kafka_partition": None,
+        "kafka_offset": None,
     }
 
 
@@ -133,6 +140,13 @@ class RawEventStore:
             if self._schema:
                 conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {self._schema}"))
             conn.execute(text(ddl.format(table=self._qualified())))
+            if self._engine.dialect.name == "postgresql":
+                # Tables created before a column existed (Alembic lands in
+                # Phase 5): additively self-heal instead of failing inserts.
+                for col in ("kafka_partition SMALLINT", "kafka_offset BIGINT"):
+                    conn.execute(
+                        text(f"ALTER TABLE {self._qualified()} ADD COLUMN IF NOT EXISTS {col}")
+                    )
 
     def _ensure_database(self) -> None:
         url = make_url(self._engine.url)
@@ -168,9 +182,10 @@ class RawEventStore:
                     stmt = text(
                         f"INSERT INTO {self._qualified()} "
                         "(event_id, order_id, event_type, schema_version, payload, "
-                        "source_created_at, ingested_at) "
+                        "source_created_at, ingested_at, kafka_partition, kafka_offset) "
                         "VALUES (:event_id, :order_id, :event_type, :schema_version, "
-                        ":payload, :source_created_at, :ingested_at) "
+                        ":payload, :source_created_at, :ingested_at, "
+                        ":kafka_partition, :kafka_offset) "
                         "ON CONFLICT (event_id) DO NOTHING"
                     )
                 result = conn.execute(stmt, record | {"ingested_at": ingested_at})
@@ -211,7 +226,13 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
         for msg in batch:
             if msg.error():
                 logger.warning("kafka message error: %s", msg.error())
-        records = [r for r in (parse_message(m.value()) for m in batch) if r is not None]
+        records = []
+        for msg in batch:
+            record = parse_message(msg.value())
+            if record is not None:
+                record["kafka_partition"] = msg.partition()
+                record["kafka_offset"] = msg.offset()
+                records.append(record)
         try:
             if records:
                 inserted = store.store(records)
