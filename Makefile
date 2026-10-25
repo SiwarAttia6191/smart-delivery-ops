@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint smoke clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke clean
 
 API_PORT ?= 8010
 
@@ -22,12 +22,18 @@ seed:            ## seed the database with demo data (Tunis metro area)
 api:             ## run the API locally with reload (Swagger at http://127.0.0.1:$(API_PORT)/docs)
 	.venv/Scripts/python -m uvicorn apps.api.main:app --reload --port $(API_PORT)
 
-test:            ## run the full test suite
-	.venv/Scripts/python -m pytest
+test:            ## run the full test suite with coverage
+	.venv/Scripts/python -m pytest --cov=apps --cov=core --cov=domain
 
 lint:            ## ruff check + format verification
 	.venv/Scripts/python -m ruff check .
 	.venv/Scripts/python -m ruff format --check .
+
+typecheck:       ## static type checking (mypy)
+	.venv/Scripts/python -m mypy apps core domain scripts tests
+
+audit:           ## dependency vulnerability audit (production requirements)
+	.venv/Scripts/python -m pip_audit -r requirements.txt
 
 smoke:           ## end-to-end smoke test against a running API (make api first)
 	.venv/Scripts/python scripts/smoke_test.py

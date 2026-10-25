@@ -1,6 +1,7 @@
 """Shared test fixtures: isolated in-memory database + API test client."""
 
-import os
+import os  # noqa: E402
+from collections.abc import Generator  # noqa: E402
 
 # Tests must not depend on (or touch) the real PostgreSQL database:
 # pin the app-level engine to a throwaway SQLite file BEFORE the app modules
@@ -21,7 +22,7 @@ from domain.models import Base  # noqa: E402
 
 
 @pytest.fixture
-def engine():
+def engine() -> Generator[object, None, None]:
     engine = create_engine(
         "sqlite://",  # in-memory, one connection shared across threads
         connect_args={"check_same_thread": False},
@@ -33,7 +34,7 @@ def engine():
 
 
 @pytest.fixture
-def db(engine) -> Session:
+def db(engine) -> Generator[Session, None, None]:
     """Function-scoped session over a fresh schema (tables dropped per test)."""
     Base.metadata.drop_all(engine)
     Base.metadata.create_all(engine)
@@ -45,7 +46,7 @@ def db(engine) -> Session:
 
 
 @pytest.fixture
-def client(db: Session) -> TestClient:
+def client(db: Session) -> Generator[TestClient, None, None]:
     """API client wired to the same isolated session (lifespan skipped)."""
 
     def _override():
