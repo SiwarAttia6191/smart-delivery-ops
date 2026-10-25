@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Append-only landings from the Kafka orders.events topic (see
+      apps/worker/ingest.py). This is the ONLY place the transformation layer
+      touches — never the operational database the API serves.
+    schema: raw
+    tables:
+      - name: order_events
+        description: One row per order-lifecycle event, deduped by event_id.
+        columns:
+          - name: event_id
+            description: Source primary key from order_events (the outbox log).
+            tests: [unique, not_null]
+          - name: order_id
+            tests: [not_null]
+          - name: event_type
+            tests:
+              - not_null
+              - accepted_values:
+                  values: [created, assigned, status]
+          - name: schema_version
+            tests:
+              - accepted_values:
+                  values: [1]

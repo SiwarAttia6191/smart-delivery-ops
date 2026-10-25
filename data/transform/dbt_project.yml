@@ -1,0 +1,19 @@
+name: "smart_delivery_ops"
+version: "1.0.0"
+config-version: 2
+
+profile: "warehouse"
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  smart_delivery_ops:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: analytics

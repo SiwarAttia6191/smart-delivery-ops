@@ -1,0 +1,15 @@
+# dbt connection profile — every value is env-var driven so the same file
+# works from host tooling (defaults, host port 5434) and from the compose
+# `dbt` service (DBT_HOST=postgres, DBT_PORT=5432).
+warehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', 'localhost') }}"
+      port: "{{ env_var('DBT_PORT', '5434') | int }}"
+      user: "{{ env_var('DBT_USER', 'smartops') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'smartops') }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'smart_delivery_warehouse') }}"
+      schema: "analytics"
+      threads: 4
