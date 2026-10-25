@@ -2,6 +2,13 @@
 -- here — the marts never touch JSON. Events older than the coordinate
 -- enrichment keep working: missing payload keys simply come through as NULL.
 -- Parentheses matter: payload->>'key'::int would cast the *literal* to int.
+--
+-- TIME POLICY (decided before Phase 3 features freeze): the warehouse stores
+-- UTC (timestamptz) - that never changes. Human-facing business grains
+-- (calendar day, hour of day) are derived HERE, once, in Africa/Tunis local
+-- time via AT TIME ZONE - so order_date/order_hour answer "when did the city
+-- actually order?", not "when did UTC say it did". Feature engineering may
+-- add both grains later; marts consume only the local one.
 with source as (
 
     select * from {{ source('raw', 'order_events') }}
@@ -14,6 +21,8 @@ select
     event_type,
     schema_version,
     source_created_at,
+    -- Africa/Tunis is UTC+1 with no DST: stable business day/hour boundaries.
+    source_created_at AT TIME ZONE 'Africa/Tunis' as source_created_at_local,
     ingested_at,
     -- created events
     (payload->>'customer_id')::int                     as customer_id,

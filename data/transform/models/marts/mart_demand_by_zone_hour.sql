@@ -7,7 +7,7 @@ with created as (
 
     select
         order_id,
-        source_created_at,
+        source_created_at_local,
         dropoff_latitude,
         dropoff_longitude,
         delivery_fee,
@@ -23,7 +23,7 @@ zoned as (
         -- ~0.01° grid ≈ 1 km squares; good enough to see city hotspots
         round(dropoff_latitude, 2)   as dropoff_zone_lat,
         round(dropoff_longitude, 2)  as dropoff_zone_lon,
-        extract(hour from source_created_at)::int as order_hour,
+        extract(hour from source_created_at_local)::int as order_hour,
         delivery_fee,
         surge_multiplier
     from created
