@@ -31,6 +31,7 @@ containers reach it on kafka:19092.
 
 import json
 import logging
+import signal
 import time
 from datetime import UTC, datetime
 from typing import Protocol
@@ -198,28 +199,55 @@ def migrate_legacy_deployment(engine) -> None:
 
 
 def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-running loop
+    global _shutdown
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     s = settings or get_settings()
     publisher = KafkaEventPublisher(s.kafka_bootstrap_servers)
-    engine = create_engine(s.database_url)
+    # pool_pre_ping: recycle stale pooled connections after a Postgres restart
+    # instead of crashing the worker with an OperationalError.
+    engine = create_engine(s.database_url, pool_pre_ping=True)
     # Idempotent — removes the startup race with the API when a new table
     # (e.g. relay_state) ships in the same deployment.
     Base.metadata.create_all(engine)
     migrate_legacy_deployment(engine)
     session_factory = sessionmaker(bind=engine)
+
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, _request_shutdown)  # docker stop → finish batch, exit cleanly
+
     logger.info(
         "outbox relay started: topic=%s brokers=%s batch=%d",
         s.kafka_orders_topic,
         s.kafka_bootstrap_servers,
         s.relay_batch_size,
     )
-    while True:
-        with session_factory() as session:
-            relayed = relay_once(session, publisher, s.kafka_orders_topic, s.relay_batch_size)
-        if relayed:
-            logger.info("relayed %d event(s)", relayed)
-            continue  # drain the backlog before sleeping
-        time.sleep(s.relay_poll_seconds)
+    backoff = s.relay_poll_seconds
+    while not _shutdown:
+        try:
+            with session_factory() as session:
+                relayed = relay_once(session, publisher, s.kafka_orders_topic, s.relay_batch_size)
+        except Exception:
+            # Broker down, DB hiccup, ...: back off and retry instead of the
+            # crash-restart cycle a bare exception would cause.
+            logger.exception("relay cycle failed; backing off %.1fs", backoff)
+            time.sleep(backoff)
+            backoff = min(backoff * 2, s.relay_backoff_seconds)
+        else:
+            if relayed:
+                logger.info("relayed %d event(s)", relayed)
+                backoff = s.relay_poll_seconds
+                continue  # drain the backlog before sleeping
+            time.sleep(s.relay_poll_seconds)
+    logger.info("relay stopped cleanly")
+
+
+_shutdown = False
+
+
+def _request_shutdown(signum, frame) -> None:  # noqa: ANN001 - signal handler signature
+    global _shutdown
+    _shutdown = True
+    logger.info("shutdown signal received (sig=%s); finishing current cycle", signum)
 
 
 if __name__ == "__main__":
