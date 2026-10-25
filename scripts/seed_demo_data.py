@@ -70,7 +70,7 @@ def seed() -> None:
             f"{len(CUSTOMERS)} customers (Tunis metro area)."
         )
         print(
-            "Try: curl -X POST localhost:8000/pricing/quote -H 'Content-Type: application/json'"
+            "Try: curl -X POST localhost:8010/pricing/quote -H 'Content-Type: application/json'"
             ' -d \'{"restaurant_id": 1, "dropoff_latitude": 36.8381, "dropoff_longitude": 10.2385}\''
         )
     finally:

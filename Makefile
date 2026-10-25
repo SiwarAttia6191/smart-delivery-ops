@@ -1,5 +1,7 @@
 .PHONY: setup seed api test lint smoke clean
 
+API_PORT ?= 8010
+
 setup:            ## create venv + install dev dependencies
 	python -m venv .venv
 	.venv/Scripts/python -m pip install --upgrade pip
@@ -8,8 +10,8 @@ setup:            ## create venv + install dev dependencies
 seed:            ## seed the local database with demo data (Tunis metro area)
 	.venv/Scripts/python scripts/seed_demo_data.py
 
-api:             ## run the API locally with reload (Swagger at /docs)
-	.venv/Scripts/python -m uvicorn apps.api.main:app --reload --port 8000
+api:             ## run the API locally with reload (Swagger at http://127.0.0.1:$(API_PORT)/docs)
+	.venv/Scripts/python -m uvicorn apps.api.main:app --reload --port $(API_PORT)
 
 test:            ## run the full test suite
 	.venv/Scripts/python -m pytest

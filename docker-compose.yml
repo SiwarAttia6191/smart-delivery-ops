@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: infra/docker/Dockerfile.api
     ports:
-      - "8000:8000"
+      - "8010:8000"  # host 8010 (8000 conflicts with common local tooling) → container 8000
     environment:
       ENVIRONMENT: docker
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops

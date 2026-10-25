@@ -2,7 +2,7 @@
 
 Start the API first (make api), then:
     python scripts/smoke_test.py
-    BASE_URL=http://localhost:8000 python scripts/smoke_test.py
+    BASE_URL=http://localhost:8010 python scripts/smoke_test.py
 """
 
 import os
@@ -11,7 +11,7 @@ import uuid
 
 import httpx
 
-BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8000")
+BASE_URL = os.getenv("BASE_URL", "http://127.0.0.1:8010")
 
 
 def main() -> int:
