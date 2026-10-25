@@ -1,14 +1,23 @@
 """Shared test fixtures: isolated in-memory database + API test client."""
 
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+import os
 
-from apps.api.deps import get_db
-from apps.api.main import app
-from domain.models import Base
+# Tests must not depend on (or touch) the real PostgreSQL database:
+# pin the app-level engine to a throwaway SQLite file BEFORE the app modules
+# import and build their engine from settings. The fixtures below override
+# get_db with an in-memory engine regardless, but FastAPI's lifespan would
+# otherwise still open the configured database.
+os.environ["DATABASE_URL"] = "sqlite:///./.test_local.db"
+
+import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from apps.api.deps import get_db  # noqa: E402
+from apps.api.main import app  # noqa: E402
+from domain.models import Base  # noqa: E402
 
 
 @pytest.fixture

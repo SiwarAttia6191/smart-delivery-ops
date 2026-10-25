@@ -1,4 +1,4 @@
-.PHONY: setup seed api test lint smoke clean
+.PHONY: setup db-up db-down db-shell seed api test lint smoke clean
 
 API_PORT ?= 8010
 
@@ -7,7 +7,16 @@ setup:            ## create venv + install dev dependencies
 	.venv/Scripts/python -m pip install --upgrade pip
 	.venv/Scripts/python -m pip install -r requirements-dev.txt
 
-seed:            ## seed the local database with demo data (Tunis metro area)
+db-up:            ## start the PostgreSQL container (production database)
+	docker compose up -d postgres
+
+db-down:          ## stop the PostgreSQL container (data persists in the pgdata volume)
+	docker compose stop postgres
+
+db-shell:         ## interactive psql inside the Postgres container
+	docker compose exec postgres psql -U smartops -d smart_delivery_ops
+
+seed:            ## seed the database with demo data (Tunis metro area)
 	.venv/Scripts/python scripts/seed_demo_data.py
 
 api:             ## run the API locally with reload (Swagger at http://127.0.0.1:$(API_PORT)/docs)

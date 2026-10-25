@@ -17,6 +17,7 @@ env/
 # Databases
 *.db
 *.sqlite3
+.test_local.db
 
 # Tooling caches
 .pytest_cache/
