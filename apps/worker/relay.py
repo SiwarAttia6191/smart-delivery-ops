@@ -42,6 +42,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from core.config import Settings, get_settings
 from domain.models import Base
 from domain.models.order_event import OrderEvent
+from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
 
 logger = logging.getLogger("worker.relay")
@@ -63,6 +64,11 @@ class EventPublisher(Protocol):
 
     def flush(self) -> None: ...
 
+    def take_delivery_failures(self) -> list[int]:
+        """Event ids whose delivery permanently failed (per delivery reports),
+        consumed by the relay's quarantine path. Empty after a broker outage
+        (a timeout leaves messages queued, not failed)."""
+
 
 class KafkaEventPublisher:
     """confluent-kafka producer with idempotence enabled (acks=all, no dupes
@@ -82,11 +88,22 @@ class KafkaEventPublisher:
             {"bootstrap.servers": bootstrap_servers, "enable.idempotence": True}
         )
         self._failures = 0
+        self._failed_event_ids: list[int] = []
 
     def _on_delivery(self, err, msg) -> None:  # noqa: ANN001 - confluent callback signature
         if err is not None:
             self._failures += 1
-            logger.error("kafka delivery failed: %s (topic=%s)", err, msg.topic() if msg else "?")
+            event_id = None
+            for hdr_key, hdr_val in msg.headers() or []:
+                if hdr_key == "event_id":
+                    event_id = int(hdr_val.decode())
+            self._failed_event_ids.append(event_id) if event_id else None
+            logger.error(
+                "kafka delivery failed: %s (topic=%s, event_id=%s)",
+                err,
+                msg.topic() if msg else "?",
+                event_id,
+            )
 
     def produce(
         self,
@@ -105,11 +122,17 @@ class KafkaEventPublisher:
 
     def flush(self) -> None:
         self._failures = 0
+        self._failed_event_ids = []
         remaining = self._producer.flush(FLUSH_TIMEOUT_SECONDS)
         if remaining or self._failures:
             raise RuntimeError(
                 f"delivery not confirmed: {self._failures} failure(s), {remaining} unflushed"
             )
+
+    def take_delivery_failures(self) -> list[int]:
+        failed = self._failed_event_ids
+        self._failed_event_ids = []
+        return failed
 
 
 def event_record(event: OrderEvent) -> dict:
@@ -139,6 +162,7 @@ def relay_once(
         session.execute(
             select(OrderEvent)
             .where(OrderEvent.published_at.is_(None))
+            .where(OrderEvent.quarantined_at.is_(None))
             .order_by(OrderEvent.id)
             .limit(batch_size)
             .with_for_update(skip_locked=True)
@@ -149,22 +173,62 @@ def relay_once(
     if not events:
         return 0
 
-    try:
-        for event in events:
+    def _quarantine(event: OrderEvent, error: Exception) -> None:
+        """Give up on one poison event - visible, searchable, never silent."""
+        now = datetime.now(UTC)
+        event.quarantined_at = now
+        session.add(
+            RelayDeadLetter(
+                event_id=event.id,
+                order_id=event.order_id,
+                event_type=event.event_type,
+                error=str(error)[:500],
+                created_at=now,
+            )
+        )
+        logger.error("quarantined event %s (%s): %s", event.id, event.event_type, error)
+
+    # Produce every event, isolating produce-time failures (serialization,
+    # oversized payloads) to their row instead of failing the batch.
+    deliverable: list[OrderEvent] = []
+    for event in events:
+        try:
             publisher.produce(
                 topic=topic,
                 key=event.order_id,  # per-order ordering inside a partition
                 value=json.dumps(event_record(event)),
-                headers=[("event_type", event.event_type.encode("utf-8"))],
+                headers=[
+                    ("event_type", event.event_type.encode("utf-8")),
+                    ("event_id", str(event.id).encode("utf-8")),
+                ],
             )
-        publisher.flush()  # raises unless the broker acknowledged every message
-    except Exception:
-        session.rollback()  # release the claim; the batch stays due and will replay
-        raise
+            deliverable.append(event)
+        except Exception as exc:  # noqa: BLE001 - quarantine is the point
+            _quarantine(event, exc)
+
+    if deliverable:
+        try:
+            publisher.flush()  # raises unless the broker acknowledged everything
+        except Exception:
+            failed_ids = set(publisher.take_delivery_failures())
+            if not failed_ids:
+                # No specific failures -> broker-wide outage/timeout: release
+                # the claim and retry the whole batch later.
+                session.rollback()
+                raise
+            survivors: list[OrderEvent] = []
+            for event in deliverable:
+                if event.id in failed_ids:
+                    _quarantine(event, RuntimeError("delivery report: permanent failure"))
+                else:
+                    survivors.append(event)
+            publisher.flush()  # drain whatever survived the quarantine
 
     delivered_at = datetime.now(UTC)
+    quarantined_ids = {e.id for e in events if e.quarantined_at is not None}
     for event in events:
-        event.published_at = delivered_at
+        if event.id not in quarantined_ids:
+            event.published_at = delivered_at
 
     # Observability only — selection no longer depends on this row.
     state = session.get(RelayState, 1, with_for_update=True)
@@ -174,7 +238,7 @@ def relay_once(
     else:
         state.last_relayed_event_id = newest
     session.commit()
-    return len(events)
+    return len(events) - len(quarantined_ids)
 
 
 def migrate_legacy_deployment(engine) -> None:
@@ -190,9 +254,11 @@ def migrate_legacy_deployment(engine) -> None:
     if engine.dialect.name != "postgresql":
         return
     with engine.begin() as conn:
-        conn.execute(
-            text("ALTER TABLE order_events ADD COLUMN IF NOT EXISTS published_at timestamptz")
-        )
+        for ddl in (
+            "ALTER TABLE order_events ADD COLUMN IF NOT EXISTS published_at timestamptz",
+            "ALTER TABLE order_events ADD COLUMN IF NOT EXISTS quarantined_at timestamptz",
+        ):
+            conn.execute(text(ddl))
 
 
 def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-running loop
