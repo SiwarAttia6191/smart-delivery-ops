@@ -33,7 +33,7 @@ analytics in one system.
 
 - **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
-- **Streaming** — Apache Kafka (KRaft, Docker) · confluent-kafka producer · warehouse ingestion consumer
+- **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (staging + marts, official Docker image)
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`
@@ -160,10 +160,13 @@ database transaction (source of truth), and a relay worker copies the log onto
 the topic without ever touching the API's hot path:
 
 ```
+                          ┌──────────────────────── the platform ────────────────────────┐
 POST /orders ──► PostgreSQL (orders + order_events) ──► Kafka orders.events ──► warehouse raw layer
-                     (transactional outbox)    worker    (keyed by order id)  ingest consumer
-                                                                                    (dedupe by event_id)
-```
+                          │     (transactional outbox)    worker    (keyed by order id)  ingest consumer
+                          │                                                                     │
+                          └──────────────────────── the warehouse ──────────────────────────────┘
+                                     dbt build ──► staging views ──► analytics marts
+
 
 Start the broker and the relay (the API comes up as before):
 
@@ -203,9 +206,26 @@ Design notes:
   database** — analytics never reads or writes the operational tables. Kafka
   offsets commit only after the database commit, and the raw table's
   `event_id` primary key turns replays into no-ops: at-least-once end to end,
-  zero duplicates. dbt builds its marts on this raw layer (next).
+  zero duplicates.
 - Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
   containers on `kafka:19092`.
+
+### 🏭 Warehouse transformations (dbt)
+
+`data/transform/` is a dbt project over the raw layer — the only JSON
+unwrapping happens once in `staging`, and four marts answer the business
+questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
+official dbt-postgres image since dbt needs Python ≤ 3.12):
+
+| Mart (schema `analytics`) | Answers |
+|---|---|
+| `mart_daily_order_summary` | Daily funnel: created vs delivered, revenue, avg delivery minutes |
+| `mart_demand_by_zone_hour` | Demand heatmap: orders per ~1 km dropoff zone per hour (Phase 3 forecasting input) |
+| `mart_driver_utilization` | Per-courier workload: assignments, completions, match distance |
+| `mart_pricing_history` | Every quote: distance, fee, surge, fee-per-km (Phase 3 pricing-model feed) |
+
+Every build also runs the data tests: unique/not-null keys on the source and
+marts, accepted-values checks on event types and `schema_version`.
 
 ## 🗂️ Project structure
 
@@ -214,8 +234,9 @@ smart-delivery-ops/
 ├── apps/
 │   ├── api/            # FastAPI app: routes, Pydantic schemas, deps
 │   ├── dashboard/      # Phase 4 — Streamlit operations dashboard
-│   └── worker/         # Phase 2 — event bus consumers
+│   └── worker/         # Phase 2 — event bus consumers (outbox relay, ingestion)
 ├── core/               # config, database, logging, exceptions
+├── data/transform/     # dbt project: staging + warehouse marts (Phase 2)
 ├── domain/
 │   ├── models/         # SQLAlchemy entities (Customer, Driver, Restaurant, Order, OrderEvent)
 │   ├── rules/          # pure business rules (geo, pricing tiers, driver eligibility)
