@@ -231,6 +231,10 @@ marts, accepted-values checks on event types and `schema_version`.
 
 ### 🛡️ Data quality — three lines of defense
 
+`make dbt` runs **45 checks** (the live-build total: 6 source + 4 staging +
+27 mart-column tests with the generic macros instantiated per column, plus 3
+singular business-rule tests). Three lines of defense:
+
 1. **Source gates** — unique/not-null `event_id`, accepted-values on
    `event_type` and `schema_version`. Source-level failures *block* the build:
    bad data never reaches the marts.
@@ -244,7 +248,8 @@ marts, accepted-values checks on event types and `schema_version`.
    error 24 h) turns a silently-stalled pipeline into a loud incident.
    `make dbt` runs build + freshness.
 
-Every failure mode below was demonstrated live by injecting bad rows:
+Every failure mode below was demonstrated live by injecting bad rows (the
+PASS/ERROR/SKIP totals are from those runs, not the clean build):
 
 ```text
 # 1 · a corrupt event_type halts the build before any model runs
