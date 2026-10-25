@@ -37,3 +37,6 @@ data/raw/*
 !data/raw/.gitkeep
 ml/artifacts/*
 !ml/artifacts/.gitkeep
+
+# Local learning notes (personal study guide, never committed)
+LEARNING.md
