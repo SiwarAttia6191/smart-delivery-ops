@@ -38,8 +38,9 @@ audit:           ## dependency vulnerability audit (production requirements)
 smoke:           ## end-to-end smoke test against a running API (make api first)
 	.venv/Scripts/python scripts/smoke_test.py
 
-dbt:             ## build + test the warehouse marts (staging views + analytics tables)
+dbt:             ## build + test the warehouse marts, then check source freshness
 	docker compose run --rm dbt build
+	docker compose run --rm dbt source freshness
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__
