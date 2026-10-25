@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- ════════════════════════════════════════════════════════════════
+     EDIT ME — page title / brand
+     ════════════════════════════════════════════════════════════════ -->
+<title>Smart Delivery Ops — AI-Powered Delivery Operations Platform</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cff'/%3E%3Cstop offset='1' stop-color='%2338e1ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='url(%23g)'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+
+<style>
+/* ══════════════════════════════════════════════════════════════════
+   THEME — change the three accents here; the 3D scene reads them too
+   ══════════════════════════════════════════════════════════════════ */
+:root {
+  --bg: #05060e;
+  --text: #eef0ff;
+  --muted: rgba(230, 233, 255, 0.62);
+  --accent-a: #7c6cff;   /* indigo  — primary   */
+  --accent-b: #38e1ff;   /* cyan    — secondary */
+  --accent-c: #b06cff;   /* violet  — tertiary  */
+  --nav-h: 76px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--accent-a); color: #fff; }
+
+/* ── ambient background ─────────────────────────────────────────── */
+.orbs { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
+.orb { position: absolute; border-radius: 50%; filter: blur(110px); opacity: 0.32; }
+.orb-a {
+  width: 44rem; height: 44rem; top: -14rem; left: 52%;
+  background: radial-gradient(circle, var(--accent-a), transparent 65%);
+  animation: drift-a 22s ease-in-out infinite alternate;
+}
+.orb-b {
+  width: 36rem; height: 36rem; bottom: -12rem; left: -10rem;
+  background: radial-gradient(circle, var(--accent-b), transparent 65%);
+  opacity: 0.2;
+  animation: drift-b 26s ease-in-out infinite alternate;
+}
+@keyframes drift-a { to { transform: translate(-6rem, 4rem) scale(1.12); } }
+@keyframes drift-b { to { transform: translate(7rem, -5rem) scale(0.92); } }
+
+/* film-grain overlay */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: 40; pointer-events: none; opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* CSS-only fallback blob, shown when three.js or WebGL is unavailable */
+.fallback-blob {
+  display: none; position: absolute; z-index: 1; right: 6vw; top: 50%;
+  width: min(46vw, 560px); aspect-ratio: 1; border-radius: 50%;
+  background: conic-gradient(from 120deg, var(--accent-a), var(--accent-b), var(--accent-c), var(--accent-a));
+  filter: blur(60px); opacity: 0.4;
+  animation: spin 24s linear infinite;
+}
+body.no3d .fallback-blob { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── nav ─────────────────────────────────────────────────────────── */
+.nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+  transition: background 0.4s ease, border-color 0.4s ease, backdrop-filter 0.4s ease;
+  border-bottom: 1px solid transparent;
+}
+.nav.scrolled {
+  background: rgba(6, 7, 16, 0.72);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+.nav-inner {
+  max-width: 1200px; margin: 0 auto; height: var(--nav-h);
+  padding: 0 clamp(1.25rem, 4vw, 2.5rem);
+  display: flex; align-items: center; justify-content: space-between; gap: 2rem;
+}
+.logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: var(--text); }
+.logo svg { width: 26px; height: 26px; }
+.logo span {
+  font-family: "Space Grotesk", sans-serif; font-weight: 700;
+  font-size: 1.12rem; letter-spacing: 0.04em;
+}
+.nav-links { display: flex; gap: 2.1rem; list-style: none; }
+.nav-links a {
+  color: var(--muted); text-decoration: none; font-size: 0.93rem; font-weight: 500;
+  background: linear-gradient(var(--text), var(--text)) no-repeat 0 100% / 0 1px;
+  transition: color 0.3s ease, background-size 0.3s ease;
+  padding-bottom: 3px;
+}
+.nav-links a:hover { color: var(--text); background-size: 100% 1px; }
+
+/* ── buttons ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  padding: 0.85rem 1.7rem; border-radius: 999px;
+  font-family: inherit; font-size: 0.95rem; font-weight: 600;
+  text-decoration: none; cursor: pointer; border: none; white-space: nowrap;
+  transition: box-shadow 0.35s ease, background 0.35s ease, border-color 0.35s ease, transform 0.25s ease;
+  will-change: transform;
+}
+.btn-primary {
+  position: relative; overflow: hidden;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  color: #050711; font-weight: 700;
+  box-shadow: 0 10px 34px -10px rgba(124, 108, 255, 0.55);
+}
+.btn-primary:hover { box-shadow: 0 16px 46px -10px rgba(56, 225, 255, 0.6); }
+.btn-primary::after {          /* shine sweep */
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.55) 50%, transparent 70%);
+  transform: translateX(-120%); transition: transform 0.7s ease;
+}
+.btn-primary:hover::after { transform: translateX(120%); }
+.btn-ghost {
+  color: var(--text); background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.btn-ghost:hover { border-color: rgba(255, 255, 255, 0.38); background: rgba(255, 255, 255, 0.07); }
+.btn-ghost .play {
+  width: 22px; height: 22px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  display: grid; place-items: center;
+}
+.btn-ghost .play::before {
+  content: ""; width: 0; height: 0; margin-left: 2px;
+  border-left: 6px solid var(--text); border-top: 4px solid transparent; border-bottom: 4px solid transparent;
+}
+
+/* ── hero layout ─────────────────────────────────────────────────── */
+.hero {
+  position: relative; z-index: 1;
+  min-height: 100vh; min-height: 100svh;
+  display: grid; place-items: center;
+  padding-top: var(--nav-h);
+  overflow: hidden;
+}
+#scene { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; }
+
+.hero-inner {
+  position: relative; z-index: 2;
+  width: 100%; max-width: 1200px;
+  padding: 4rem clamp(1.25rem, 5vw, 3rem) 6rem;
+}
+.copy { position: relative; max-width: 640px; }
+
+/* readability scrim — keeps text legible over the 3D glow at any size */
+.copy::before {
+  content: ""; position: absolute; inset: -20% -12%; z-index: -1;
+  background: radial-gradient(closest-side, rgba(5, 6, 14, 0.74), rgba(5, 6, 14, 0.38) 55%, transparent 78%);
+  pointer-events: none;
+}
+@media (min-width: 921px) { .copy::before { opacity: 0.55; } }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 0.6rem;
+  padding: 0.45rem 1.05rem; border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  font-size: 0.85rem; font-weight: 500; color: var(--muted);
+}
+.badge .dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-b); }
+.badge .dot::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--accent-b);
+  animation: ping 2.2s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes ping { 75%, 100% { transform: scale(2.6); opacity: 0; } }
+
+h1 {
+  font-family: "Space Grotesk", sans-serif;
+  font-size: clamp(2.75rem, 6.4vw, 4.9rem);
+  line-height: 1.05; letter-spacing: -0.03em;
+  margin: 1.5rem 0 1.3rem;
+}
+.grad {
+  background: linear-gradient(90deg, var(--accent-a), var(--accent-b), var(--accent-c), var(--accent-a));
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  animation: grad-shift 9s linear infinite;
+}
+@keyframes grad-shift { to { background-position: 300% 0; } }
+
+.sub {
+  color: var(--muted); font-size: clamp(1.02rem, 1.35vw, 1.18rem);
+  line-height: 1.68; max-width: 560px; margin-bottom: 2.5rem;
+}
+
+.cta-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+.stats { display: flex; margin-top: 3.4rem; gap: clamp(1.4rem, 4vw, 3.2rem); }
+.stat .v {
+  font-family: "Space Grotesk", sans-serif; font-weight: 700;
+  font-size: 1.4rem; letter-spacing: -0.01em;
+}
+.stat .l { color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem; }
+.stat + .stat { border-left: 1px solid rgba(255, 255, 255, 0.1); padding-left: clamp(1.4rem, 4vw, 3.2rem); }
+
+/* scroll cue */
+.scroll-cue {
+  position: absolute; left: 50%; bottom: 1.9rem; transform: translateX(-50%); z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 0.7rem;
+  color: var(--muted); font-size: 0.66rem; letter-spacing: 0.32em; text-transform: uppercase;
+}
+.scroll-cue .line {
+  width: 1px; height: 46px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+.scroll-cue .line::after {
+  content: ""; display: block; width: 100%; height: 46px;
+  background: linear-gradient(180deg, transparent, var(--accent-b));
+  animation: cue 2.1s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes cue { 0% { transform: translateY(-100%); } 55%, 100% { transform: translateY(100%); } }
+
+/* entrance choreography */
+.reveal { opacity: 0; animation: fade-up 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) forwards; }
+.reveal:nth-child(1) { animation-delay: 0.08s; }
+.reveal:nth-child(2) { animation-delay: 0.18s; }
+.reveal:nth-child(3) { animation-delay: 0.28s; }
+.reveal:nth-child(4) { animation-delay: 0.38s; }
+.reveal:nth-child(5) { animation-delay: 0.5s; }
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(26px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 920px) {
+  .nav-links { display: none; }
+  .hero-inner { text-align: center; }
+  .copy { margin: 0 auto; }
+  .sub { margin-left: auto; margin-right: auto; }
+  .cta-row, .stats { justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .reveal { opacity: 1; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+</div>
+<div class="fallback-blob" aria-hidden="true"></div>
+
+<!-- ════════════════════════════════════════════════════════════════
+     NAV — brand name + links
+     ════════════════════════════════════════════════════════════════ -->
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="logo" href="https://github.com/SiwarAttia6191/smart-delivery-ops" aria-label="Smart Delivery Ops on GitHub">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7c6cff"/><stop offset="1" stop-color="#38e1ff"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 2 30 16 16 30 2 16Z" fill="url(#lg)"/>
+        <path d="M16 9 23 16 16 23 9 16Z" fill="#05060e"/>
+      </svg>
+      <span>Smart Delivery Ops</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops">Platform</a></li>
+        <li><a href="https://github.com/SiwarAttia6191/smart-delivery-ops#-features">Features</a></li>
+        <li><a href="https://siwarattia6191.github.io/smart-delivery-ops/architecture/">Architecture</a></li>
+        <li><a href="https://siwarattia6191.github.io/smart-delivery-ops/api/">Docs</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-primary nav-cta" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
+  </div>
+</header>
+
+<!-- ════════════════════════════════════════════════════════════════
+     HERO — headline, sub, CTAs, stats  ← edit copy here
+     ════════════════════════════════════════════════════════════════ -->
+<section class="hero" id="hero">
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <div class="hero-inner">
+    <div class="copy">
+      <div class="badge reveal"><span class="dot"></span>AI-Powered Delivery Operations Platform</div>
+
+      <h1 class="reveal">From order to doorstep,<br/><span class="grad">optimized by AI</span>.</h1>
+
+      <p class="sub reveal">
+        smart-delivery-ops unifies order management, geographic driver dispatch, dynamic
+        pricing, and demand forecasting in one event-driven platform — a production-style
+        showcase of backend, data, and AI engineering.
+      </p>
+
+      <div class="cta-row reveal">
+        <a class="btn btn-primary" id="cta-primary" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
+        <a class="btn btn-ghost" href="https://github.com/SiwarAttia6191/smart-delivery-ops#-try-it-live--swagger-walkthrough"><span class="play" aria-hidden="true"></span>Watch the demo</a>
+      </div>
+
+      <div class="stats reveal">
+        <div class="stat"><div class="v">5+</div><div class="l">core service domains</div></div>
+        <div class="stat"><div class="v">24/7</div><div class="l">event-driven pipeline</div></div>
+        <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-cue" aria-hidden="true">
+    <span>Scroll</span>
+    <span class="line"></span>
+  </div>
+</section>
+
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+/* ── load three.js, degrade gracefully if offline / no WebGL ────── */
+let THREE;
+try { THREE = await import("three"); }
+catch { document.body.classList.add("no3d"); }
+
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+if (THREE) {
+  const cssVar = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const COL_A = new THREE.Color(cssVar("--accent-a"));
+  const COL_B = new THREE.Color(cssVar("--accent-b"));
+  const COL_C = new THREE.Color(cssVar("--accent-c"));
+
+  const canvas = document.getElementById("scene");
+  const hero = document.getElementById("hero");
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  } catch { document.body.classList.add("no3d"); }
+
+  if (renderer) {
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+    camera.position.set(0, 0.35, 7.4);
+
+    /* ── soft-dot sprite texture (round particles, no squares) ──── */
+    function dotTexture(size = 64) {
+      const c = document.createElement("canvas"); c.width = c.height = size;
+      const g = c.getContext("2d");
+      const gr = g.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+      gr.addColorStop(0, "rgba(255,255,255,1)");
+      gr.addColorStop(0.4, "rgba(255,255,255,0.5)");
+      gr.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = gr; g.fillRect(0, 0, size, size);
+      return new THREE.CanvasTexture(c);
+    }
+    const dot = dotTexture();
+
+    /* ── the core: holographic fresnel-glass icosahedron ────────── */
+    const core = new THREE.Group();
+
+    const fresnelMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColorA: { value: COL_A },
+        uColorB: { value: COL_B },
+        uTime:   { value: 0 },
+      },
+      vertexShader: /* glsl */`
+        varying vec3 vN; varying vec3 vV;
+        void main() {
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          vN = normalize(normalMatrix * normal);
+          vV = normalize(-mv.xyz);
+          gl_Position = projectionMatrix * mv;
+        }`,
+      fragmentShader: /* glsl */`
+        uniform vec3 uColorA; uniform vec3 uColorB; uniform float uTime;
+        varying vec3 vN; varying vec3 vV;
+        void main() {
+          float f = pow(1.0 - max(dot(normalize(vN), normalize(vV)), 0.0), 2.2);
+          vec3 col = mix(uColorB, uColorA, f);
+          float pulse = 0.9 + 0.1 * sin(uTime * 1.6);
+          gl_FragColor = vec4(col, (0.05 + f * 0.95) * pulse);
+        }`,
+      transparent: true,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    });
+
+    const shellIn  = new THREE.Mesh(new THREE.IcosahedronGeometry(1.12, 1), fresnelMat);
+    const shellOut = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0),
+      new THREE.ShaderMaterial({
+        uniforms: { uColorA: { value: COL_C }, uColorB: { value: COL_A }, uTime: { value: 0 } },
+        vertexShader: fresnelMat.vertexShader, fragmentShader: fresnelMat.fragmentShader,
+        transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+        wireframe: true,
+      }));
+
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(1.78, 1)),
+      new THREE.LineBasicMaterial({ color: COL_A, transparent: true, opacity: 0.22 })
+    );
+
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: dot, color: COL_A, transparent: true, opacity: 0.5,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    glow.scale.setScalar(9);
+    glow.position.z = -0.8;
+
+    core.add(glow, shellIn, shellOut, edges);
+
+    /* ── orbiting satellites on tilted rings ─────────────────────── */
+    const satGroup = new THREE.Group();
+    const SATS = [
+      { r: 2.25, speed:  0.55, tilt: [0.52, 0.40, 0.14], color: COL_A,        size: 0.11 },
+      { r: 2.75, speed: -0.40, tilt: [-0.34, 2.10, -0.50], color: COL_B,      size: 0.08 },
+      { r: 3.20, speed:  0.30, tilt: [1.02, 4.20, 0.40], color: COL_C,        size: 0.095 },
+      { r: 1.95, speed:  0.85, tilt: [-0.85, 5.50, 0.55], color: 0xffffff,    size: 0.055 },
+    ];
+    const circlePts = (r) => {
+      const p = [];
+      for (let i = 0; i < 96; i++) {
+        const a = (i / 96) * Math.PI * 2;
+        p.push(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r));
+      }
+      return p;
+    };
+    for (const s of SATS) {
+      const pivot = new THREE.Group();
+      pivot.rotation.set(...s.tilt);
+      pivot.add(new THREE.LineLoop(
+        new THREE.BufferGeometry().setFromPoints(circlePts(s.r)),
+        new THREE.LineBasicMaterial({ color: s.color, transparent: true, opacity: 0.14 })
+      ));
+      const sat = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(s.size, 0),
+        new THREE.MeshBasicMaterial({ color: s.color })
+      );
+      sat.position.set(s.r, 0, 0);
+      pivot.add(sat);
+      satGroup.add(pivot);
+      s.pivot = pivot; s.sat = sat;
+    }
+
+    /* ── starfield ───────────────────────────────────────────────── */
+    const mobile = matchMedia("(max-width: 920px)").matches;
+    const N = mobile ? 400 : 1100;
+    const pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+    const tmp = new THREE.Color();
+    for (let i = 0; i < N; i++) {
+      const v = new THREE.Vector3().randomDirection().multiplyScalar(5 + Math.random() * 9);
+      pos.set([v.x, v.y, v.z], i * 3);
+      const pick = Math.random();
+      tmp.copy(pick < 0.62 ? new THREE.Color(0.85, 0.88, 1)
+             : pick < 0.82 ? COL_A : pick < 0.94 ? COL_B : COL_C);
+      tmp.multiplyScalar(0.55 + Math.random() * 0.45);
+      col.set([tmp.r, tmp.g, tmp.b], i * 3);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    starGeo.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    const stars = new THREE.Points(starGeo, new THREE.PointsMaterial({
+      size: 0.055, map: dot, vertexColors: true, transparent: true, opacity: 0.9,
+      blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true,
+    }));
+
+    const world = new THREE.Group();
+    world.add(core, satGroup, stars);
+    scene.add(world);
+
+    /* ── layout: orb right of copy on wide screens ───────────────── */
+    function layout() {
+      const w = hero.clientWidth, h = hero.clientHeight;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      if (w > 920) { world.position.set(1.7, 0.1, 0); }
+      else         { world.position.set(0, 0.75, 0); }
+    }
+    layout();
+    addEventListener("resize", layout);
+
+    /* ── pointer parallax ────────────────────────────────────────── */
+    const target = { x: 0, y: 0 };
+    addEventListener("pointermove", (e) => {
+      target.x = (e.clientX / innerWidth) * 2 - 1;
+      target.y = (e.clientY / innerHeight) * 2 - 1;
+    });
+
+    /* ── click pulse on the primary CTA ──────────────────────────── */
+    let pulseAt = -10;
+    document.getElementById("cta-primary").addEventListener("click", (e) => {
+      e.preventDefault();
+      pulseAt = clock.elapsedTime;
+    });
+
+    /* magnetic hover for the primary button */
+    const mag = document.getElementById("cta-primary");
+    mag.addEventListener("pointermove", (e) => {
+      const r = mag.getBoundingClientRect();
+      const x = (e.clientX - r.left - r.width / 2) / r.width;
+      const y = (e.clientY - r.top - r.height / 2) / r.height;
+      mag.style.transform = `translate(${x * 8}px, ${y * 6}px)`;
+    });
+    mag.addEventListener("pointerleave", () => { mag.style.transform = ""; });
+
+    /* ── render loop ─────────────────────────────────────────────── */
+    const clock = new THREE.Clock();
+    const ease = { x: 0, y: 0 };
+
+    function tick() {
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const t = clock.elapsedTime;
+
+      ease.x += (target.x - ease.x) * 0.05;
+      ease.y += (target.y - ease.y) * 0.05;
+
+      // click ripple: damped oscillation
+      const since = t - pulseAt;
+      const pulse = since > 0 && since < 3
+        ? Math.exp(-2.2 * since) * Math.sin(9 * since) * 0.16 : 0;
+      const sc = 1 + pulse;
+      core.scale.setScalar(sc);
+      shellIn.rotation.y  += 0.16 * dt;
+      shellIn.rotation.x  += 0.05 * dt;
+      shellOut.rotation.y -= 0.10 * dt;
+      shellOut.rotation.z += 0.06 * dt;
+      edges.rotation.y    += 0.04 * dt;
+      edges.rotation.x    -= 0.03 * dt;
+
+      const boost = 1 + Math.max(0, pulse) * 6;
+      for (const s of SATS) {
+        s.pivot.rotation.y += s.speed * dt * boost;
+        s.sat.rotation.x += 1.4 * dt;
+        s.sat.rotation.y += 1.1 * dt;
+      }
+
+      stars.rotation.y += 0.016 * dt;
+      stars.rotation.x  = ease.y * 0.03;
+
+      // idle float + parallax
+      core.position.y = Math.sin(t * 0.8) * 0.12;
+      world.rotation.y = ease.x * 0.14;
+      world.rotation.x = ease.y * 0.08;
+      camera.position.x = ease.x * 0.35;
+      camera.position.y = 0.35 - ease.y * 0.22;
+      camera.lookAt(world.position.x * 0.25, 0.15, 0);
+
+      fresnelMat.uniforms.uTime.value = t;
+      shellOut.material.uniforms.uTime.value = t;
+
+      renderer.render(scene, camera);
+      if (!reduced) requestAnimationFrame(tick);
+    }
+    tick();
+
+    /* nav glass after scroll */
+    const nav = document.getElementById("nav");
+    addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
+  }
+}
+</script>
+</body>
+</html>
