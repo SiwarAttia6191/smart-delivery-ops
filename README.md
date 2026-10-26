@@ -311,7 +311,7 @@ documented in [`data/README.md`](data/README.md).)
 |---|---|---|---|
 | `haversine` | great-circle ("as the crow flies") arc on a sphere - a closed formula over the two lat/lon pairs. Ignores roads, one-way streets, rivers. | instant, offline | **champion** (business decisions) |
 | `circuity ×1.3` | haversine × an urban circuity factor: real road paths are consistently ~1.3× longer than straight lines (detours, one-ways). The factor is the benchmark's median correction. | instant, offline | offline challenger |
-| `osrm` | true shortest path over the OpenStreetMap road graph (self-hosted container, Tunisia extract) - road distance *and* travel time per vehicle profile. | ~10 ms/call, self-hosted | benchmark ground truth + shadow challenger |
+| `osrm` | true shortest path over the OpenStreetMap road graph (self-hosted container, Tunisia extract) - road distance *and* free-flow travel time per vehicle profile. | ~10 ms/call, self-hosted | benchmark ground truth + shadow challenger |
 
 **Speed — how a distance becomes an ETA.** The Phase 1 heuristic is
 deliberately legible:
@@ -329,6 +329,13 @@ ETA = kitchen prep (12 min) + travel (distance ÷ 20 km/h) + handoff buffer (5 m
 - The Phase 3 ETA model (#26) must **beat this heuristic in the benchmark
   harness** to replace it - same challenger-vs-champion discipline as
   distance.
+- **On traffic:** self-hosted OSRM has no live-traffic feed - its durations
+  are free-flow estimates from static OSM tags. Distances are
+  traffic-independent (solid ground truth); ETAs are evaluated against the
+  only grounded source there is: **our own realized deliveries**
+  (created -> delivered timestamps in the event log), with the ETA model
+  learning real congestion patterns from time-of-day features. See issue
+  #26 for the full evaluation design.
 
 **Where each is used:** distance feeds the delivery fee (`per_km`), the
 nearest-driver dispatch, and the ETA; speed only feeds the ETA. All of it
