@@ -11,7 +11,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from apps.api.routes import analytics, customers, drivers, health, orders, pricing, restaurants
+from apps.api.routes import (
+    analytics,
+    customers,
+    drivers,
+    health,
+    orders,
+    pricing,
+    restaurants,
+    routes,
+)
 from core.config import get_settings
 from core.database import create_all
 from core.exceptions import DomainError
@@ -65,6 +74,7 @@ def create_app() -> FastAPI:
         orders.router,
         pricing.router,
         analytics.router,
+        routes.router,
     ):
         app.include_router(router)
     return app

@@ -11,5 +11,8 @@ __pycache__
 data/raw/*
 ml/artifacts/*
 docs
+!docs/
+docs/*
+!docs/route.geojson
 tests
 .github

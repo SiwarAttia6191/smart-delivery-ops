@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
 <style>
 :root {
@@ -274,6 +275,15 @@ h1 {
 
 /* ── demo ────────────────────────────────────────────────────────── */
 .demo-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 1.2rem; align-items: start; }
+.route-map { height: min(62vh, 520px); min-height: 360px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #111827; }
+.route-map-status { color: var(--muted); font-size: 0.85rem; line-height: 1.6; margin-top: 1rem; }
+.route-map-stats { display: flex; flex-wrap: wrap; gap: 1rem 2rem; margin-top: 1rem; }
+.route-map-stat { color: var(--muted); font-size: 0.82rem; }
+.route-map-stat b { color: var(--text); display: block; font: 600 1.05rem "Space Grotesk", sans-serif; margin-top: 0.2rem; }
+.route-map-links { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; }
+.route-map-links a { color: var(--accent-b); font-size: 0.88rem; text-decoration: none; }
+.route-map-links a:hover { text-decoration: underline; }
+.leaflet-container { font: 0.85rem "Inter", system-ui, sans-serif; }
 .panel {
   background: var(--card); border: 1px solid var(--line); border-radius: 18px;
   padding: 1.6rem;
@@ -461,6 +471,7 @@ footer {
       <ul class="nav-links">
         <li><a href="#features">Features</a></li>
         <li><a href="#demo">Live demo</a></li>
+        <li><a href="#route">Route map</a></li>
         <li><a href="#architecture">Architecture</a></li>
         <li><a href="#analytics">Analytics</a></li>
       </ul>
@@ -605,6 +616,32 @@ footer {
   </div>
 </section>
 
+<!-- ── ROUTE MAP ─────────────────────────────────────────────────── -->
+<section class="section" id="route">
+  <div class="swoosh">
+    <span class="eyebrow">OSRM route</span>
+    <h2>A real road route through Tunis</h2>
+    <p class="lead">
+      This saved GeoJSON route follows the OpenStreetMap road network between the
+      restaurant and delivery coordinates. The API exposes the same file at
+      <code>GET /routes/demo</code>.
+    </p>
+    <div class="panel">
+      <div id="route-map" class="route-map" role="region" aria-label="Map showing the demo delivery route"></div>
+      <p class="route-map-status" id="route-map-status" aria-live="polite">Loading route GeoJSON…</p>
+      <div class="route-map-stats" aria-label="Route details">
+        <div class="route-map-stat">Road distance<b id="route-distance">—</b></div>
+        <div class="route-map-stat">OSRM duration<b id="route-duration">—</b></div>
+        <div class="route-map-stat">Stops<b>Restaurant → Customer</b></div>
+      </div>
+      <div class="route-map-links">
+        <a href="route.geojson" download="tunis-demo-route.geojson">Download route GeoJSON</a>
+        <a href="https://geojson.io/" target="_blank" rel="noopener">Open geojson.io</a>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── ARCHITECTURE ─────────────────────────────────────────────── -->
 <section class="section" id="architecture">
   <div class="swoosh">
@@ -711,6 +748,7 @@ flowchart LR
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
 /* ── 3D hero scene ───────────────────────────────────────────────── */
 let THREE;
@@ -1094,6 +1132,54 @@ $("btn-reset").addEventListener("click", () => {
 buttons();
 
 /* ── mermaid architecture diagram ────────────────────────────────── */
+const routeStatus = document.getElementById("route-map-status");
+try {
+  if (!window.L) throw new Error("Leaflet failed to load.");
+
+  const response = await fetch("route.geojson");
+  if (!response.ok) throw new Error(`GeoJSON request failed (${response.status}).`);
+  const routeData = await response.json();
+  const routeFeature = routeData.features?.[0];
+  const coordinates = routeFeature?.geometry?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    throw new Error("GeoJSON does not contain a route with at least two points.");
+  }
+
+  const [startLon, startLat] = coordinates[0];
+  const [endLon, endLat] = coordinates[coordinates.length - 1];
+  const routeMap = window.L.map("route-map").setView(
+    [(startLat + endLat) / 2, (startLon + endLon) / 2],
+    13,
+  );
+  window.L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  }).addTo(routeMap);
+  const routeLayer = window.L.geoJSON(routeData, {
+    style: { color: "#38e1ff", weight: 6, opacity: 0.9 },
+  }).addTo(routeMap);
+  window.L.circleMarker([startLat, startLon], {
+    radius: 7, color: "#fff", weight: 2, fillColor: "#7c6cff", fillOpacity: 1,
+  }).bindPopup("Restaurant · pickup").addTo(routeMap);
+  window.L.circleMarker([endLat, endLon], {
+    radius: 7, color: "#fff", weight: 2, fillColor: "#38e1ff", fillOpacity: 1,
+  }).bindPopup("Customer · drop-off").addTo(routeMap);
+
+  const properties = routeFeature.properties ?? {};
+  if (Number.isFinite(properties.distance_m)) {
+    document.getElementById("route-distance").textContent =
+      `${(properties.distance_m / 1000).toFixed(2)} km`;
+  }
+  if (Number.isFinite(properties.duration_s)) {
+    document.getElementById("route-duration").textContent =
+      `${Math.round(properties.duration_s / 60)} min`;
+  }
+  routeStatus.textContent = "Route loaded from the saved GeoJSON snapshot.";
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  routeStatus.textContent = `Route map unavailable: ${message}`;
+}
+
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 mermaid.initialize({
   startOnLoad: true,
