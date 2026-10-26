@@ -300,6 +300,40 @@ traffic says otherwise** - migration by measurement, not faith.
 
 Run it yourself: `docker compose run --rm osrm-prepare` (once), `docker
 compose up -d osrm`, then `PYTHONPATH=. python scripts/benchmark_geo.py`.
+(Map data under `data/osrm/` - source, license and regeneration are
+documented in [`data/README.md`](data/README.md).)
+
+#### How distance and speed are computed
+
+**Distance — three definitions of "how far":**
+
+| provider | what it computes | cost | used as |
+|---|---|---|---|
+| `haversine` | great-circle ("as the crow flies") arc on a sphere - a closed formula over the two lat/lon pairs. Ignores roads, one-way streets, rivers. | instant, offline | **champion** (business decisions) |
+| `circuity ×1.3` | haversine × an urban circuity factor: real road paths are consistently ~1.3× longer than straight lines (detours, one-ways). The factor is the benchmark's median correction. | instant, offline | offline challenger |
+| `osrm` | true shortest path over the OpenStreetMap road graph (self-hosted container, Tunisia extract) - road distance *and* travel time per vehicle profile. | ~10 ms/call, self-hosted | benchmark ground truth + shadow challenger |
+
+**Speed — how a distance becomes an ETA.** The Phase 1 heuristic is
+deliberately legible:
+
+```
+ETA = kitchen prep (12 min) + travel (distance ÷ 20 km/h) + handoff buffer (5 min)
+```
+
+- **20 km/h** is the *effective urban courier speed* - not the vehicle's
+  top speed but door-to-door city reality (stops, traffic, parking), matching
+  the observed 17–21 km/h courier band. It is config (`ETA_AVG_SPEED_KMH`),
+  not a magic number.
+- Worked example, the README's own 6 km quote: `12 + (6.17 ÷ 20 × 60) + 5`
+  = `12 + 18.5 + 5` ≈ **36 min** - consistent with observed city averages.
+- The Phase 3 ETA model (#26) must **beat this heuristic in the benchmark
+  harness** to replace it - same challenger-vs-champion discipline as
+  distance.
+
+**Where each is used:** distance feeds the delivery fee (`per_km`), the
+nearest-driver dispatch, and the ETA; speed only feeds the ETA. All of it
+lives in `domain/rules/` as pure functions over `core/config.py` settings -
+no hidden constants.
 
 ### ⏰ Orchestration (Airflow)
 
@@ -330,7 +364,7 @@ smart-delivery-ops/
 │   ├── models/         # SQLAlchemy entities (Customer, Driver, Restaurant, Order, OrderEvent)
 │   ├── rules/          # pure business rules (geo, pricing tiers, driver eligibility)
 │   └── services/       # use-cases (order lifecycle, dispatch, pricing, ETA)
-├── data/               # Phase 2 — ingestion, ETL, warehouse
+├── data/               # transform/ (dbt) · osrm/ (map data, gitignored) · benchmarks/ (reports) — see data/README.md
 ├── ml/                 # Phase 3 — features, training, model registry
 ├── infra/              # docker, kubernetes, monitoring
 ├── tests/              # unit + integration
