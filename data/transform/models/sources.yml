@@ -37,3 +37,19 @@ sources:
             tests:
               - accepted_values:
                   values: [1]
+      - name: driver_events
+        description: Driver availability transitions, deduped by event_id.
+        columns:
+          - name: event_id
+            tests: [unique, not_null]
+          - name: driver_id
+            tests: [not_null]
+          - name: event_type
+            tests:
+              - not_null
+              - accepted_values:
+                  values: [availability]
+          - name: schema_version
+            tests:
+              - accepted_values:
+                  values: [1]

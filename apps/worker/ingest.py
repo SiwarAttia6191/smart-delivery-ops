@@ -1,22 +1,20 @@
-"""Warehouse ingestion consumer: lands ``orders.events`` into the raw layer.
+"""Warehouse ingestion consumer: lands order and driver events into raw tables.
 
 The last leg of the event pipeline:
 
-    API ──► order_events (outbox) ──► relay ──► Kafka orders.events
-                                                        │
-                                        THIS consumer ──▼
-                              warehouse DB · raw.order_events (dedupe by event_id)
+    API ──► order_events  ──► relay ──► Kafka orders.events  ──► raw.order_events
+       └──► driver_events ──► relay ──► Kafka drivers.events ──► raw.driver_events
+                                                   THIS consumer
 
 Design contracts:
 
 * **Separate warehouse database** — analytics never reads or loads into the
-  operational tables the API serves (dbt will build marts on top of this raw
-  layer in the next step). On Postgres the raw layer lives in a ``raw``
-  schema; the database itself is created on first boot so existing compose
-  volumes self-heal without manual steps.
-* **Dedupe is owned here.** The relay is at-least-once, so replays are
-  expected: ``event_id`` is the primary key and inserts use ON CONFLICT DO
-  NOTHING — a replayed event is a no-op, not a duplicate row.
+  operational tables the API serves. On Postgres the raw layer lives in a
+  ``raw`` schema; the database itself is created on first boot so existing
+  compose volumes self-heal without manual steps.
+* **Per-stream dedupe is owned here.** The relay is at-least-once, so replays
+  are expected: each raw table uses ``event_id`` as its primary key and
+  inserts use ON CONFLICT DO NOTHING.
 * **Offsets commit only after the database commit** (``enable.auto.commit``
   is off) — the at-least-once chain holds end to end: crash anywhere in
   between and the group re-reads its uncommitted offsets.
@@ -44,12 +42,12 @@ from core.config import Settings, get_settings
 
 logger = logging.getLogger("worker.ingest")
 
-_REQUIRED_FIELDS = {"event_id", "order_id", "event_type", "schema_version", "payload"}
+_REQUIRED_FIELDS = {"event_id", "event_type", "schema_version", "payload"}
 
 _PG_DDL = """
 CREATE TABLE IF NOT EXISTS {table} (
     event_id BIGINT PRIMARY KEY,
-    order_id VARCHAR(64) NOT NULL,
+    {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(30) NOT NULL,
     schema_version INTEGER NOT NULL,
     payload JSONB,
@@ -63,7 +61,7 @@ CREATE TABLE IF NOT EXISTS {table} (
 _PG_DDL_DEAD = """
 CREATE TABLE IF NOT EXISTS {table} (
     event_id BIGINT PRIMARY KEY,
-    order_id VARCHAR(64) NOT NULL,
+    {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(64),
     payload TEXT,
     error TEXT NOT NULL,
@@ -74,7 +72,7 @@ CREATE TABLE IF NOT EXISTS {table} (
 _SQLITE_DDL_DEAD = """
 CREATE TABLE IF NOT EXISTS {table} (
     event_id INTEGER PRIMARY KEY,
-    order_id VARCHAR(64) NOT NULL,
+    {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(64),
     payload TEXT,
     error TEXT NOT NULL,
@@ -85,7 +83,7 @@ CREATE TABLE IF NOT EXISTS {table} (
 _SQLITE_DDL = """
 CREATE TABLE IF NOT EXISTS {table} (
     event_id INTEGER PRIMARY KEY,
-    order_id VARCHAR(64) NOT NULL,
+    {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(30) NOT NULL,
     schema_version INTEGER NOT NULL,
     payload TEXT,
@@ -97,7 +95,7 @@ CREATE TABLE IF NOT EXISTS {table} (
 """
 
 
-def parse_message(value: bytes | str | None) -> dict[str, Any] | None:
+def _parse_message(value: bytes | str | None, entity_id_field: str) -> dict[str, Any] | None:
     """Validate and normalize one Kafka message into a raw-layer record.
 
     Returns None (with a warning log) for anything malformed — the raw layer
@@ -111,21 +109,22 @@ def parse_message(value: bytes | str | None) -> dict[str, Any] | None:
     if not isinstance(raw, dict):
         logger.warning("dropping malformed event (not an object): %r", str(value)[:120])
         return None
-    missing = _REQUIRED_FIELDS - set(raw)
+    missing = (_REQUIRED_FIELDS | {entity_id_field}) - set(raw)
     if missing:
         logger.warning("dropping malformed event (missing %s): %r", sorted(missing), str(raw)[:120])
         return None
     if isinstance(raw["event_id"], bool) or not isinstance(raw["event_id"], int):
         logger.warning("dropping malformed event (event_id not an int): %r", str(raw)[:120])
         return None
-    if not isinstance(raw["order_id"], str) or not isinstance(raw["event_type"], str):
+    if not isinstance(raw[entity_id_field], str | int) or not isinstance(raw["event_type"], str):
         logger.warning(
-            "dropping malformed event (order_id/event_type not strings): %r", str(raw)[:120]
+            "dropping malformed event (%s/event_type has invalid type): %r",
+            entity_id_field,
+            str(raw)[:120],
         )
         return None
-    return {
+    record = {
         "event_id": raw["event_id"],
-        "order_id": raw["order_id"],
         "event_type": raw["event_type"],
         "schema_version": int(raw["schema_version"]),
         "payload": json.dumps(raw["payload"]),
@@ -134,6 +133,28 @@ def parse_message(value: bytes | str | None) -> dict[str, Any] | None:
         "kafka_partition": None,
         "kafka_offset": None,
     }
+    record[entity_id_field] = raw[entity_id_field]
+    return record
+
+
+def parse_message(value: bytes | str | None) -> dict[str, Any] | None:
+    """Validate and normalize one order event from Kafka."""
+    record = _parse_message(value, "order_id")
+    if record is not None and not isinstance(record["order_id"], str):
+        logger.warning("dropping malformed event (order_id is not a string): %r", str(value)[:120])
+        return None
+    return record
+
+
+def parse_driver_message(value: bytes | str | None) -> dict[str, Any] | None:
+    """Validate and normalize one driver availability event from Kafka."""
+    record = _parse_message(value, "driver_id")
+    if record is not None and (
+        isinstance(record["driver_id"], bool) or not isinstance(record["driver_id"], int)
+    ):
+        logger.warning("dropping malformed driver event (driver_id is not an integer)")
+        return None
+    return record
 
 
 class RawEventStore:
@@ -145,9 +166,15 @@ class RawEventStore:
         schema: str | None = "raw",
         table: str = "order_events",
         engine: Engine | None = None,
+        entity_column: str = "order_id",
+        entity_type: str = "VARCHAR(64)",
+        dead_letter_table: str = "ingest_dead_letters",
     ) -> None:
         self._schema = schema
         self._table = table
+        self._entity_column = entity_column
+        self._entity_type = entity_type
+        self._dead_letter_name = dead_letter_table
         self._engine = engine or create_engine(database_url, pool_pre_ping=True)
 
     def _qualified(self) -> str:
@@ -164,8 +191,24 @@ class RawEventStore:
         with self._engine.begin() as conn:
             if self._schema:
                 conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {self._schema}"))
-            conn.execute(text(ddl.format(table=self._qualified())))
-            conn.execute(text(dead_ddl.format(table=self._dead_letter_table())))
+            conn.execute(
+                text(
+                    ddl.format(
+                        table=self._qualified(),
+                        entity_column=self._entity_column,
+                        entity_type=self._entity_type,
+                    )
+                )
+            )
+            conn.execute(
+                text(
+                    dead_ddl.format(
+                        table=self._dead_letter_table(),
+                        entity_column=self._entity_column,
+                        entity_type=self._entity_type,
+                    )
+                )
+            )
             if is_pg:
                 # Tables created before a column existed (Alembic lands in
                 # Phase 5): additively self-heal instead of failing inserts.
@@ -175,7 +218,9 @@ class RawEventStore:
                     )
 
     def _dead_letter_table(self) -> str:
-        return f"{self._schema}.ingest_dead_letters" if self._schema else "ingest_dead_letters"
+        return (
+            f"{self._schema}.{self._dead_letter_name}" if self._schema else self._dead_letter_name
+        )
 
     def _quarantine(self, conn, record: dict[str, Any], error: Exception) -> None:
         """Preserve a permanently-rejected event instead of retrying it forever.
@@ -188,12 +233,12 @@ class RawEventStore:
         conn.execute(
             text(
                 f"INSERT INTO {self._dead_letter_table()} "
-                "(event_id, order_id, event_type, payload, error, created_at) "
-                "VALUES (:event_id, :order_id, :event_type, :payload, :error, :created_at)"
+                f"(event_id, {self._entity_column}, event_type, payload, error, created_at) "
+                f"VALUES (:event_id, :{self._entity_column}, :event_type, :payload, :error, :created_at)"
             ),
             {
                 "event_id": record["event_id"],
-                "order_id": record["order_id"],
+                self._entity_column: record[self._entity_column],
                 "event_type": (record.get("event_type") or "unknown")[:64],
                 "payload": record.get("payload"),
                 "error": str(error)[:500],
@@ -201,9 +246,10 @@ class RawEventStore:
             },
         )
         logger.error(
-            "quarantined event %s (%s) to the ingest dead-letter table: %s",
+            "quarantined event %s (%s) to %s: %s",
             record["event_id"],
             record["event_type"],
+            self._dead_letter_table(),
             error,
         )
 
@@ -238,9 +284,9 @@ class RawEventStore:
                 # silently swallow NOT NULL/CHECK violations too.)
                 stmt = text(
                     f"INSERT INTO {self._qualified()} "
-                    "(event_id, order_id, event_type, schema_version, payload, "
+                    f"(event_id, {self._entity_column}, event_type, schema_version, payload, "
                     "source_created_at, ingested_at, kafka_partition, kafka_offset) "
-                    "VALUES (:event_id, :order_id, :event_type, :schema_version, "
+                    f"VALUES (:event_id, :{self._entity_column}, :event_type, :schema_version, "
                     ":payload, :source_created_at, :ingested_at, "
                     ":kafka_partition, :kafka_offset) "
                     "ON CONFLICT (event_id) DO NOTHING"
@@ -262,12 +308,34 @@ class RawEventStore:
         return inserted, quarantined
 
 
+class RawDriverEventStore(RawEventStore):
+    """Dedupe and quarantine store for the drivers.events topic."""
+
+    def __init__(
+        self,
+        database_url: str,
+        schema: str | None = "raw",
+        engine: Engine | None = None,
+    ) -> None:
+        super().__init__(
+            database_url,
+            schema=schema,
+            table="driver_events",
+            engine=engine,
+            entity_column="driver_id",
+            entity_type="BIGINT",
+            dead_letter_table="driver_ingest_dead_letters",
+        )
+
+
 def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-running loop
     global _shutdown
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     s = settings or get_settings()
-    store = RawEventStore(s.warehouse_database_url)
-    store.ensure()
+    order_store = RawEventStore(s.warehouse_database_url)
+    driver_store = RawDriverEventStore(s.warehouse_database_url)
+    order_store.ensure()
+    driver_store.ensure()
 
     from confluent_kafka import Consumer
 
@@ -279,12 +347,13 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
             "enable.auto.commit": False,  # offsets move only after the DB commit
         }
     )
-    consumer.subscribe([s.kafka_orders_topic])
+    consumer.subscribe([s.kafka_orders_topic, s.kafka_drivers_topic])
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, _request_shutdown)
     logger.info(
-        "ingest consumer started: topic=%s group=%s -> warehouse raw layer",
+        "ingest consumer started: topics=%s,%s group=%s -> warehouse raw layer",
         s.kafka_orders_topic,
+        s.kafka_drivers_topic,
         s.kafka_group_id,
     )
 
@@ -296,21 +365,40 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
         for msg in batch:
             if msg.error():
                 logger.warning("kafka message error: %s", msg.error())
-        records = []
+        order_records: list[dict[str, Any]] = []
+        driver_records: list[dict[str, Any]] = []
         for msg in batch:
-            record = parse_message(msg.value())
+            if msg.topic() == s.kafka_orders_topic:
+                record = parse_message(msg.value())
+                records = order_records
+            elif msg.topic() == s.kafka_drivers_topic:
+                record = parse_driver_message(msg.value())
+                records = driver_records
+            else:
+                logger.warning("ignoring message from unexpected topic %s", msg.topic())
+                continue
             if record is not None:
                 record["kafka_partition"] = msg.partition()
                 record["kafka_offset"] = msg.offset()
                 records.append(record)
         try:
-            if records:
-                inserted, quarantined = store.store(records)
+            received = len(batch)
+            inserted = 0
+            quarantined = 0
+            if order_records:
+                order_inserted, order_quarantined = order_store.store(order_records)
+                inserted += order_inserted
+                quarantined += order_quarantined
+            if driver_records:
+                driver_inserted, driver_quarantined = driver_store.store(driver_records)
+                inserted += driver_inserted
+                quarantined += driver_quarantined
+            if received:
                 logger.info(
                     "ingested %d new event(s) — %d received, %d deduped/malformed/quarantined",
                     inserted + quarantined,
-                    len(batch),
-                    len(batch) - inserted - quarantined,
+                    received,
+                    received - inserted - quarantined,
                 )
                 if quarantined:
                     logger.error(
@@ -327,7 +415,8 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
                 # re-run the idempotent bootstrap (the restart policy can't
                 # help because the loop never exits).
                 logger.warning("%d consecutive failures; re-running ensure()", consecutive_failures)
-                store.ensure()
+                order_store.ensure()
+                driver_store.ensure()
                 consecutive_failures = 0
             time.sleep(s.relay_poll_seconds * 2)
         else:

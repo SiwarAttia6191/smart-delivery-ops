@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db
 from apps.api.schemas.analytics import AnalyticsSummary
-from domain.models import Driver, Order, OrderEvent, OrderStatus, RelayDeadLetter, Restaurant
+from domain.models import (
+    Driver,
+    DriverEvent,
+    DriverRelayDeadLetter,
+    Order,
+    OrderEvent,
+    OrderStatus,
+    RelayDeadLetter,
+    Restaurant,
+)
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -88,12 +97,12 @@ def metrics(db: Session = Depends(get_db)) -> Response:
         # ingest workers run without their own metrics endpoints, but the
         # pipeline's source of truth IS this database — so its delivery state
         # is surfaced here for the same Prometheus scraper.
-        "# HELP sdo_outbox_unpublished Events awaiting relay to Kafka (backlog)",
+        "# HELP sdo_outbox_unpublished Order and driver events awaiting relay to Kafka",
         "# TYPE sdo_outbox_unpublished gauge",
         f"sdo_outbox_unpublished {_outbox_backlog(db)}",
         "# HELP sdo_outbox_quarantined Events quarantined by the relay (dead letters)",
         "# TYPE sdo_outbox_quarantined gauge",
-        f"sdo_outbox_quarantined {db.scalar(select(func.count(RelayDeadLetter.id))) or 0}",
+        f"sdo_outbox_quarantined {_outbox_quarantined(db)}",
         "# HELP sdo_outbox_last_relay_age_seconds Seconds since the last successful relay (-1 = never)",
         "# TYPE sdo_outbox_last_relay_age_seconds gauge",
         f"sdo_outbox_last_relay_age_seconds {_last_relay_age(db)}",
@@ -102,19 +111,35 @@ def metrics(db: Session = Depends(get_db)) -> Response:
 
 
 def _outbox_backlog(db: Session) -> int:
-    """Events not yet on the bus and not quarantined - the relay's backlog."""
-    return (
-        db.scalar(
-            select(func.count(OrderEvent.id)).where(
-                OrderEvent.published_at.is_(None), OrderEvent.quarantined_at.is_(None)
-            )
+    """Order and driver events not yet on the bus and not quarantined."""
+    order_backlog = db.scalar(
+        select(func.count(OrderEvent.id)).where(
+            OrderEvent.published_at.is_(None), OrderEvent.quarantined_at.is_(None)
         )
-        or 0
     )
+    driver_backlog = db.scalar(
+        select(func.count(DriverEvent.id)).where(
+            DriverEvent.published_at.is_(None), DriverEvent.quarantined_at.is_(None)
+        )
+    )
+    return (order_backlog or 0) + (driver_backlog or 0)
+
+
+def _outbox_quarantined(db: Session) -> int:
+    order_dead_letters = db.scalar(select(func.count(RelayDeadLetter.id)))
+    driver_dead_letters = db.scalar(select(func.count(DriverRelayDeadLetter.id)))
+    return (order_dead_letters or 0) + (driver_dead_letters or 0)
 
 
 def _last_relay_age(db: Session) -> float:
-    last = db.scalar(select(func.max(OrderEvent.published_at)))
+    order_last = db.scalar(select(func.max(OrderEvent.published_at)))
+    driver_last = db.scalar(select(func.max(DriverEvent.published_at)))
+    published_times = [
+        timestamp.replace(tzinfo=UTC) if timestamp.tzinfo is None else timestamp.astimezone(UTC)
+        for timestamp in (order_last, driver_last)
+        if timestamp is not None
+    ]
+    last = max(published_times) if published_times else None
     if last is None:
         return -1.0
     return round((datetime.now(UTC) - last).total_seconds(), 1)

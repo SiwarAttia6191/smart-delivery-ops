@@ -6,6 +6,7 @@ What actually lives here, where it comes from, and how to regenerate it.
 data/
 ├── transform/    # dbt project: staging + warehouse marts (the medallion layer)
 ├── benchmarks/   # committed benchmark reports (geo distance today, ML later)
+│   └── driver_supply_sanity_*.md  # demand-vs-available-supply feature coverage
 ├── osrm/         # OSRM map data for Tunisia — gitignored, ~826 MB (see below)
 ├── schema/       # (empty scaffolding, pre-Phase 2)
 ├── ingestion/    # (empty scaffolding — ingestion lives in apps/worker/ingest.py)
@@ -25,9 +26,13 @@ medallion layering and every model are documented in the main README under
 
 Output of `scripts/benchmark_geo.py`: distance-provider accuracy against
 OSRM road-distance ground truth, per distance bucket (MAE/RMSE/MAPE/bias).
-Every report embeds its dataset snapshot (`max(event_id)` + git SHA) so a
-run is reproducible to the exact rows. These ARE committed — they are the
+Geo benchmark reports embed their dataset snapshot (`max(event_id)` + git SHA)
+so a run is reproducible to the exact rows. These ARE committed — they are the
 evidence behind the champion/challenger decisions.
+
+After rebuilding dbt, run `python -m scripts.benchmark_driver_supply` to
+write a demand/supply coverage report. It checks same-zone, local-date/hour
+feature coverage; it is a sanity report, not a causal or forecasting benchmark.
 
 ## `osrm/` — OSRM map data (gitignored)
 

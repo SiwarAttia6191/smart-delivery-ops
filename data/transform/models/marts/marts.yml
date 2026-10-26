@@ -43,6 +43,44 @@ models:
       - name: avg_match_distance_km
         tests: [non_negative]
 
+  - name: mart_driver_supply_by_zone_hour
+    description: Average available drivers during each local hour in their last known ~1 km zone.
+    columns:
+      - name: driver_zone_lat
+        tests: [not_null]
+      - name: driver_zone_lon
+        tests: [not_null]
+      - name: supply_date
+        tests: [not_null]
+      - name: supply_hour
+        tests:
+          - not_null
+          - between:
+              min: 0
+              max: 23
+      - name: available_drivers
+        tests: [not_null, non_negative]
+
+  - name: mart_demand_supply_by_zone_hour
+    description: Pickup demand and available supply joined by zone, local date, and hour.
+    columns:
+      - name: zone_lat
+        tests: [not_null]
+      - name: zone_lon
+        tests: [not_null]
+      - name: business_date
+        tests: [not_null]
+      - name: business_hour
+        tests:
+          - not_null
+          - between:
+              min: 0
+              max: 23
+      - name: orders
+        tests: [not_null, non_negative]
+      - name: available_drivers
+        tests: [not_null, non_negative]
+
   - name: mart_pricing_history
     description: Every quote the pricing engine issued, from the event stream.
     columns:
