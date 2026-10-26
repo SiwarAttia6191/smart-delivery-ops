@@ -5,6 +5,9 @@
 select
     order_id,
     source_created_at            as quoted_at,
+    -- business-day grain must match mart_daily_order_summary (see the
+    -- reconciliation test that caught the mismatch)
+    source_created_at_local      as quoted_at_local,
     distance_km,
     delivery_fee,
     surge_multiplier,

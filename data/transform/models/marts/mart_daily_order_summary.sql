@@ -6,6 +6,7 @@ with created as (
 
     select
         order_id,
+        source_created_at,
         source_created_at_local,
         distance_km,
         delivery_fee,
@@ -31,10 +32,12 @@ per_order as (
     select
         c.order_id,
         c.source_created_at,
+        c.source_created_at_local,
         c.distance_km,
         c.delivery_fee,
         c.surge_multiplier,
         d.delivered_at,
+        -- duration math on UTC instants; the date bucket below is local
         round(extract(epoch from (d.delivered_at - c.source_created_at)) / 60.0, 1)
             as actual_delivery_minutes
     from created c

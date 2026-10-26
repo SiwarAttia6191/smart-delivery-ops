@@ -54,7 +54,5 @@ topic deferred). dbt builds its marts on this raw layer.
 ```
 apps/worker/
 ├── relay.py           # shipped — outbox → Kafka
-├── ingest.py          # shipped — Kafka → warehouse raw layer (dedupe by event_id)
-├── tasks.py           # scheduled jobs (aggregations, reprocessing)
-└── event_handlers.py  # per-event-type handlers (order.created, order.assigned…)
+└── ingest.py          # shipped — Kafka → warehouse raw layer (dedupe by event_id)
 ```

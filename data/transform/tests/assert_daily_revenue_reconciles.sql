@@ -14,7 +14,7 @@ with from_funnel as (
 from_pricing as (
 
     select
-        quoted_at::date as order_date,
+        quoted_at_local::date as order_date,
         sum(delivery_fee) as revenue
     from {{ ref('mart_pricing_history') }}
     group by 1
