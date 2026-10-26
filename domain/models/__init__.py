@@ -2,6 +2,7 @@
 
 from domain.models.base import Base
 from domain.models.customer import Customer
+from domain.models.demand_forecast import DemandForecast
 from domain.models.driver import Driver
 from domain.models.driver_event import DriverEvent
 from domain.models.driver_relay_dead_letter import DriverRelayDeadLetter
@@ -14,6 +15,7 @@ from domain.models.restaurant import Restaurant
 __all__ = [
     "Base",
     "Customer",
+    "DemandForecast",
     "Driver",
     "DriverEvent",
     "DriverRelayDeadLetter",

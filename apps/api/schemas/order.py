@@ -13,13 +13,14 @@ class OrderCreate(BaseModel):
     restaurant_id: int
     dropoff_latitude: float = Field(..., ge=-90, le=90)
     dropoff_longitude: float = Field(..., ge=-180, le=180)
-    demand_ratio: float = Field(
-        1.0,
+    demand_ratio: float | None = Field(
+        None,
         ge=0,
         description=(
-            "Current demand / expected demand for the zone+hour. Above the surge "
-            "tiers this multiplies the fee. Phase 3 feeds this from the "
-            "forecasting service automatically."
+            "Current demand / expected demand for the dropoff zone+hour. Omit to "
+            "derive it from the demand_forecasts table (observed orders vs the "
+            "forecast for the elapsed part of the hour); explicit values are "
+            "honored for demos and tests."
         ),
     )
 

@@ -163,6 +163,20 @@ class TestOrderFlow:
             "order_delivered",
         ]
 
+    def test_quote_without_forecasts_derives_neutral_ratio(self, client):
+        # No demand_forecasts rows: derivation must fall back to 1.0, never
+        # spike a customer's fee on missing data.
+        ids = _seed(client)
+        quote = client.post(
+            "/pricing/quote",
+            json={
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_latitude": CUSTOMER["latitude"],
+                "dropoff_longitude": CUSTOMER["longitude"],
+            },
+        ).json()
+        assert quote["surge_multiplier"] == 1.0
+
     def test_order_not_found(self, client):
         response = client.get("/orders/00000000-0000-0000-0000-000000000000")
         assert response.status_code == 404

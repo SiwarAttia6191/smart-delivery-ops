@@ -7,7 +7,7 @@ from apps.api.deps import get_db
 from apps.api.schemas.pricing import QuoteRequest, QuoteResponse
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
-from domain.services import pricing_service
+from domain.services import demand_service, pricing_service
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
@@ -26,12 +26,17 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         pickup_lat = payload.pickup_latitude
         pickup_lon = payload.pickup_longitude
 
+    demand_ratio = payload.demand_ratio
+    if demand_ratio is None:
+        demand_ratio = demand_service.derive_demand_ratio(
+            db, payload.dropoff_latitude, payload.dropoff_longitude
+        )
     quote = pricing_service.quote_delivery(
         pickup_lat,
         pickup_lon,
         payload.dropoff_latitude,
         payload.dropoff_longitude,
-        payload.demand_ratio,
+        demand_ratio,
     )
     return QuoteResponse(
         distance_km=quote.distance_km,

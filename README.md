@@ -35,6 +35,7 @@ analytics in one system.
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
 - **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (medallion: raw → staging → marts, official Docker image) · **Airflow** (LocalExecutor, scheduled dbt builds + freshness)
 - **Geo layer (Phase 3)** — pluggable `DistanceProvider` (haversine / circuity / self-hosted **OSRM**) · shadow-mode comparison · challenger-vs-champion benchmark harness with snapshot-reproducible reports
+- **ML layer (Phase 3)** — **MLflow** tracking (Docker, Postgres-backed) · demand-forecast benchmark (seasonal-naive vs LightGBM vs Prophet, report committed per run) · **forecast serving loop**: pooled LightGBM writes zone-hour forecasts, the pricing engine derives `demand_ratio` from them live
 - **Route preview** — saved Tunis OSRM GeoJSON, served by `GET /routes/demo` and visualized on the project demo page
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
@@ -225,7 +226,7 @@ The warehouse is layered exactly like the medallion pattern: **bronze** =
 `raw.order_events` and `raw.driver_events` (append-only landings), **silver** =
 typed, flattened staging views, **gold** = `analytics.*` marts
 (business answers). `data/transform/` is a dbt project over the raw layer,
-and six marts answer the business questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
+and seven marts answer the business questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
 official dbt-postgres image since dbt needs Python ≤ 3.12):
 
 | Mart (schema `analytics`) | Answers |
@@ -236,15 +237,17 @@ official dbt-postgres image since dbt needs Python ≤ 3.12):
 | `mart_driver_supply_by_zone_hour` | Average available drivers per ~1 km zone during each Africa/Tunis local hour |
 | `mart_demand_supply_by_zone_hour` | Pickup demand vs available supply joined by same zone/date/hour |
 | `mart_pricing_history` | Every quote: distance, fee, surge, fee-per-km (Phase 3 pricing-model feed) |
+| `mart_demand_timeseries` | Time-ordered demand per zone × Africa/Tunis local hour — the forecasting training input (not an average shape) |
 
 Every build also runs the data tests: unique/not-null keys on the source and
 marts, accepted-values checks on event types and `schema_version`.
 
 ### 🛡️ Data quality — three lines of defense
 
-`make dbt` runs **45 checks** (the live-build total: 6 source + 4 staging +
-27 mart-column tests with the generic macros instantiated per column, plus 3
-singular business-rule tests). Three lines of defense:
+`make dbt` runs **48 nodes** per build: 9 models + **39 data tests**
+(12 source-declared, 22 column/schema tests, 5 singular business-rule tests
+including grain-uniqueness and the delivered-orders-have-assignments
+referential rule). Three lines of defense:
 
 1. **Source gates** — unique/not-null `event_id`, accepted-values on
    `event_type` and `schema_version`. Source-level failures *block* the build:
@@ -352,6 +355,34 @@ nearest-driver dispatch, and the ETA; speed only feeds the ETA. All of it
 lives in `domain/rules/` as pure functions over `core/config.py` settings -
 no hidden constants.
 
+### 🔮 Demand forecasting: trained, benchmarked, and serving (#25)
+
+The forecast loop is end-to-end: warehouse → training → benchmark → serving
+table → pricing.
+
+- **Training input**: `mart_demand_timeseries` — every zone's hourly demand
+  as a time-ordered series (a young deployment's history is real: the demo
+  backfill, `scripts/backfill_order_history.py`, pushes four weeks of
+  realistic Tunis traffic through the *actual* pipeline — outbox → Kafka →
+  ingest → dbt — so every layer exercises production behavior).
+- **Benchmark** (`make ml-benchmark`, one-shot container): seasonal-naive
+  baseline vs LightGBM vs Prophet on a time-based holdout (never random —
+  the future must not leak into training). Every run logs params, metrics
+  and the dataset snapshot (`max(event_id)` + git SHA) to **MLflow**
+  (UI `localhost:5100`), and the comparison report is committed under
+  `data/benchmarks/`. First run: **both challengers beat the baseline**
+  (MAE 1.16 / 1.15 vs 2.39) — the harness's promotion rule is "ship only if
+  it beats the incumbent", same as the geo layer.
+- **Serving** (`make ml-forecast`): a pooled LightGBM — one model across all
+  zone cells with lag + zone + calendar features, because ~27 zone cells are
+  far too sparse for a univariate fit per zone — writes the next 24 hours of
+  zone-hour forecasts into the ops database (`demand_forecasts`).
+- **Pricing consumes it live**: quote/order requests without an explicit
+  `demand_ratio` derive one from the forecast table — observed orders in the
+  current zone-hour ÷ the forecast's expectation for the elapsed part of the
+  hour, floored at 0.5, capped at 2.5 — and the existing surge tiers do the
+  rest. Missing forecast ⇒ neutral 1.0: absent data can never spike a fee.
+
 ### ⏰ Orchestration (Airflow)
 
 The whole warehouse routine is scheduled: **Airflow 2.10 (LocalExecutor)**
@@ -382,7 +413,7 @@ smart-delivery-ops/
 │   ├── rules/          # pure business rules (geo, pricing tiers, driver eligibility)
 │   └── services/       # use-cases (order lifecycle, dispatch, pricing, ETA)
 ├── data/               # transform/ (dbt) · osrm/ (map data, gitignored) · benchmarks/ (reports) — see data/README.md
-├── ml/                 # Phase 3 — features, training, model registry
+├── ml/                 # Phase 3 — training (benchmark_demand), pipelines (forecast serving)
 ├── infra/              # docker, kubernetes, monitoring
 ├── tests/              # unit + integration
 ├── scripts/            # seed, smoke test, bootstrap
@@ -395,7 +426,7 @@ smart-delivery-ops/
 |---|---|---|
 | 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
 | 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
-| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — distance providers benchmarked against OSRM with live shadow mode; demand forecasting + ETA model next |
+| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting trained + benchmarked in MLflow and serving surge pricing; ETA model next |
 | 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
 | 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
 

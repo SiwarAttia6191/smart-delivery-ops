@@ -22,7 +22,12 @@ from core.exceptions import (
 )
 from domain.models import Customer, Order, OrderEvent, OrderStatus, Restaurant
 from domain.rules import geo
-from domain.services import driver_matching_service, eta_service, pricing_service
+from domain.services import (
+    demand_service,
+    driver_matching_service,
+    eta_service,
+    pricing_service,
+)
 from domain.services.driver_event_service import AvailabilityReason, record_availability_change
 from domain.services.pricing_service import Quote
 
@@ -65,7 +70,7 @@ def create_order(
     restaurant_id: int,
     dropoff_lat: float,
     dropoff_lon: float,
-    demand_ratio: float = 1.0,
+    demand_ratio: float | None = None,
 ) -> Order:
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -74,6 +79,8 @@ def create_order(
     if restaurant is None:
         raise NotFoundError(f"restaurant {restaurant_id} not found")
 
+    if demand_ratio is None:
+        demand_ratio = demand_service.derive_demand_ratio(session, dropoff_lat, dropoff_lon)
     quote: Quote = pricing_service.quote_delivery(
         restaurant.latitude, restaurant.longitude, dropoff_lat, dropoff_lon, demand_ratio
     )
