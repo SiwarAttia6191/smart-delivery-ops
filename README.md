@@ -34,6 +34,7 @@ analytics in one system.
 - **API** — Python · FastAPI · Pydantic v2 · SQLAlchemy 2.0 · Swagger/OpenAPI
 - **Database** — PostgreSQL 16 (Docker, default) · SQLite fallback for quick experiments
 - **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (medallion: raw → staging → marts, official Docker image) · **Airflow** (LocalExecutor, scheduled dbt builds + freshness)
+- **Geo layer (Phase 3)** — pluggable `DistanceProvider` (haversine / circuity / self-hosted **OSRM**) · shadow-mode comparison · challenger-vs-champion benchmark harness with snapshot-reproducible reports
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`
@@ -269,6 +270,36 @@ Done. PASS=42  WARN=0  ERROR=3  SKIP=0  TOTAL=45
 #    original 12h/24h bounds; today's policy warns at 24h, errors at 72h
 ERROR STALE freshness of raw.order_events
 ```
+
+## 🧭 Phase 3 — learning layer (started)
+
+### 📐 Geo benchmarking: distance is an interface, not a decision
+
+The distance behind every quote and dispatch is pluggable
+(`domain/rules/geo.py`): a `DistanceProvider` protocol with three
+implementations - **haversine** (the champion), **circuity ×1.3** (offline
+corrector), and **OSRM road routing** (self-hosted Docker container, no API
+key). Services take a provider and default to the configured champion; a
+*shadow* challenger can be computed alongside every call and logged without
+ever influencing business decisions.
+
+The challenger-vs-champion harness (`scripts/benchmark_geo.py`) scores them
+against OSRM ground truth per distance bucket, and every report records the
+dataset snapshot (`max(event_id)` + git SHA). First live run
+(`data/benchmarks/`):
+
+| bucket | haversine bias | circuity ×1.3 bias |
+|---|---|---|
+| <2 km | −21% | +2.5% |
+| 2–5 km | −37% | −18% |
+| >10 km | −27% | −5% |
+
+Haversine systematically under-estimates; circuity corrects most of the bias
+offline. The champion stays haversine **until shadow-mode evidence over real
+traffic says otherwise** - migration by measurement, not faith.
+
+Run it yourself: `docker compose run --rm osrm-prepare` (once), `docker
+compose up -d osrm`, then `PYTHONPATH=. python scripts/benchmark_geo.py`.
 
 ### ⏰ Orchestration (Airflow)
 
