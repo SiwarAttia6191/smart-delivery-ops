@@ -273,6 +273,17 @@ h1 {
 .card h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.05rem; margin-bottom: 0.5rem; }
 .card p { color: var(--muted); font-size: 0.9rem; line-height: 1.62; }
 
+/* ── services (status chips + evidence links) ─────────────────────── */
+.chip-row { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; }
+.chip {
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  padding: 0.24rem 0.6rem; border-radius: 999px; border: 1px solid;
+}
+.chip.live { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.08); }
+.chip.bench { color: var(--accent-b); border-color: rgba(56, 225, 255, 0.35); background: rgba(56, 225, 255, 0.07); }
+.card .power { margin-top: 0.9rem; font-size: 0.76rem; color: var(--muted); line-height: 1.55; }
+.card .power a { color: var(--accent-b); }
+
 /* ── demo ────────────────────────────────────────────────────────── */
 .demo-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 1.2rem; align-items: start; }
 .route-map { height: min(62vh, 520px); min-height: 360px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #111827; }
@@ -470,6 +481,7 @@ footer {
     <nav aria-label="Primary">
       <ul class="nav-links">
         <li><a href="#features">Features</a></li>
+        <li><a href="#services">Services</a></li>
         <li><a href="#demo">Live demo</a></li>
         <li><a href="#route">Route map</a></li>
         <li><a href="#architecture">Architecture</a></li>
@@ -501,8 +513,8 @@ footer {
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">19</div><div class="l">REST endpoints</div></div>
-        <div class="stat"><div class="v">92%</div><div class="l">test coverage</div></div>
+        <div class="stat"><div class="v">15</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">89%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
     </div>
@@ -537,7 +549,7 @@ footer {
       <div class="card">
         <div class="ico">💸</div>
         <h3>Dynamic pricing</h3>
-        <p>Distance-based fees with demand-surge tiers and a minimum-fee floor. Every quote returns a full, auditable breakdown.</p>
+        <p>Distance-based fees with demand-surge tiers and a minimum-fee floor. When the client omits a demand ratio, the engine derives it live from zone-hour demand forecasts. Every quote returns a full, auditable breakdown.</p>
       </div>
       <div class="card">
         <div class="ico">⏱️</div>
@@ -559,6 +571,63 @@ footer {
 </section>
 
 <!-- ── DEMO ─────────────────────────────────────────────────────── -->
+<!-- ── SERVICES ─────────────────────────────────────────────────── -->
+<section class="section" id="services">
+  <div class="swoosh">
+    <span class="eyebrow">Services</span>
+    <h2>What you can run on this platform today</h2>
+    <p class="lead">
+      Not a roadmap — each service below is live in this repository right now, wired to
+      the code, marts and endpoints that power it. If a claim can't be traced to the
+      codebase, it doesn't go on this page.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <div class="ico">💸</div>
+        <div class="chip-row"><span class="chip live">Live</span></div>
+        <h3>Pricing API</h3>
+        <p>Delivery fees per quote — base + per-km + surge tiers with a minimum-fee floor — every response a full, auditable breakdown. Parameters market-benchmarked, not guessed.</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/api/routes/pricing.py" target="_blank" rel="noopener">POST /pricing/quote</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/rules/pricing_rules.py" target="_blank" rel="noopener">pricing_rules.py</a></p>
+      </div>
+      <div class="card">
+        <div class="ico">🔮</div>
+        <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked</span></div>
+        <h3>Demand-aware surge</h3>
+        <p>The fee already knows what this hour usually looks like: zone-hour demand forecasts feed the surge tiers automatically, so pricing anticipates the lunch rush instead of reacting to it. Gradient boosting benchmarked against a seasonal-naive baseline (MAE 1.16 vs 2.39).</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/ml/pipelines/forecast_demand.py" target="_blank" rel="noopener">forecast_demand.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/benchmarks" target="_blank" rel="noopener">benchmark reports</a></p>
+      </div>
+      <div class="card">
+        <div class="ico">🛵</div>
+        <div class="chip-row"><span class="chip live">Live</span></div>
+        <h3>Dispatch-as-a-Service</h3>
+        <p>Nearest-driver matching with vehicle eligibility and live availability. Every assignment and release is an event, so fleet supply is queryable per zone and hour.</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/driver_matching_service.py" target="_blank" rel="noopener">driver_matching_service.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/worker/relay.py" target="_blank" rel="noopener">drivers.events relay</a></p>
+      </div>
+      <div class="card">
+        <div class="ico">📦</div>
+        <div class="chip-row"><span class="chip live">Live</span></div>
+        <h3>Event-sourced operations</h3>
+        <p>Every order and driver state change flows Kafka → warehouse → dbt marts on an Airflow schedule. Replayable history with quarantine and data-quality gates — not a mutable row you have to trust.</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/worker/relay.py" target="_blank" rel="noopener">outbox relay</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/transform" target="_blank" rel="noopener">dbt project (48 checks)</a></p>
+      </div>
+      <div class="card">
+        <div class="ico">📊</div>
+        <div class="chip-row"><span class="chip live">Live</span></div>
+        <h3>Zone &amp; fleet analytics</h3>
+        <p>Demand vs supply per zone-hour, driver utilization, pricing history, daily funnel — the tables an operator actually asks questions of, refreshed daily. Dashboard UI ships in Phase 4.</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/transform/models/marts" target="_blank" rel="noopener">7 warehouse marts</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/dags/warehouse_daily_build.py" target="_blank" rel="noopener">Airflow DAG</a></p>
+      </div>
+      <div class="card">
+        <div class="ico">⏱️</div>
+        <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked ground truth</span></div>
+        <h3>ETA engine</h3>
+        <p>Transparent prep + travel + buffer estimate on every order, at a calibrated 20 km/h effective urban courier speed. An ML challenger must beat it on realized deliveries before it can replace it.</p>
+        <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/eta_service.py" target="_blank" rel="noopener">eta_service.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/core/config.py" target="_blank" rel="noopener">calibrated in config</a></p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section class="section" id="demo">
   <div class="swoosh">
     <span class="eyebrow">Live demo</span>
@@ -662,16 +731,21 @@ flowchart LR
   ORD --> PG[(PostgreSQL)]
   DRV --> PG
   PRC --> PG
-  ORD --> EV[order_events log]
-  EV --> P2[Phase 2 · event pipeline + dbt]
-  P2 --> P3[Phase 3 · forecasting + ML ETA]
-  P3 -. feeds .-> PRC
+  ORD --> EV[order_events outbox]
+  DRV --> DEV[driver_events outbox]
+  EV --> K[Kafka]
+  DEV --> K
+  K --> RAW[(Warehouse raw)]
+  RAW --> DBT[dbt marts · Airflow]
+  DBT --> FC[Forecast job · MLflow]
+  FC --> DF[(demand_forecasts)]
+  DF -. demand_ratio .-> PRC
       </pre>
     </div>
     <div class="phases">
       <div class="phase done"><div class="n">Phase 1</div><h4>Core platform</h4><p>Orders, dispatch, pricing, ETA, analytics — live, typed, tested.</p></div>
-      <div class="phase"><div class="n">Phase 2</div><h4>Data engineering</h4><p>Event pipeline, warehouse models with dbt, orchestration, quality checks.</p></div>
-      <div class="phase"><div class="n">Phase 3</div><h4>AI / ML</h4><p>Demand forecasting by zone, ML ETA, forecast-driven dynamic pricing.</p></div>
+      <div class="phase done"><div class="n">Phase 2</div><h4>Data engineering</h4><p>Kafka event pipeline, dbt warehouse marts, Airflow orchestration, quality gates — shipped.</p></div>
+      <div class="phase"><div class="n">Phase 3</div><h4>AI / ML</h4><p>In progress: geo benchmarking and demand forecasting live, forecast-driven pricing on; ML ETA next.</p></div>
       <div class="phase"><div class="n">Phase 4</div><h4>Dashboard</h4><p>Operational KPIs, demand vs supply, drill-downs for the ops team.</p></div>
     </div>
   </div>
@@ -696,7 +770,7 @@ flowchart LR
       <h3>Orders by hour — a tale of two peaks</h3>
       <div class="bars" id="bars"></div>
       <div class="axis"><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>23:00</span></div>
-      <p class="chart-note">Hover the bars — lunch and dinner peaks are exactly what Phase 3 forecasting learns to predict.</p>
+      <p class="chart-note">Hover the bars — lunch and dinner peaks are exactly what the live demand forecaster was trained on and predicts per zone.</p>
     </div>
   </div>
 </section>
