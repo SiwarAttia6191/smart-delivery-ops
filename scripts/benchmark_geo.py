@@ -58,9 +58,13 @@ def real_pairs(session: Session) -> list[tuple[float, float, float, float]]:
     pairs = []
     for event in events:
         payload = event.payload or {}
-        lat, lon = payload.get("dropoff_latitude"), payload.get("dropoff_longitude")
-        plat, plon = payload.get("pickup_latitude"), payload.get("pickup_longitude")
+        lat = payload.get("dropoff_latitude")
+        lon = payload.get("dropoff_longitude")
+        plat = payload.get("pickup_latitude")
+        plon = payload.get("pickup_longitude")
         if None not in (lat, lon, plat, plon):
+            assert lat is not None and lon is not None
+            assert plat is not None and plon is not None
             pairs.append((float(plat), float(plon), float(lat), float(lon)))
     return pairs
 
@@ -86,9 +90,7 @@ def bucket_stats(errors: list[float], truths: list[float]) -> dict:
         "n": len(errors),
         "mae": round(statistics.mean(abs(e) for e in errors), 3),
         "rmse": round(math.sqrt(statistics.mean(e * e for e in errors)), 3),
-        "mape": round(
-            statistics.mean(abs(e) / t for e, t in zip(errors, truths) if t) * 100, 2
-        ),
+        "mape": round(statistics.mean(abs(e) / t for e, t in zip(errors, truths) if t) * 100, 2),
         "bias_pct": round(statistics.mean(errors) / statistics.mean(truths) * 100, 2),
     }
 
@@ -135,9 +137,7 @@ def render_report(results: dict, meta: dict) -> str:
             if m["n"] == 0:
                 lines.append(f"| {label} | 0 | - | - | - |")
             else:
-                lines.append(
-                    f"| {label} | {m['n']} | {m['mae']} | {m['rmse']} | {m['bias_pct']} |"
-                )
+                lines.append(f"| {label} | {m['n']} | {m['mae']} | {m['rmse']} | {m['bias_pct']} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -160,8 +160,7 @@ def main() -> None:
         with Session(engine) as session:
             pairs = real_pairs(session)
             max_event_id = (
-                session.scalar(select(OrderEvent.id).order_by(OrderEvent.id.desc()).limit(1))
-                or 0
+                session.scalar(select(OrderEvent.id).order_by(OrderEvent.id.desc()).limit(1)) or 0
             )
         real_count = len(pairs)
     pairs += synthetic_pairs(args.synthetic)
