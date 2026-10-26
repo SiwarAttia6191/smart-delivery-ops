@@ -121,6 +121,10 @@ services:
       # inside the compose network Postgres is postgres:5432.
       DBT_HOST: postgres
       DBT_PORT: "5432"
+      # Failure-alert surface for the warehouse DAG: set to a webhook URL to
+      # enable POSTs on task failure. Empty = log-only (the DAG's fallback
+      # logs loudly so the gap stays discoverable).
+      AIRFLOW_ALERT_WEBHOOK: ""
     volumes: &airflow-volumes
       - ./dags:/opt/airflow/dags
       - ./data/transform:/opt/transform
