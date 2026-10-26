@@ -394,10 +394,10 @@ smart-delivery-ops/
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
-| 2 | Data engineering — event ingestion, warehouse, ETL | 🔜 |
-| 3 | AI/ML — demand forecasting, ETA model, smart allocation | 🔜 |
-| 4 | Dashboard & BI — KPIs, trends, drill-downs | 🔜 |
-| 5 | Production readiness — Docker, CI/CD, observability, auth | 🟡 partially (CI, Docker, metrics already in) |
+| 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
+| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — distance providers benchmarked against OSRM with live shadow mode; demand forecasting + ETA model next |
+| 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
+| 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
 
 Details: [docs/roadmap.md](docs/roadmap.md) · Architecture: [docs/architecture.md](docs/architecture.md)
 
