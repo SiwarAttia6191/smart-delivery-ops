@@ -76,6 +76,46 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  osrm-prepare:
+    # One-shot map preparation: runs the MLD pipeline (extract -> partition
+    # -> customize) over the Tunisia OSM extract (matches the seed data's
+    # Tunis coordinates). Takes a few minutes and ~1GB RAM, ONCE - results
+    # persist in the bind-mounted data/osrm/. NOT part of `up -d`:
+    #   curl -L -o data/osrm/tunisia-latest.osm.pbf https://download.geofabrik.de/africa/tunisia-latest.osm.pbf
+    #   docker compose run --rm osrm-prepare
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    profiles: ["tools"]
+    volumes:
+      - ./data/osrm:/data
+    working_dir: /data
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        if [ -f /data/tunisia-latest.osrm ]; then
+          echo "OSRM data already prepared - skipping"
+          exit 0
+        fi
+        # the .pbf is downloaded on the HOST (the image has no curl/wget):
+        #   curl -L -o data/osrm/tunisia-latest.osm.pbf         #     https://download.geofabrik.de/africa/tunisia-latest.osm.pbf
+        [ -f /data/tunisia-latest.osm.pbf ] || { echo 'missing data/osrm/tunisia-latest.osm.pbf - download it first (see README)'; exit 1; }
+        osrm-extract -p /opt/car.lua /data/tunisia-latest.osm.pbf
+        osrm-partition /data/tunisia-latest.osrm
+        osrm-customize /data/tunisia-latest.osrm
+
+  osrm:
+    # Road-network routing service (the benchmark challenger). Needs the
+    # prepared data from osrm-prepare; serves on host port 5000. No
+    # healthcheck - the image ships no curl/wget; liveness is checked by
+    # actually calling /route (the benchmark script fails loudly).
+    image: ghcr.io/project-osrm/osrm-backend:v5.27.1
+    profiles: ["tools"]
+    command: osrm-routed --algorithm mld /data/tunisia-latest.osrm
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/osrm:/data
+
   dbt:
     # Transformation layer: staging + marts over the warehouse raw layer.
     # On-demand only (not part of `up -d`): docker compose run --rm dbt build
