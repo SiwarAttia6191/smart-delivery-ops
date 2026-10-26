@@ -226,6 +226,8 @@ services:
     profiles: ["tools"]
     ports:
       - "5100:5100"
+    environment:
+      PGPASSWORD: smartops  # entrypoint's psql provisioning runs non-interactive
     volumes:
       - ./ml:/ml
       - ml-artifacts:/mlart
@@ -234,8 +236,10 @@ services:
       - |
         set -e
         psql -h postgres -U smartops -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'mlflow'" | grep -q 1 ||           psql -h postgres -U smartops -d postgres -c "CREATE DATABASE mlflow"
-        mlflow db upgrade postgresql://smartops:smartops@postgres:5432/mlflow
-        mlflow server --backend-store-uri postgresql://smartops:smartops@postgres:5432/mlflow           --artifacts-destination /mlart --host 0.0.0.0 --port 5100
+        if psql -h postgres -U smartops -d mlflow -tc "SELECT 1 FROM information_schema.tables WHERE table_name = 'alembic_version'" | grep -q 1; then
+          mlflow db upgrade postgresql+psycopg2://smartops:smartops@postgres:5432/mlflow
+        fi
+        mlflow server --backend-store-uri postgresql+psycopg2://smartops:smartops@postgres:5432/mlflow           --artifacts-destination /mlart --host 0.0.0.0 --port 5100
     depends_on:
       postgres:
         condition: service_healthy
@@ -247,13 +251,14 @@ services:
       context: .
       dockerfile: infra/docker/Dockerfile.ml
     profiles: ["tools"]
-    command: python ml/training/benchmark_demand.py
+    command: python training/benchmark_demand.py  # ./ml is mounted at WORKDIR /ml
     environment:
       WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_warehouse
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
       MLFLOW_TRACKING_URI: http://mlflow:5100
       MLFLOW_ARTIFACT_ROOT: /mlart
       GIT_SHA: ${GIT_SHA:-unknown}
+      GIT_PYTHON_REFRESH: quiet  # mlflow probes for git; silence the import warning
     volumes:
       - ./ml:/ml
       - ./data/benchmarks:/ml/benchmarks

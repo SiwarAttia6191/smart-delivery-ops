@@ -138,7 +138,9 @@ def score(actual: list[float], predicted: list[float]) -> dict:
 
 def main() -> None:
     series = reindex_hourly(load_series())
-    values = series["orders"].astype(float)
+    # DatetimeIndex drives every model: LightGBM reads hour/dow off it and
+    # Prophet's reset_index() turns it into the (ds, y) frame it requires.
+    values = series.set_index("ds")["orders"].astype(float)
     holdout = max(3, math.ceil(len(values) * 0.2))
     train, test = values.iloc[:-holdout], values.iloc[-holdout:]
     actual = list(test)
