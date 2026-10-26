@@ -49,6 +49,12 @@ Interactive versions: **/docs** (Swagger UI) and **/redoc** when the API is runn
 |---|---|---|
 | POST | `/pricing/quote` | Fee breakdown for a route (`restaurant_id` **or** pickup lat/lon) |
 
+## Routes
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/routes/demo` | Return the saved Tunis demo route as a GeoJSON FeatureCollection |
+
 ## Analytics
 
 | Method | Path | Description |
