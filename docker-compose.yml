@@ -215,6 +215,53 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
 
+  mlflow:
+    # MLflow tracking server (Phase 3, issue #41): experiment runs for the
+    # forecasting/ETA benchmark harness, backed by a self-provisioned
+    # `mlflow` database on the shared Postgres instance. Artifacts land in
+    # the bind-mounted ml/artifacts/ (gitignored). Tools profile - on demand.
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.ml
+    profiles: ["tools"]
+    ports:
+      - "5100:5100"
+    volumes:
+      - ./ml:/ml
+      - ml-artifacts:/mlart
+    entrypoint: ["/bin/bash", "-c"]
+    command:
+      - |
+        set -e
+        psql -h postgres -U smartops -d postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'mlflow'" | grep -q 1 ||           psql -h postgres -U smartops -d postgres -c "CREATE DATABASE mlflow"
+        mlflow db upgrade postgresql://smartops:smartops@postgres:5432/mlflow
+        mlflow server --backend-store-uri postgresql://smartops:smartops@postgres:5432/mlflow           --artifacts-destination /mlart --host 0.0.0.0 --port 5100
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ml-bench:
+    # One-shot benchmark/training run (Prophet vs LightGBM vs seasonal-naive,
+    # logged to MLflow): docker compose run --rm ml-bench
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.ml
+    profiles: ["tools"]
+    command: python ml/training/benchmark_demand.py
+    environment:
+      WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_warehouse
+      DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      MLFLOW_TRACKING_URI: http://mlflow:5100
+      MLFLOW_ARTIFACT_ROOT: /mlart
+      GIT_SHA: ${GIT_SHA:-unknown}
+    volumes:
+      - ./ml:/ml
+      - ./data/benchmarks:/ml/benchmarks
+      - ml-artifacts:/mlart
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   kafka-init:
     # One-shot topic provisioning. Production disables auto-create (typos
     # would silently produce to dead topics, partition counts drift
@@ -279,3 +326,4 @@ volumes:
   pgdata:
   kafkadata:
   airflow-logs:
+  ml-artifacts:

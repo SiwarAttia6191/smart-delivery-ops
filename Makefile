@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark clean
 
 API_PORT ?= 8010
 
@@ -47,6 +47,10 @@ airflow-trigger: ## trigger the warehouse DAG immediately (UI: http://localhost:
 
 airflow-state:   ## show recent runs and task states of the warehouse DAG
 	docker compose exec airflow-scheduler airflow dags list-runs -d warehouse_daily_build
+
+ml-benchmark:    ## run the demand-forecasting benchmark (logs to MLflow, UI :5100)
+	docker compose up -d mlflow
+	GIT_SHA=$$(git rev-parse --short HEAD) docker compose run --rm ml-bench
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__
