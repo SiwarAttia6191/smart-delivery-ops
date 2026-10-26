@@ -45,3 +45,6 @@ LEARNING.md
 data/transform/target/
 data/transform/logs/
 data/transform/.user.yml
+
+# OSRM map data (downloaded + prepared, ~100MB)
+data/osrm/
