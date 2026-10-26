@@ -76,7 +76,9 @@ def test_ratio_is_capped_and_floored(db):
     # 3 observed / 0.05 expected ≈ 60 → capped
     assert demand_service.derive_demand_ratio(db, *ZONE, now=now) == demand_service.RATIO_CAP
 
-    _seed_forecast(db, predicted=100.0, hour_start=hour_start.replace(minute=0) + timedelta(hours=1))
+    _seed_forecast(
+        db, predicted=100.0, hour_start=hour_start.replace(minute=0) + timedelta(hours=1)
+    )
     later = hour_start + timedelta(hours=1, minutes=30)
     # 0 observed / 50 expected → floored
     assert demand_service.derive_demand_ratio(db, *ZONE, now=later) == demand_service.RATIO_FLOOR

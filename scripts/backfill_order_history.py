@@ -51,11 +51,30 @@ TUNIS_UTC_OFFSET = timedelta(hours=1)
 # dead nights, a morning trickle, a 12-13h lunch spike, a 19-20h dinner peak.
 BASE_RATE = 2.4
 HOUR_WEIGHTS = {
-    0: 0.08, 1: 0.05, 2: 0.05, 3: 0.05, 4: 0.08, 5: 0.15,
-    6: 0.30, 7: 0.50, 8: 0.60, 9: 0.50, 10: 0.70,
-    11: 1.40, 12: 2.20, 13: 2.00, 14: 1.20,
-    15: 0.70, 16: 0.70, 17: 0.80,
-    18: 1.20, 19: 1.90, 20: 1.90, 21: 1.40, 22: 0.90, 23: 0.40,
+    0: 0.08,
+    1: 0.05,
+    2: 0.05,
+    3: 0.05,
+    4: 0.08,
+    5: 0.15,
+    6: 0.30,
+    7: 0.50,
+    8: 0.60,
+    9: 0.50,
+    10: 0.70,
+    11: 1.40,
+    12: 2.20,
+    13: 2.00,
+    14: 1.20,
+    15: 0.70,
+    16: 0.70,
+    17: 0.80,
+    18: 1.20,
+    19: 1.90,
+    20: 1.90,
+    21: 1.40,
+    22: 0.90,
+    23: 0.40,
 }
 WEEKEND_FACTOR = 1.35  # Sat/Sun
 JITTER_DEG = 0.006  # dropoff scatter around the customer (~±650 m)
@@ -179,9 +198,7 @@ def backfill(days: int, seed: int) -> None:
         # Refuse to run twice: a second backfill would duplicate history and
         # double-count demand in every mart. (Reset via warehouse + ops DB
         # truncation if a redo is ever needed.)
-        oldest = session.scalar(
-            select(Order.created_at).order_by(Order.created_at.asc()).limit(1)
-        )
+        oldest = session.scalar(select(Order.created_at).order_by(Order.created_at.asc()).limit(1))
         if oldest is not None and oldest < datetime.now(UTC) - timedelta(days=3):
             print(
                 f"Orders already go back to {oldest:%Y-%m-%d} - history looks "

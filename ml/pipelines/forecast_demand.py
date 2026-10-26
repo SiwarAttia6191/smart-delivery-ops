@@ -194,7 +194,9 @@ def main() -> None:
         )
 
     total = sum(p["predicted_orders"] for p in predictions)
-    print(f"forecast: {written} zone-hours written across {len(zones)} zones (next {HORIZON_HOURS}h)")
+    print(
+        f"forecast: {written} zone-hours written across {len(zones)} zones (next {HORIZON_HOURS}h)"
+    )
     print(f"expected demand: {total:.1f} orders / {len(zones)} zones / {HORIZON_HOURS}h")
     print("serving: the API derives demand_ratio from demand_forecasts on the quote path")
 
