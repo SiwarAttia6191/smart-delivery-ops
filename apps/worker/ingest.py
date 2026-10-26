@@ -246,11 +246,17 @@ class RawEventStore:
                     "ON CONFLICT (event_id) DO NOTHING"
                 )
                 try:
-                    result = conn.execute(stmt, record | {"ingested_at": ingested_at})
+                    # SAVEPOINT: Postgres aborts the WHOLE transaction on a
+                    # statement failure, so the dead-letter insert below would
+                    # hit InFailedSqlTransaction without this (SQLite does not
+                    # poison transactions - which is exactly how this bug once
+                    # slipped through a unit suite).
+                    with conn.begin_nested():
+                        result = conn.execute(stmt, record | {"ingested_at": ingested_at})
                     inserted += max(result.rowcount, 0)
                 except Exception as exc:
                     # Re-raises connection-level failures (aborting the batch);
-                    # quarantines row-level ones.
+                    # quarantines row-level ones - on a now-usable transaction.
                     self._quarantine(conn, record, exc)
                     quarantined += 1
         return inserted, quarantined

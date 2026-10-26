@@ -198,7 +198,9 @@ Design notes:
   events: exponential backoff up to a 60 s cap, then resume. Topic data
   persists in the `kafkadata` volume, and full replay from the source of truth
   is always one `UPDATE relay_state SET last_relayed_event_id = 0` +
-  `UPDATE order_events SET published_at = NULL` away.
+  `UPDATE order_events SET published_at = NULL, quarantined_at = NULL` away
+  (the warehouse's `event_id` primary key makes re-ingestion a no-op for
+  anything that survived).
 - **Wire format:** versioned JSON (`schema_version: 1`) with `event_type` as a
   Kafka header.
 - **Warehouse ingestion:** an `ingest` consumer (group `warehouse-ingest`)
@@ -244,9 +246,10 @@ singular business-rule tests). Three lines of defense:
    cap). Singular business-rule tests: daily revenue must reconcile between
    the funnel and pricing marts, delivered orders must have a prior
    assignment, delivered can never exceed created.
-3. **Freshness** — `dbt source freshness` on `max(ingested_at)` (warn 12 h /
-   error 24 h) turns a silently-stalled pipeline into a loud incident.
-   `make dbt` runs build + freshness.
+3. **Freshness** — `dbt source freshness` on `max(ingested_at)` (warn 24 h /
+   error 72 h — bounds set for a low-traffic demo; the per-partition
+   heartbeat is the documented production upgrade) turns a silently-stalled
+   pipeline into a loud incident. `make dbt` runs build + freshness.
 
 Every failure mode below was demonstrated live by injecting bad rows (the
 PASS/ERROR/SKIP totals are from those runs, not the clean build):
@@ -262,7 +265,8 @@ FAIL 1 non_negative_mart_pricing_history_delivery_fee
 FAIL 1 non_negative_mart_pricing_history_fee_per_km
 Done. PASS=42  WARN=0  ERROR=3  SKIP=0  TOTAL=45
 
-# 3 · a stalled pipeline (no fresh rows in 25h)
+# 3 · a stalled pipeline (no fresh rows in 25h) — captured under the
+#    original 12h/24h bounds; today's policy warns at 24h, errors at 72h
 ERROR STALE freshness of raw.order_events
 ```
 
