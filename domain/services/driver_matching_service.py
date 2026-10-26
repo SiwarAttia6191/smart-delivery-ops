@@ -5,12 +5,17 @@ this to load-aware allocation (driver efficiency + predicted demand).
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from domain.models import Driver
 from domain.rules import driver_rules, geo
+
+if TYPE_CHECKING:
+    from core.config import Settings
+    from domain.rules.geo import DistanceProvider
 
 
 @dataclass(frozen=True)
@@ -24,14 +29,21 @@ def find_nearest_driver(
     pickup_lat: float,
     pickup_lon: float,
     vehicle: str | None = None,
+    settings: "Settings | None" = None,
+    provider: "DistanceProvider | None" = None,
 ) -> MatchResult | None:
-    """Return the closest eligible driver to the pickup point, or None."""
+    """Return the closest eligible driver to the pickup point, or None.
+
+    Distance comes from the configured provider (champion by default; a
+    shadow challenger may log alongside it - see domain/rules/geo.py)."""
     best: MatchResult | None = None
     drivers = session.scalars(select(Driver)).all()
     for driver in drivers:
         if not driver_rules.is_eligible(driver, vehicle):
             continue
-        distance = geo.haversine_km(pickup_lat, pickup_lon, driver.latitude, driver.longitude)
+        distance = geo.resolve_distance(
+            pickup_lat, pickup_lon, driver.latitude, driver.longitude, provider, settings
+        )
         if best is None or distance < best.distance_km:
             best = MatchResult(driver=driver, distance_km=distance)
     return best

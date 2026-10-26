@@ -5,9 +5,14 @@ pure functions so it can be exhaustively unit-tested.
 """
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from domain.rules import geo, pricing_rules
 from domain.rules.pricing_rules import PriceBreakdown
+
+if TYPE_CHECKING:
+    from core.config import Settings
+    from domain.rules.geo import DistanceProvider
 
 
 @dataclass(frozen=True)
@@ -25,7 +30,13 @@ def quote_delivery(
     dropoff_lat: float,
     dropoff_lon: float,
     demand_ratio: float = 1.0,
+    settings: "Settings | None" = None,
+    provider: "DistanceProvider | None" = None,
 ) -> Quote:
-    distance_km = geo.haversine_km(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
+    """Distance comes from the configured provider (champion by default;
+    a shadow challenger may log alongside it - see domain/rules/geo.py)."""
+    distance_km = geo.resolve_distance(
+        pickup_lat, pickup_lon, dropoff_lat, dropoff_lon, provider, settings
+    )
     breakdown = pricing_rules.compute_price(distance_km, demand_ratio)
     return Quote(distance_km=distance_km, breakdown=breakdown)
