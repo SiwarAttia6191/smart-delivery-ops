@@ -7,6 +7,7 @@ erDiagram
     CUSTOMER ||--o{ ORDER : places
     RESTAURANT ||--o{ ORDER : "picked up at"
     DRIVER |o--o{ ORDER : delivers
+    DRIVER ||--o{ DRIVER_EVENT : emits
     ORDER ||--o{ ORDER_EVENT : emits
 
     CUSTOMER {
@@ -54,6 +55,14 @@ erDiagram
         json payload
         datetime created_at
     }
+    DRIVER_EVENT {
+        int id PK
+        int driver_id FK
+        string event_type "availability"
+        json payload
+        datetime created_at
+        datetime published_at
+    }
 ```
 
 ## Order lifecycle
@@ -77,6 +86,9 @@ Notes:
   schema rejects it on `POST /orders/{id}/status`.
 - Driver availability is a transactional side-effect: assigning marks the
   driver busy; delivery or cancellation frees them.
+- Each availability change is also committed to the driver outbox in the same
+  transaction. The warehouse reconstructs hourly available supply from those
+  events; continuous GPS pings remain out of scope.
 - Pickup coordinates are **snapshotted** at creation so later restaurant
   edits never mutate historical orders.
 - Phase 2 warehouse tables (`demand_forecast`, `pricing_history`,

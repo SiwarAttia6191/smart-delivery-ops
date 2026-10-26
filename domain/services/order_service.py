@@ -23,6 +23,7 @@ from core.exceptions import (
 from domain.models import Customer, Order, OrderEvent, OrderStatus, Restaurant
 from domain.rules import geo
 from domain.services import driver_matching_service, eta_service, pricing_service
+from domain.services.driver_event_service import AvailabilityReason, record_availability_change
 from domain.services.pricing_service import Quote
 
 _ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
@@ -45,9 +46,17 @@ def _get_order(session: Session, order_id: str) -> Order:
     return order
 
 
-def _free_driver(order: Order) -> None:
+def _free_driver(session: Session, order: Order, reason: AvailabilityReason) -> None:
     if order.driver is not None and order.driver.is_available is False:
         order.driver.is_available = True
+        record_availability_change(
+            session=session,
+            driver=order.driver,
+            previous=False,
+            available=True,
+            reason=reason,
+            order_id=order.id,
+        )
 
 
 def create_order(
@@ -123,7 +132,11 @@ def assign_driver(session: Session, order_id: str, vehicle: str | None = None) -
 
     order.driver = match.driver
     order.status = OrderStatus.assigned
+    previous_availability = match.driver.is_available
     match.driver.is_available = False
+    record_availability_change(
+        session, match.driver, previous_availability, False, "order_assigned", order.id
+    )
     _event(
         session,
         order,
@@ -153,9 +166,9 @@ def transition(session: Session, order_id: str, new_status: OrderStatus) -> Orde
         from datetime import UTC, datetime
 
         order.delivered_at = datetime.now(UTC)
-        _free_driver(order)
+        _free_driver(session, order, "order_delivered")
     elif new_status is OrderStatus.cancelled:
-        _free_driver(order)
+        _free_driver(session, order, "order_cancelled")
 
     order.status = new_status
     _event(session, order, "status", {"from": current.value, "to": new_status.value})

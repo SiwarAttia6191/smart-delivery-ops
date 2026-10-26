@@ -22,7 +22,7 @@ analytics in one system.
 | Domain | What it does |
 |---|---|
 | 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
-| 📡 **Event streaming** | Transactional-outbox relay → Kafka (`orders.events`, keyed by order id) → warehouse raw layer with primary-key dedupe — at-least-once end to end, offsets commit only after the DB commit |
+| 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-stream primary-key dedupe — at-least-once end to end |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
 | ⏱️ **ETA estimation** | Prep + travel + buffer heuristic (Phase 1), upgrade path to an ML regression model |
@@ -153,20 +153,18 @@ Data persists in the `pgdata` Docker volume across restarts. A zero-config
 SQLite fallback remains available via `DATABASE_URL=sqlite:///./local.db`
 (tests always run on isolated in-memory SQLite).
 
-## 📡 Event pipeline (Phase 2)
+## 📡 Event pipeline
 
-Order lifecycle events now flow onto a Kafka bus using the **transactional
-outbox** pattern — the API commits domain state and its event rows in one
-database transaction (source of truth), and a relay worker copies the log onto
-the topic without ever touching the API's hot path:
+Order lifecycle and driver availability events flow onto separate Kafka topics
+using the **transactional outbox** pattern. Each API operation commits its
+business state and event together; the relay and warehouse consumer run off
+the request path:
 
 ```
                           ┌──────────────────────── the platform ────────────────────────┐
-POST /orders ──► PostgreSQL (orders + order_events) ──► Kafka orders.events ──► warehouse raw layer
-                          │     (transactional outbox)    worker    (keyed by order id)  ingest consumer
-                          │                                                                     │
-                          └──────────────────────── the warehouse ──────────────────────────────┘
-                                     dbt build ──► staging views ──► analytics marts
+orders ──► order_events ──► orders.events ──┐
+                                             ├──► raw warehouse ──► dbt staging/marts
+drivers ─► driver_events ─► drivers.events ─┘
 
 
 Start the broker and the relay (the API comes up as before):
@@ -175,11 +173,14 @@ Start the broker and the relay (the API comes up as before):
 docker compose up -d
 ```
 
-Watch the live stream — every order transition appears as a JSON event:
+Watch either stream — order transitions and driver availability changes are
+keyed by their order or driver id:
 
 ```bash
 docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
   --bootstrap-server kafka:19092 --topic orders.events --from-beginning
+docker compose exec kafka /opt/kafka/bin/kafka-console-consumer.sh \
+  --bootstrap-server kafka:19092 --topic drivers.events --from-beginning
 ```
 
 Design notes:
@@ -191,35 +192,36 @@ Design notes:
   dedupe by `event_id`. Claiming rows instead of tracking an id offset also
   removes the classic sequence-gap race (ids are assigned at INSERT but become
   visible at COMMIT) and makes concurrent relay instances safe.
-- **Ordering:** messages are keyed by order id, so all events of one order land
-  in the same partition, in order (`orders.events` is provisioned with 3
-  partitions by the one-shot `kafka-init` service; auto-create is off).
-- **The relay is restart-safe and retroactive** — it tails `order_events`
+- **Ordering:** order messages are keyed by order id and driver messages by
+  driver id, preserving per-entity order in each separately provisioned
+  three-partition topic.
+- **The relay is restart-safe and retroactive** — it tails both outboxes
   continuously (idle poll 2 s) and treats broker/database outages as expected
   events: exponential backoff up to a 60 s cap, then resume. Topic data
-  persists in the `kafkadata` volume, and full replay from the source of truth
-  is always one `UPDATE relay_state SET last_relayed_event_id = 0` +
-  `UPDATE order_events SET published_at = NULL, quarantined_at = NULL` away
-  (the warehouse's `event_id` primary key makes re-ingestion a no-op for
-  anything that survived).
+  persists in the `kafkadata` volume. Full replay from the source of truth is
+  done by clearing `published_at` and `quarantined_at` on both outboxes (the
+  separate raw tables dedupe each stream by `event_id`).
 - **Wire format:** versioned JSON (`schema_version: 1`) with `event_type` as a
   Kafka header.
-- **Warehouse ingestion:** an `ingest` consumer (group `warehouse-ingest`)
-  lands every event into `raw.order_events` in a **separate warehouse
-  database** — analytics never reads or writes the operational tables. Kafka
-  offsets commit only after the database commit, and the raw table's
-  `event_id` primary key turns replays into no-ops: at-least-once end to end,
-  zero duplicates.
+- **Driver supply:** registration, dispatch, delivery/cancellation, and
+  heartbeat availability transitions are committed to `driver_events` with
+  the driver row. Location is snapshotted only when availability changes;
+  continuous GPS pings are explicitly out of scope.
+- **Warehouse ingestion:** one `ingest` consumer (group `warehouse-ingest`)
+  subscribes to both topics and lands them into `raw.order_events` and
+  `raw.driver_events` in the **separate warehouse database**. It commits Kafka
+  offsets only after both applicable stores have committed; replayed events
+  dedupe by each table's `event_id` primary key.
 - Host tooling (kcat, local scripts) reaches the broker on `localhost:9094`;
   containers on `kafka:19092`.
 
 ### 🏭 Warehouse transformations (dbt) — medallion architecture
 
 The warehouse is layered exactly like the medallion pattern: **bronze** =
-`raw.order_events` (append-only landings), **silver** = `staging.stg_order_events`
-(cleaned, typed, one JSON-flattening point), **gold** = `analytics.*` marts
+`raw.order_events` and `raw.driver_events` (append-only landings), **silver** =
+typed, flattened staging views, **gold** = `analytics.*` marts
 (business answers). `data/transform/` is a dbt project over the raw layer,
-and four marts answer the business questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
+and six marts answer the business questions (`docker compose run --rm dbt build`, or `make dbt`; runs on the
 official dbt-postgres image since dbt needs Python ≤ 3.12):
 
 | Mart (schema `analytics`) | Answers |
@@ -227,6 +229,8 @@ official dbt-postgres image since dbt needs Python ≤ 3.12):
 | `mart_daily_order_summary` | Daily funnel: created vs delivered, revenue, avg delivery minutes |
 | `mart_demand_by_zone_hour` | Demand heatmap: orders per ~1 km dropoff zone per hour (Phase 3 forecasting input) |
 | `mart_driver_utilization` | Per-courier workload: assignments, completions, match distance |
+| `mart_driver_supply_by_zone_hour` | Average available drivers per ~1 km zone during each Africa/Tunis local hour |
+| `mart_demand_supply_by_zone_hour` | Pickup demand vs available supply joined by same zone/date/hour |
 | `mart_pricing_history` | Every quote: distance, fee, surge, fee-per-km (Phase 3 pricing-model feed) |
 
 Every build also runs the data tests: unique/not-null keys on the source and

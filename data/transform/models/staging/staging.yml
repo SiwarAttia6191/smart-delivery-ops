@@ -11,3 +11,14 @@ models:
         tests: [not_null]
       - name: event_type
         tests: [not_null]
+  - name: stg_driver_events
+    description: Typed, flattened view over raw driver availability events.
+    columns:
+      - name: event_id
+        tests: [unique, not_null]
+      - name: driver_id
+        tests: [not_null]
+      - name: event_type
+        tests: [not_null]
+      - name: to_available
+        tests: [not_null]

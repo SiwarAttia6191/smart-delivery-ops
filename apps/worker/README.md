@@ -1,9 +1,11 @@
 # Event Worker (Phase 2)
 
-The outbox relay is live: `relay.py` tails the immutable `order_events` log
-(transactional-outbox pattern — the API's database commit stays the source of
-truth) and publishes every event to the `orders.events` Kafka topic, keyed by
-order id so per-order ordering is preserved inside a partition.
+The outbox relay tails two immutable transactional outboxes:
+`order_events` → `orders.events` and `driver_events` → `drivers.events`.
+Driver events record availability transitions (registration, heartbeat,
+assignment, delivery, and cancellation) with the driver-state change in the
+same database transaction. They snapshot location only at those transitions;
+GPS pings are out of scope.
 
 - **Delivery guarantee:** at-least-once. Due rows are claimed
   (`published_at IS NULL`, `quarantined_at IS NULL` + `FOR UPDATE SKIP LOCKED`)
@@ -15,9 +17,10 @@ order id so per-order ordering is preserved inside a partition.
 - **Poison pills are quarantined, never blocking:** an event that permanently
   fails to produce or deliver gets `quarantined_at` + a `relay_dead_letters`
   row (reason preserved) and the outbox drains around it. The backlog and
-  quarantine counts are gauges on `/analytics/metrics`
+  combined order/driver backlog and quarantine counts are gauges on `/analytics/metrics`
   (`sdo_outbox_unpublished`, `sdo_outbox_quarantined`,
-  `sdo_outbox_last_relay_age_seconds`).
+  `sdo_outbox_last_relay_age_seconds`). Driver relay failures are preserved in
+  `driver_relay_dead_letters`.
 - **Resilience:** transient failures (broker down, DB restart) trigger
   exponential backoff (cap 60s) instead of a crash-restart loop; `pool_pre_ping`
   survives Postgres restarts; SIGTERM finishes the current batch before exit.
@@ -27,32 +30,30 @@ order id so per-order ordering is preserved inside a partition.
 ## Recovery story (why nothing here is ever lost)
 
 - **Kafka is a buffer, not the archive**: `KAFKA_LOG_RETENTION_HOURS=168`
-  (7 days) is explicit. The archive is the outbox itself — `order_events` in
-  the operational database.
+  (7 days) is explicit. The archives are `order_events` and `driver_events`
+  in the operational database.
 - **Full replay from the source of truth** (e.g. after a warehouse wipe):
-  `UPDATE order_events SET published_at = NULL, quarantined_at = NULL;` — the
-  relay drains the entire history back onto the bus, and the warehouse's
-  `event_id` primary key makes re-ingestion a no-op for anything that
-  survived. No event can be lost this way; at worst it is delivered twice
-  (deduped downstream).
+  clear `published_at` and `quarantined_at` on both outboxes — each stream
+  replays to its own raw table, where `event_id` dedupes surviving rows.
 - **Quarantined events** (dead letters) are the one category replay skips:
   they failed deterministically, so fix the cause, then clear
   `quarantined_at` (and delete the dead-letter row) to re-queue them.
-- **Wire format:** `event_record()` in `relay.py` — `event_id`, `order_id`,
-  `event_type`, `payload`, `created_at` (ISO-8601) as JSON.
+- **Wire formats:** `event_record()` includes `order_id`; `driver_event_record()`
+  includes `driver_id`. Both carry `schema_version`, `event_id`, `event_type`,
+  `payload`, and ISO-8601 `created_at`.
 - **Run:** `docker compose up -d worker` (entrypoint `python -m apps.worker.relay`).
   Hosts reach the broker on `localhost:9094`, containers on `kafka:19092`.
 
-The warehouse consumer is also live: `ingest.py` subscribes to `orders.events`
-(group `warehouse-ingest`, `enable.auto.commit=false`) and lands events into
-`raw.order_events` in the **separate warehouse database**. Dedupe contract:
-`event_id` is the primary key with ON CONFLICT DO NOTHING, so the relay's
-at-least-once replays are no-ops; Kafka offsets commit only after the database
-commit. Malformed messages are logged with a preview and skipped (dead-letter
-topic deferred). dbt builds its marts on this raw layer.
+The warehouse consumer subscribes to both topics (group `warehouse-ingest`,
+`enable.auto.commit=false`) and lands them into `raw.order_events` and
+`raw.driver_events` in the **separate warehouse database**. Each table has its
+own `event_id` primary key, so at-least-once replays dedupe without collisions
+between independent outbox ids. Kafka offsets commit only after the rows from
+both streams have been stored. dbt builds `stg_driver_events` and the hourly
+driver-supply/demand-supply marts from these immutable records.
 
 ```
 apps/worker/
 ├── relay.py           # shipped — outbox → Kafka
-└── ingest.py          # shipped — Kafka → warehouse raw layer (dedupe by event_id)
+└── ingest.py          # shipped — both Kafka topics → per-stream raw tables
 ```
