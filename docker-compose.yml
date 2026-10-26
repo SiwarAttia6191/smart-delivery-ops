@@ -52,6 +52,7 @@ services:
       ENVIRONMENT: docker
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_DRIVERS_TOPIC: drivers.events
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +75,8 @@ services:
       ENVIRONMENT: docker
       WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_warehouse
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
+      KAFKA_DRIVERS_TOPIC: drivers.events
+      KAFKA_ORDERS_TOPIC: orders.events
     depends_on:
       postgres:
         condition: service_healthy
@@ -226,7 +229,10 @@ services:
     restart: "no"
     entrypoint: ["/bin/bash", "-c"]
     command:
-      - "/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic orders.events --partitions 3 --replication-factor 1"
+      - |
+        set -e
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic orders.events --partitions 3 --replication-factor 1
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic drivers.events --partitions 3 --replication-factor 1
 
   kafka:
     # Official Apache Kafka image, KRaft mode (no ZooKeeper) — a single node

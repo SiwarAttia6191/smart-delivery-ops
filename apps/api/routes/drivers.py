@@ -8,6 +8,7 @@ from apps.api.deps import get_db
 from apps.api.schemas.driver import DriverCreate, DriverResponse, DriverUpdate
 from core.exceptions import NotFoundError
 from domain.models import Driver
+from domain.services.driver_event_service import record_availability_change
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
@@ -19,8 +20,11 @@ def create_driver(payload: DriverCreate, db: Session = Depends(get_db)) -> Drive
         vehicle=payload.vehicle,
         latitude=payload.latitude,
         longitude=payload.longitude,
+        is_available=True,
     )
     db.add(driver)
+    db.flush()
+    record_availability_change(db, driver, None, True, "registered")
     db.commit()
     db.refresh(driver)
     return driver
@@ -51,9 +55,11 @@ def update_driver(driver_id: int, payload: DriverUpdate, db: Session = Depends(g
     driver = db.get(Driver, driver_id)
     if driver is None:
         raise NotFoundError(f"driver {driver_id} not found")
+    previous_availability = driver.is_available
     driver.latitude = payload.latitude
     driver.longitude = payload.longitude
     driver.is_available = payload.is_available
+    record_availability_change(db, driver, previous_availability, payload.is_available, "heartbeat")
     db.commit()
     db.refresh(driver)
     return driver

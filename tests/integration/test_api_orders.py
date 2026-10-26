@@ -1,6 +1,10 @@
 """Integration tests: the order flow over HTTP, as a client would drive it."""
 
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
+
+from domain.models import DriverEvent, DriverRelayDeadLetter
 
 CUSTOMER = {"name": "Aziza", "phone": "+216 20 000 000", "latitude": 36.8381, "longitude": 10.2385}
 RESTAURANT = {"name": "Chez Slah", "latitude": 36.8065, "longitude": 10.1815}
@@ -21,8 +25,76 @@ class TestHealth:
         assert body["database"] == "up"
 
 
+class TestDriverEvents:
+    def test_registration_and_heartbeat_record_availability_changes(self, client, db):
+        created = client.post("/drivers", json=DRIVER)
+        assert created.status_code == 201
+        driver = created.json()
+
+        unchanged = client.patch(
+            f"/drivers/{driver['id']}",
+            json={"latitude": 36.81, "longitude": 10.19, "is_available": True},
+        )
+        unavailable = client.patch(
+            f"/drivers/{driver['id']}",
+            json={"latitude": 36.81, "longitude": 10.19, "is_available": False},
+        )
+
+        assert unchanged.status_code == 200
+        assert unavailable.status_code == 200
+        events = (
+            db.query(DriverEvent).filter_by(driver_id=driver["id"]).order_by(DriverEvent.id).all()
+        )
+        assert [event.payload["reason"] for event in events] == ["registered", "heartbeat"]
+        assert [event.payload["to_available"] for event in events] == [True, False]
+        assert events[-1].payload["latitude"] == 36.81
+
+
+class TestOutboxMetrics:
+    def test_metrics_include_driver_backlog_and_quarantine(self, client, db):
+        driver = client.post("/drivers", json=DRIVER).json()
+        event = db.query(DriverEvent).filter_by(driver_id=driver["id"]).one()
+        event.quarantined_at = event.created_at
+        db.add(
+            DriverEvent(
+                driver_id=driver["id"],
+                event_type="availability",
+                payload={"from_available": True, "to_available": False},
+            )
+        )
+        db.add(
+            DriverRelayDeadLetter(
+                event_id=event.id,
+                driver_id=driver["id"],
+                event_type=event.event_type,
+                error="test quarantine",
+            )
+        )
+        db.commit()
+
+        metrics = client.get("/analytics/metrics").text
+
+        assert "sdo_outbox_unpublished 1" in metrics
+        assert "sdo_outbox_quarantined 1" in metrics
+
+    def test_metrics_calculate_age_from_driver_relay(self, client, db):
+        driver = client.post("/drivers", json=DRIVER).json()
+        event = db.query(DriverEvent).filter_by(driver_id=driver["id"]).one()
+        event.published_at = datetime.now(UTC) - timedelta(seconds=5)
+        db.commit()
+
+        metrics = client.get("/analytics/metrics").text
+        age = next(
+            line
+            for line in metrics.splitlines()
+            if line.startswith("sdo_outbox_last_relay_age_seconds ")
+        )
+
+        assert 0 <= float(age.rsplit(" ", 1)[1]) <= 10
+
+
 class TestOrderFlow:
-    def test_quote_then_create_assign_deliver(self, client):
+    def test_quote_then_create_assign_deliver(self, client, db):
         ids = _seed(client)
 
         quote = client.post(
@@ -66,6 +138,15 @@ class TestOrderFlow:
         # Driver was freed and shows as available again.
         drivers = client.get("/drivers", params={"available": True}).json()
         assert any(d["id"] == ids["driver"]["id"] for d in drivers)
+        driver_events = (
+            db.query(DriverEvent).filter_by(driver_id=ids["driver"]["id"]).order_by(DriverEvent.id)
+        )
+        assert [event.payload["to_available"] for event in driver_events] == [True, False, True]
+        assert [event.payload["reason"] for event in driver_events] == [
+            "registered",
+            "order_assigned",
+            "order_delivered",
+        ]
 
     def test_order_not_found(self, client):
         response = client.get("/orders/00000000-0000-0000-0000-000000000000")

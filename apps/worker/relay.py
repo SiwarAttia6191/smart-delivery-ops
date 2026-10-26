@@ -1,6 +1,5 @@
-"""Outbox relay: tails the immutable ``order_events`` log and publishes each
-row to a Kafka topic for downstream consumers (stream processing, warehouse
-ingestion, dashboards).
+"""Outbox relay: tails the immutable order and driver event logs and publishes
+them to separate Kafka topics for downstream consumers.
 
 Pattern: transactional outbox. The API commits domain state AND its event
 rows in one database transaction; this worker never touches the API path —
@@ -33,14 +32,15 @@ import json
 import logging
 import signal
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings, get_settings
-from domain.models import Base
+from domain.models import Base, DriverEvent, DriverRelayDeadLetter
 from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
@@ -148,8 +148,27 @@ def event_record(event: OrderEvent) -> dict:
     }
 
 
-def relay_once(
-    session: Session, publisher: EventPublisher, topic: str, batch_size: int = 100
+def driver_event_record(event: DriverEvent) -> dict:
+    """Wire format for the drivers.events topic."""
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "event_id": event.id,
+        "driver_id": event.driver_id,
+        "event_type": event.event_type,
+        "payload": event.payload,
+        "created_at": event.created_at.isoformat() if event.created_at else None,
+    }
+
+
+def _relay_once(
+    session: Session,
+    publisher: EventPublisher,
+    topic: str,
+    batch_size: int,
+    event_model: type[OrderEvent] | type[DriverEvent],
+    key_field: str,
+    record_encoder: Callable[[Any], dict],
+    update_state: bool,
 ) -> int:
     """Claim, publish, and mark one batch of due events; returns how many were sent.
 
@@ -158,45 +177,52 @@ def relay_once(
     failure releases everything cleanly. Flush timeout is bounded so the
     open transaction — and its vacuum pin — cannot outlive a broker outage.
     """
-    events = (
-        session.execute(
-            select(OrderEvent)
-            .where(OrderEvent.published_at.is_(None))
-            .where(OrderEvent.quarantined_at.is_(None))
-            .order_by(OrderEvent.id)
+    events = cast(
+        list[OrderEvent | DriverEvent],
+        session.scalars(
+            select(event_model)
+            .where(event_model.published_at.is_(None))
+            .where(event_model.quarantined_at.is_(None))
+            .order_by(event_model.id)
             .limit(batch_size)
             .with_for_update(skip_locked=True)
-        )
-        .scalars()
-        .all()
+        ).all(),
     )
     if not events:
         return 0
 
-    def _quarantine(event: OrderEvent, error: Exception) -> None:
+    def _quarantine(event, error: Exception) -> None:  # noqa: ANN001 - ORM model is selected above
         """Give up on one poison event - visible, searchable, never silent."""
         now = datetime.now(UTC)
         event.quarantined_at = now
-        session.add(
-            RelayDeadLetter(
+        if event_model is OrderEvent:
+            dead_letter: RelayDeadLetter | DriverRelayDeadLetter = RelayDeadLetter(
                 event_id=event.id,
                 order_id=event.order_id,
                 event_type=event.event_type,
                 error=str(error)[:500],
                 created_at=now,
             )
-        )
+        else:
+            dead_letter = DriverRelayDeadLetter(
+                event_id=event.id,
+                driver_id=event.driver_id,
+                event_type=event.event_type,
+                error=str(error)[:500],
+                created_at=now,
+            )
+        session.add(dead_letter)
         logger.error("quarantined event %s (%s): %s", event.id, event.event_type, error)
 
     # Produce every event, isolating produce-time failures (serialization,
     # oversized payloads) to their row instead of failing the batch.
-    deliverable: list[OrderEvent] = []
+    deliverable = []
     for event in events:
         try:
             publisher.produce(
                 topic=topic,
-                key=event.order_id,  # per-order ordering inside a partition
-                value=json.dumps(event_record(event)),
+                key=str(getattr(event, key_field)),
+                value=json.dumps(record_encoder(event)),
                 headers=[
                     ("event_type", event.event_type.encode("utf-8")),
                     ("event_id", str(event.id).encode("utf-8")),
@@ -208,37 +234,50 @@ def relay_once(
 
     if deliverable:
         try:
-            publisher.flush()  # raises unless the broker acknowledged everything
+            publisher.flush()  # raises unless the broker acknowledged delivery
         except Exception:
             failed_ids = set(publisher.take_delivery_failures())
             if not failed_ids:
-                # No specific failures -> broker-wide outage/timeout: release
-                # the claim and retry the whole batch later.
                 session.rollback()
                 raise
-            survivors: list[OrderEvent] = []
             for event in deliverable:
                 if event.id in failed_ids:
                     _quarantine(event, RuntimeError("delivery report: permanent failure"))
-                else:
-                    survivors.append(event)
-            publisher.flush()  # drain whatever survived the quarantine
+            publisher.flush()
 
     delivered_at = datetime.now(UTC)
-    quarantined_ids = {e.id for e in events if e.quarantined_at is not None}
+    quarantined_ids = {event.id for event in events if event.quarantined_at is not None}
     for event in events:
         if event.id not in quarantined_ids:
             event.published_at = delivered_at
 
-    # Observability only — selection no longer depends on this row.
-    state = session.get(RelayState, 1, with_for_update=True)
-    newest = events[-1].id
-    if state is None:
-        session.add(RelayState(id=1, last_relayed_event_id=newest))
-    else:
-        state.last_relayed_event_id = newest
+    if update_state:
+        state = session.get(RelayState, 1, with_for_update=True)
+        newest = events[-1].id
+        if state is None:
+            session.add(RelayState(id=1, last_relayed_event_id=newest))
+        else:
+            state.last_relayed_event_id = newest
     session.commit()
     return len(events) - len(quarantined_ids)
+
+
+def relay_once(
+    session: Session, publisher: EventPublisher, topic: str, batch_size: int = 100
+) -> int:
+    """Relay one order-event batch to its Kafka topic."""
+    return _relay_once(
+        session, publisher, topic, batch_size, OrderEvent, "order_id", event_record, True
+    )
+
+
+def relay_driver_events_once(
+    session: Session, publisher: EventPublisher, topic: str, batch_size: int = 100
+) -> int:
+    """Relay one driver-event batch to its dedicated Kafka topic."""
+    return _relay_once(
+        session, publisher, topic, batch_size, DriverEvent, "driver_id", driver_event_record, False
+    )
 
 
 def migrate_legacy_deployment(engine) -> None:
@@ -279,8 +318,9 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
         signal.signal(sig, _request_shutdown)  # docker stop → finish batch, exit cleanly
 
     logger.info(
-        "outbox relay started: topic=%s brokers=%s batch=%d",
+        "outbox relay started: topics=%s,%s brokers=%s batch=%d",
         s.kafka_orders_topic,
+        s.kafka_drivers_topic,
         s.kafka_bootstrap_servers,
         s.relay_batch_size,
     )
@@ -289,6 +329,9 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
         try:
             with session_factory() as session:
                 relayed = relay_once(session, publisher, s.kafka_orders_topic, s.relay_batch_size)
+                relayed += relay_driver_events_once(
+                    session, publisher, s.kafka_drivers_topic, s.relay_batch_size
+                )
         except Exception:
             # Broker down, DB hiccup, ...: back off and retry instead of the
             # crash-restart cycle a bare exception would cause.

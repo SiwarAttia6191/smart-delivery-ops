@@ -14,8 +14,14 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
-from apps.worker.relay import SCHEMA_VERSION, relay_once
-from domain.models import OrderEvent, RelayDeadLetter, RelayState
+from apps.worker.relay import SCHEMA_VERSION, relay_driver_events_once, relay_once
+from domain.models import (
+    DriverEvent,
+    DriverRelayDeadLetter,
+    OrderEvent,
+    RelayDeadLetter,
+    RelayState,
+)
 
 
 class FakePublisher:
@@ -193,6 +199,46 @@ class TestClaimBasedSelection:
 
         assert relayed == 0
         assert db.get(RelayState, 1) is None
+
+    def test_driver_events_publish_to_their_topic_keyed_by_driver(self, db: Session):
+        event = DriverEvent(
+            driver_id=17,
+            event_type="availability",
+            payload={"from_available": True, "to_available": False},
+        )
+        db.add(event)
+        db.commit()
+        publisher = FakePublisher()
+
+        relayed = relay_driver_events_once(db, publisher, "drivers.events")
+
+        assert relayed == 1
+        topic, key, value, _ = publisher.sent[0]
+        record = json.loads(value)
+        assert topic == "drivers.events"
+        assert key == "17"
+        assert record["driver_id"] == 17
+        assert record["event_type"] == "availability"
+        assert record["schema_version"] == SCHEMA_VERSION
+        assert event.published_at is not None
+
+    def test_driver_poison_event_is_quarantined(self, db: Session):
+        db.add(
+            DriverEvent(
+                driver_id=17,
+                event_type="availability",
+                payload={"to_available": True},
+            )
+        )
+        db.commit()
+        publisher = FakePublisher(fail_event_ids=(1,))
+
+        relayed = relay_driver_events_once(db, publisher, "drivers.events")
+
+        assert relayed == 0
+        event = db.query(DriverEvent).one()
+        assert event.quarantined_at is not None
+        assert db.query(DriverRelayDeadLetter).one().driver_id == 17
 
 
 class TestDeliveryGating:

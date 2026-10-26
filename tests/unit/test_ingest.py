@@ -12,7 +12,12 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.pool import StaticPool
 
-from apps.worker.ingest import RawEventStore, parse_message
+from apps.worker.ingest import (
+    RawDriverEventStore,
+    RawEventStore,
+    parse_driver_message,
+    parse_message,
+)
 
 
 def make_store() -> RawEventStore:
@@ -20,6 +25,13 @@ def make_store() -> RawEventStore:
         "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
     )
     return RawEventStore("sqlite://", schema=None, engine=engine)
+
+
+def make_driver_store() -> RawDriverEventStore:
+    engine = create_engine(
+        "sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool
+    )
+    return RawDriverEventStore("sqlite://", schema=None, engine=engine)
 
 
 def wire_record(event_id: int = 1, event_type: str = "created") -> bytes:
@@ -30,6 +42,19 @@ def wire_record(event_id: int = 1, event_type: str = "created") -> bytes:
             "order_id": f"ORD-{event_id}",
             "event_type": event_type,
             "payload": {"note": event_type},
+            "created_at": "2026-10-25T18:31:19.371540+00:00",
+        }
+    ).encode("utf-8")
+
+
+def driver_wire_record(event_id: int = 1, driver_id: int = 17) -> bytes:
+    return json.dumps(
+        {
+            "schema_version": 1,
+            "event_id": event_id,
+            "driver_id": driver_id,
+            "event_type": "availability",
+            "payload": {"from_available": True, "to_available": False},
             "created_at": "2026-10-25T18:31:19.371540+00:00",
         }
     ).encode("utf-8")
@@ -71,6 +96,20 @@ class TestParseMessage:
         assert (
             parse_message(json.dumps({**json.loads(wire_record()), "order_id": 7}).encode()) is None
         )
+
+    def test_driver_event_normalizes_integer_driver_id(self):
+        record = parse_driver_message(driver_wire_record())
+
+        assert record is not None
+        assert record["driver_id"] == 17
+        assert record["event_type"] == "availability"
+        assert json.loads(record["payload"])["to_available"] is False
+
+    def test_driver_id_must_be_an_integer(self):
+        broken = json.loads(driver_wire_record())
+        broken["driver_id"] = "17"
+
+        assert parse_driver_message(json.dumps(broken)) is None
 
 
 class TestRawEventStore:
@@ -140,6 +179,23 @@ class TestRawEventStore:
         second = parse_message(wire_record(event_id=2, event_type="assigned"))
         assert first is not None and second is not None
         assert store.store([first, second]) == (2, 0)
+
+
+class TestRawDriverEventStore:
+    def test_driver_event_store_roundtrip_and_deduplication(self):
+        store = make_driver_store()
+        store.ensure()
+        record = parse_driver_message(driver_wire_record())
+        assert record is not None
+
+        assert inspect(store._engine).has_table("driver_events")
+        assert store.store([record]) == (1, 0)
+        assert store.store([record]) == (0, 0)
+        with store._engine.connect() as conn:
+            row = conn.execute(
+                text("SELECT event_id, driver_id, event_type FROM driver_events")
+            ).one()
+        assert row == (1, 17, "availability")
 
 
 def conn_execute_count(store: RawEventStore) -> int:

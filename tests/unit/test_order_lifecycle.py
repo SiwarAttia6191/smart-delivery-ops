@@ -3,7 +3,7 @@
 import pytest
 
 from core.exceptions import InvalidTransitionError, NoDriverAvailableError
-from domain.models import Customer, Driver, OrderStatus, Restaurant
+from domain.models import Customer, Driver, DriverEvent, OrderStatus, Restaurant
 from domain.services import order_service
 
 
@@ -90,6 +90,11 @@ class TestAssignAndTransitions:
         order = order_service.transition(db, order.id, OrderStatus.cancelled)
         assert order.status is OrderStatus.cancelled
         assert driver.is_available is True
+        events = db.query(DriverEvent).filter_by(driver_id=driver.id).order_by(DriverEvent.id).all()
+        assert [event.payload["reason"] for event in events] == [
+            "order_assigned",
+            "order_cancelled",
+        ]
 
     def test_terminal_states_are_final(self, db, entities):
         customer, restaurant, _ = entities
