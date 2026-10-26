@@ -93,6 +93,21 @@ class TestOutboxMetrics:
         assert 0 <= float(age.rsplit(" ", 1)[1]) <= 10
 
 
+class TestRoutes:
+    def test_demo_route_returns_geojson(self, client):
+        response = client.get("/routes/demo")
+
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/geo+json")
+        body = response.json()
+        assert body["type"] == "FeatureCollection"
+        feature = body["features"][0]
+        assert feature["geometry"]["type"] == "LineString"
+        assert feature["geometry"]["coordinates"][0] == [10.181621, 36.806522]
+        assert feature["geometry"]["coordinates"][-1] == [10.238784, 36.838188]
+        assert feature["properties"] == {"distance_m": 7645.2, "duration_s": 510.6}
+
+
 class TestOrderFlow:
     def test_quote_then_create_assign_deliver(self, client, db):
         ids = _seed(client)

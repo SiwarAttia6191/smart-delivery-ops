@@ -66,3 +66,11 @@ docker compose up -d osrm                # serves /route on localhost:5000
 
 The `osrm` container is what `scripts/benchmark_geo.py` uses as ground
 truth and what the shadow distance provider queries.
+
+## Demo route
+
+The saved Tunis OSRM route is checked in beside the project demo page as
+[`../docs/route.geojson`](../docs/route.geojson).
+The API serves it at `GET /routes/demo`, and the project demo page renders it
+on an OpenStreetMap-backed Leaflet map. The GeoJSON is a static route snapshot;
+the OSRM service is only needed to generate a new route, not to display this one.
