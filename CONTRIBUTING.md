@@ -1,7 +1,7 @@
 # Contributing
 
 The rules that keep this repo's history clean and its pipeline trustworthy.
-They apply to humans **and** coding agents (Copilot included) alike — the
+They apply to humans **and** coding agents alike — the
 process gaps this project has hit were all agent-driven, so the conventions
 are written down, not assumed.
 
