@@ -41,6 +41,15 @@ chosen because the seed data's coordinates are in Tunis.
 | `tunisia-latest.osm.pbf` | raw OSM extract downloaded from Geofabrik |
 | `tunisia-latest.osrm.*` | the prepared routing graph, built ONCE by the MLD pipeline (`osrm-extract` → `osrm-partition` → `osrm-customize`, car profile) |
 
+**What it is NOT: live traffic.** OSRM speeds come from static OSM tags
+(maxspeed, highway class) baked in at prepare time - free-flow estimates.
+There is no live-traffic feed in self-hosted OSRM; the documented upgrade
+path is `osrm-customize --segment-speed-file <csv>` refreshed periodically
+(minutes, not real-time) - and our own realized delivery durations are a
+legitimate source for that CSV. Consequence for evaluation: OSRM **distance**
+is traffic-independent and solid ground truth; OSRM **durations** are not
+valid ETA ground truth (see the ETA model's evaluation design, issue #26).
+
 Why gitignored: ~826 MB of binary, regenerable in two commands:
 
 ```bash
