@@ -39,6 +39,15 @@ class Settings(BaseSettings):
     eta_restaurant_prep_minutes: int = 12
     eta_buffer_minutes: int = 5
 
+    # ── Geo providers (Phase 3) ────────────────────────────────
+    # Champion (business decisions) vs optional shadow challenger (logged
+    # alongside, never used, until the benchmark evidence says otherwise).
+    # Providers: haversine | circuity | osrm.
+    distance_provider: str = "haversine"
+    distance_shadow_provider: str | None = None
+    distance_circuity_factor: float = 1.3
+    osrm_base_url: str = "http://localhost:5000"
+
     # ── Event pipeline (Phase 2) ───────────────────────────────
     # Host default points at the compose host mapping (localhost:9094);
     # containers override it with kafka:19092.
