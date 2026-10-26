@@ -10,6 +10,13 @@ services:
       # Inside Docker's network the postgres service listens on its internal
       # port 5432 — the host-side 5434 mapping does not apply here.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      # Shadow mode (issue #24): the OSRM challenger is computed alongside
+      # every haversine decision and LOGGED, never used. Best-effort by
+      # design: osrm runs in the tools profile, so start it with `docker
+      # compose --profile tools up -d osrm`; if unavailable, its failure is
+      # logged while the champion remains unaffected.
+      DISTANCE_SHADOW_PROVIDER: osrm
+      OSRM_BASE_URL: http://osrm:5000
     depends_on:
       postgres:
         condition: service_healthy
