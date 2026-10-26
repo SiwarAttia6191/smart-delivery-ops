@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark ml-forecast clean
 
 API_PORT ?= 8010
 
@@ -51,6 +51,10 @@ airflow-state:   ## show recent runs and task states of the warehouse DAG
 ml-benchmark:    ## run the demand-forecasting benchmark (logs to MLflow, UI :5100)
 	docker compose up -d mlflow
 	GIT_SHA=$$(git rev-parse --short HEAD) docker compose run --rm ml-bench
+
+ml-forecast:     ## refresh the next-24h zone-hour demand forecasts the API prices against
+	docker compose up -d mlflow
+	GIT_SHA=$$(git rev-parse --short HEAD) docker compose run --rm ml-bench python pipelines/forecast_demand.py
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__

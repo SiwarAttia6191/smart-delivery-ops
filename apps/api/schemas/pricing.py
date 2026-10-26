@@ -9,7 +9,7 @@ class QuoteRequest(BaseModel):
     pickup_longitude: float | None = Field(None, ge=-180, le=180)
     dropoff_latitude: float = Field(..., ge=-90, le=90)
     dropoff_longitude: float = Field(..., ge=-180, le=180)
-    demand_ratio: float = Field(1.0, ge=0)
+    demand_ratio: float | None = Field(None, ge=0)  # None = derive from the forecast table
 
     @model_validator(mode="after")
     def check_pickup(self) -> "QuoteRequest":
