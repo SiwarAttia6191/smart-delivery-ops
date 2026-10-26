@@ -293,8 +293,10 @@ ever influencing business decisions.
 
 The challenger-vs-champion harness (`scripts/benchmark_geo.py`) scores them
 against OSRM ground truth per distance bucket, and every report records the
-dataset snapshot (`max(event_id)` + git SHA). First live run
-(`data/benchmarks/`):
+dataset snapshot (`max(event_id)` + git SHA). **Shadow mode is live**: the
+compose stack runs the OSRM challenger alongside every haversine decision
+and logs the delta — real traffic is accumulating the comparison evidence
+right now. First benchmark run (`data/benchmarks/`):
 
 | bucket | haversine bias | circuity ×1.3 bias |
 |---|---|---|
@@ -432,6 +434,14 @@ one commit and explains what landed and why.
 [MIT](LICENSE) © 2026 Siwar Attia
 
 ---
+
+## 🤝 Contributing
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a PR — it defines the
+branch/PR discipline, the verification gates (explicit exit codes, `dbt build`
+before dbt merges, Postgres-path checks for worker changes), and the
+live-verification expectations. Coding agents: the same file is your
+briefing — read it before writing code.
 
 *This project is an independent, from-scratch implementation inspired by common
 delivery-startup system-design exercises; it reuses no code from any third-party

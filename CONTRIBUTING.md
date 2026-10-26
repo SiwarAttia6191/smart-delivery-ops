@@ -13,6 +13,9 @@ are written down, not assumed.
    reset + PR) every time it happens.
 2. **One task = one branch = one PR.** Open the PR immediately after the
    push — a pushed branch without a PR is invisible to review and to `ci-ok`.
+   The README travels with the change: every PR that alters behavior,
+   configuration, or the pipeline updates `README.md` (and `data/README.md`
+   where relevant) **in the same PR** — documentation is never a follow-up.
 3. **No merge without `ci-ok`.** The ruleset enforces it; do not look for
    workarounds. Rebase-merge multi-commit PRs so per-task commits survive;
    squash single-commit ones.
