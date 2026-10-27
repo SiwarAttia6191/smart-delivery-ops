@@ -554,7 +554,7 @@ footer {
       <div class="card">
         <div class="ico">⏱️</div>
         <h3>ETA estimation</h3>
-        <p>Prep + travel + buffer heuristics serving today. The benchmarked LightGBM challenger beat them on realized deliveries (MAE 5.2 vs 17.8 min) and is registered in MLflow; the serving swap is next.</p>
+        <p>ETAs served by the registry-promoted LightGBM model (beats the heuristic 5.2 vs 17.8 min MAE on realized deliveries — a 12 km order now quotes 22 min instead of 54). If the model store is down, the transparent heuristic answers instead.</p>
       </div>
       <div class="card">
         <div class="ico">📊</div>
@@ -621,7 +621,7 @@ footer {
         <div class="ico">⏱️</div>
         <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked ground truth</span></div>
         <h3>ETA engine</h3>
-        <p>Transparent prep + travel + buffer estimate on every order, at a calibrated 20 km/h effective urban courier speed. The ML challenger beat it on realized deliveries (MAE 5.2 vs 17.8 min) and sits registered in MLflow, awaiting the serving swap.</p>
+        <p>Every order gets an ETA from the MLflow-registered model (challenger beat the heuristic 5.2 vs 17.8 min MAE on realized deliveries), with the transparent calibrated heuristic as automatic fallback when the model store is unreachable.</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/eta_service.py" target="_blank" rel="noopener">eta_service.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/core/config.py" target="_blank" rel="noopener">calibrated in config</a></p>
       </div>
     </div>
