@@ -259,6 +259,7 @@ services:
       MLFLOW_ARTIFACT_ROOT: /mlart
       GIT_SHA: ${GIT_SHA:-unknown}
       GIT_PYTHON_REFRESH: quiet  # mlflow probes for git; silence the import warning
+      OSRM_BASE_URL: http://osrm:5000  # ETA benchmark challenger (osrm is profile-gated)
     volumes:
       - ./ml:/ml
       - ./data/benchmarks:/ml/benchmarks

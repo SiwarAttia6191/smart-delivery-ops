@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark ml-forecast clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark ml-forecast eta-benchmark clean
 
 API_PORT ?= 8010
 
@@ -55,6 +55,10 @@ ml-benchmark:    ## run the demand-forecasting benchmark (logs to MLflow, UI :51
 ml-forecast:     ## refresh the next-24h zone-hour demand forecasts the API prices against
 	docker compose up -d mlflow
 	GIT_SHA=$$(git rev-parse --short HEAD) docker compose run --rm ml-bench python pipelines/forecast_demand.py
+
+eta-benchmark:   ## run the ETA benchmark (heuristic vs OSRM vs LightGBM; logs to MLflow)
+	docker compose up -d mlflow osrm
+	GIT_SHA=$$(git rev-parse --short HEAD) docker compose run --rm ml-bench python training/benchmark_eta.py
 
 clean:           ## remove caches and local databases
 	rm -rf .pytest_cache .ruff_cache **/__pycache__
