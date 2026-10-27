@@ -249,7 +249,10 @@ class TempModelArtifact:
     def log_and_register(self, beats_champion: bool, snapshot: dict) -> None:
         model = lgb.LGBMRegressor(n_estimators=300, verbose=-1)
         model.fit(self.train[FEATURES], self.train["duration_min"])
-        mlflow.lightgbm.log_model(model, artifact_path="model")
+        # Log the NATIVE booster (model.txt), not the sklearn pickle: serving
+        # loads lgb.Booster(model_file=...) — no pickle fragility across
+        # library versions, no code execution on unpickle.
+        mlflow.lightgbm.log_model(model.booster_, artifact_path="model")
         # register_model returns the ModelVersion (log_model's ModelInfo does
         # not carry the registry version in mlflow 2.19).
         mv = mlflow.register_model(mlflow.get_artifact_uri("model"), REGISTERED_MODEL)

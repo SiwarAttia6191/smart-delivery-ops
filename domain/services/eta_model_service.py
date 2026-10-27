@@ -17,6 +17,7 @@ the warehouse staging models bake in.
 
 import logging
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from core.config import get_settings
@@ -36,19 +37,43 @@ def is_serving() -> bool:
 
 
 def load_from_registry() -> None:
-    """Load the promoted model once at startup. Never raises."""
+    """Load the promoted model once at startup. Never raises.
+
+    We deliberately load the NATIVE LightGBM booster from the logged
+    artifact instead of mlflow's pyfunc wrapper: the wrapper broke in the
+    serving image ('super' object has no attribute 'get_params'), and the
+    booster is the actual artifact the benchmark logged. Registry stage
+    resolution + artifact download go through the mlflow client."""
     global _model, _loaded, _load_error
     settings = get_settings()
     if settings.eta_model_source != "registry":
         return
     try:
+        import lightgbm as lgb
         import mlflow
+        from mlflow.tracking import MlflowClient
 
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-        uri = f"models:/{settings.eta_model_name}/{settings.eta_model_stage}"
-        _model = mlflow.lightgbm.load_model(uri)
+        client = MlflowClient()
+        versions = client.get_latest_versions(
+            settings.eta_model_name, stages=[settings.eta_model_stage]
+        )
+        source = versions[0].source
+        local_dir = mlflow.artifacts.download_artifacts(
+            artifact_uri=source,
+            tracking_uri=settings.mlflow_tracking_uri,
+        )
+        artifact_dir = Path(local_dir)
+        booster_file = artifact_dir / "model.lgb"  # mlflow ≥2.14 native booster name
+        if not booster_file.exists():
+            booster_file = artifact_dir / "model.txt"  # older native name
+        _model = lgb.Booster(model_file=str(booster_file))
         _loaded = True
-        logger.info("ETA model loaded from registry: %s", uri)
+        logger.info(
+            "ETA model loaded from registry: %s (version %s)",
+            source,
+            versions[0].version,
+        )
     except Exception as exc:  # noqa: BLE001 - serving must survive registry outages
         _model, _loaded, _load_error = None, False, str(exc)[:300]
         logger.error("ETA model unavailable (%s); serving the heuristic fallback", _load_error)
