@@ -339,9 +339,18 @@ ETA = kitchen prep (12 min) + travel (distance ÷ 20 km/h) + handoff buffer (5 m
   not a magic number.
 - Worked example, the README's own 6 km quote: `12 + (6.17 ÷ 20 × 60) + 5`
   = `12 + 18.5 + 5` ≈ **36 min** - consistent with observed city averages.
-- The Phase 3 ETA model (#26) must **beat this heuristic in the benchmark
-  harness** to replace it - same challenger-vs-champion discipline as
-  distance.
+- **The ETA benchmark has run** (`make eta-benchmark`, harness in
+  `ml/training/benchmark_eta.py`): ground truth is our own realized
+  deliveries (created → delivered spans), scored on the newest 20% of
+  orders. Result on 1,431 realized deliveries: the heuristic champion MAE
+  **17.8 min**, OSRM free-flow + prep + buffer **6.4**, LightGBM regression
+  **5.2** — the challenger **beat the champion** and is registered in the
+  MLflow model registry as `eta_model` (Production stage, verdict recorded).
+  The heuristic's systematic under-estimate is a finding: it quotes
+  prep + travel + buffer, while the realized span also includes assignment
+  and pickup wait. Serving still quotes the heuristic; swapping the
+  registered model into the quote path is the follow-up, now gated on this
+  evidence.
 - **On traffic:** self-hosted OSRM has no live-traffic feed - its durations
   are free-flow estimates from static OSM tags. Distances are
   traffic-independent (solid ground truth); ETAs are evaluated against the
@@ -426,7 +435,7 @@ smart-delivery-ops/
 |---|---|---|
 | 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
 | 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
-| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting trained + benchmarked in MLflow and serving surge pricing; ETA model next |
+| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model benchmarked (LightGBM beat the heuristic, `eta_model` registered in MLflow) |
 | 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
 | 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
 
