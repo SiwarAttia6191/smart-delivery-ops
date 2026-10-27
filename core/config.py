@@ -32,6 +32,14 @@ class Settings(BaseSettings):
     pricing_surge_tier3_ratio: float = 2.00
     pricing_surge_tier3_multiplier: float = 2.00
 
+    # ── ETA serving (#26/#69): empty = heuristic champion; "registry" loads
+    #    models:/eta_model/Production at startup, heuristic fallback on any
+    #    failure (ML being down must never break quoting).
+    eta_model_source: str = ""
+    eta_model_name: str = "eta_model"
+    eta_model_stage: str = "Production"
+    mlflow_tracking_uri: str = "http://localhost:5100"
+
     # ── ETA heuristic (Phase 1; replaced by ML model in Phase 3)
     # 20 km/h ≈ urban courier travel speed (17–21 km/h benchmark);
     # a 6 km trip lands near 35 min total, matching observed city averages.

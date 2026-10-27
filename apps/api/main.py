@@ -25,6 +25,7 @@ from core.config import get_settings
 from core.database import create_all
 from core.exceptions import DomainError
 from core.logging import configure_logging
+from domain.services import eta_model_service
 
 DESCRIPTION = """
 Operational API for a delivery startup: **orders**, **drivers**, **dynamic
@@ -41,6 +42,8 @@ ETA/pricing land in Phases 2–3 (see docs/roadmap.md).
 async def lifespan(app: FastAPI):
     configure_logging()
     create_all()
+    if get_settings().eta_model_source == "registry":
+        eta_model_service.load_from_registry()
     yield
 
 

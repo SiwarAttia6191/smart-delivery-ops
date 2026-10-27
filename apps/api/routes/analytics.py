@@ -18,6 +18,7 @@ from domain.models import (
     RelayDeadLetter,
     Restaurant,
 )
+from domain.services import eta_model_service
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
@@ -106,6 +107,12 @@ def metrics(db: Session = Depends(get_db)) -> Response:
         "# HELP sdo_outbox_last_relay_age_seconds Seconds since the last successful relay (-1 = never)",
         "# TYPE sdo_outbox_last_relay_age_seconds gauge",
         f"sdo_outbox_last_relay_age_seconds {_last_relay_age(db)}",
+        # ── ETA serving (#69): 1 = the registered eta_model answers order
+        # ETAs, 0 = the heuristic fallback is answering (model unloaded or
+        # failed — check the API logs for the reason).
+        "# HELP sdo_eta_model_serving 1 when the registered ETA model is serving, 0 when the heuristic fallback answers",
+        "# TYPE sdo_eta_model_serving gauge",
+        f"sdo_eta_model_serving {1 if eta_model_service.is_serving() else 0}",
     ]
     return Response(media_type="text/plain; version=0.0.4", content="\n".join(lines) + "\n")
 
