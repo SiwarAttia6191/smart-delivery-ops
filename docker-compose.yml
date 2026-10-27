@@ -10,6 +10,15 @@ services:
       # Inside Docker's network the postgres service listens on its internal
       # port 5432 — the host-side 5434 mapping does not apply here.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      # ETA serving swap (#69): load the registry-promoted eta_model; if the
+      # mlflow container is down the API logs the failure and serves the
+      # heuristic fallback (sdo_eta_model_serving 0).
+      ETA_MODEL_SOURCE: registry
+      MLFLOW_TRACKING_URI: http://mlflow:5100
+      # Cap the mlflow client's retry/backoff so a down registry costs the
+      # API a few seconds at boot, not minutes of blocked startup.
+      MLFLOW_HTTP_REQUEST_MAX_RETRIES: 1
+      MLFLOW_HTTP_REQUEST_TIMEOUT: 5
       # Shadow mode (issue #24): the OSRM challenger is computed alongside
       # every haversine decision and LOGGED, never used. Best-effort by
       # design: osrm runs in the tools profile, so start it with `docker

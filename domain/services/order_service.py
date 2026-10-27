@@ -25,6 +25,7 @@ from domain.rules import geo
 from domain.services import (
     demand_service,
     driver_matching_service,
+    eta_model_service,
     eta_service,
     pricing_service,
 )
@@ -96,7 +97,18 @@ def create_order(
         distance_km=quote.distance_km,
         delivery_fee=quote.breakdown.total,
         surge_multiplier=quote.breakdown.surge_multiplier,
-        eta_minutes=eta_service.estimate_eta_minutes(quote.distance_km),
+        eta_minutes=(
+            eta_model_service.estimate_eta_minutes(
+                quote.distance_km,
+                restaurant.latitude,
+                restaurant.longitude,
+                dropoff_lat,
+                dropoff_lon,
+            )
+            if eta_model_service.is_serving()
+            else None
+        )
+        or eta_service.estimate_eta_minutes(quote.distance_km),
     )
     _event(
         session,

@@ -11,6 +11,13 @@ RESTAURANT = {"name": "Chez Slah", "latitude": 36.8065, "longitude": 10.1815}
 DRIVER = {"name": "Karim", "vehicle": "motorcycle", "latitude": 36.8100, "longitude": 10.1900}
 
 
+def _eta_heuristic_for(distance_km: float) -> int:
+    """The champion formula, mirrored for assertions (ceil(prep + travel + buffer))."""
+    import math
+
+    return math.ceil(12 + (distance_km / 20.0) * 60 + 5)
+
+
 def _seed(client: TestClient) -> dict:
     customer = client.post("/customers", json=CUSTOMER).json()
     restaurant = client.post("/restaurants", json=RESTAURANT).json()
@@ -162,6 +169,66 @@ class TestOrderFlow:
             "order_assigned",
             "order_delivered",
         ]
+
+    def test_eta_model_serving_and_gauge(self, client, monkeypatch):
+        # With the model "loaded", order ETAs come from it; the gauge agrees.
+        from domain.services import eta_model_service
+
+        class FakeModel:
+            def predict(self, frame):
+                assert list(frame.columns) == [
+                    "distance_km",
+                    "hour_local",
+                    "dow",
+                    "pickup_zone",
+                    "dropoff_zone",
+                    "dropoff_zone_lon",
+                ]
+                return [25.4]
+
+        monkeypatch.setattr(eta_model_service, "_model", FakeModel())
+        monkeypatch.setattr(eta_model_service, "_loaded", True)
+
+        ids = _seed(client)
+        created = client.post(
+            "/orders",
+            json={
+                "customer_id": ids["customer"]["id"],
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_latitude": CUSTOMER["latitude"],
+                "dropoff_longitude": CUSTOMER["longitude"],
+            },
+        ).json()
+        assert created["eta_minutes"] == 25  # round(25.4); heuristic would differ
+
+        metrics = client.get("/analytics/metrics").text
+        gauge = next(
+            line for line in metrics.splitlines() if line.startswith("sdo_eta_model_serving ")
+        )
+        assert gauge.rsplit(" ", 1)[1] == "1"
+
+    def test_eta_heuristic_fallback_gauge_zero(self, client):
+        # No model loaded: heuristic answers, gauge reports the fallback.
+        from domain.services import eta_model_service
+
+        eta_model_service.reset_state()
+        ids = _seed(client)
+        created = client.post(
+            "/orders",
+            json={
+                "customer_id": ids["customer"]["id"],
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_latitude": CUSTOMER["latitude"],
+                "dropoff_longitude": CUSTOMER["longitude"],
+            },
+        ).json()
+        assert created["eta_minutes"] == _eta_heuristic_for(created["distance_km"])
+
+        metrics = client.get("/analytics/metrics").text
+        gauge = next(
+            line for line in metrics.splitlines() if line.startswith("sdo_eta_model_serving ")
+        )
+        assert gauge.rsplit(" ", 1)[1] == "0"
 
     def test_quote_without_forecasts_derives_neutral_ratio(self, client):
         # No demand_forecasts rows: derivation must fall back to 1.0, never

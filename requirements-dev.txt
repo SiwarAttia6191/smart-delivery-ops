@@ -3,4 +3,5 @@ pytest>=9.1.1
 pytest-cov>=6.0
 ruff>=0.17.1
 mypy>=2.4.0
+pandas-stubs>=2.2  # type-check the ETA model serving feature frame
 pip-audit>=2.7

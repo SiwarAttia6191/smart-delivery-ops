@@ -12,10 +12,13 @@ httpx>=0.28.1
 # Event pipeline (Phase 2): outbox relay publishes order events to Kafka
 confluent-kafka>=2.7
 
+# ── ETA model serving (Phase 3, #69): loads models:/eta_model/Production
+# from the MLflow registry at startup; heuristic fallback on any failure
+mlflow-skinny>=2.19
+lightgbm>=4.5
+pandas>=2.2
+
 # ── Later phases (not required for Phase 1) ─────────────────────
 # redis>=5            # Phase 2/5 — cache & availability state
-# pandas>=2.2         # Phase 3 — feature engineering
-# scikit-learn>=1.6   # Phase 3 — ETA / baseline models
-# prophet             # Phase 3 — demand forecasting
 # streamlit           # Phase 4 — operations dashboard
 # dbt-core+dbt-postgres  # Phase 2 — warehouse transformations (needs Python ≤3.12)

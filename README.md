@@ -348,9 +348,13 @@ ETA = kitchen prep (12 min) + travel (distance ÷ 20 km/h) + handoff buffer (5 m
   MLflow model registry as `eta_model` (Production stage, verdict recorded).
   The heuristic's systematic under-estimate is a finding: it quotes
   prep + travel + buffer, while the realized span also includes assignment
-  and pickup wait. Serving still quotes the heuristic; swapping the
-  registered model into the quote path is the follow-up, now gated on this
-  evidence.
+  and pickup wait. **Serving has swapped**: with `ETA_MODEL_SOURCE=registry`
+  (default in compose) the API loads `models:/eta_model/Production` at
+  startup — the native LightGBM booster from the registered artifact — and
+  order ETAs come from the model (a 12 km order now quotes **22 min** where
+  the heuristic said 54). Failure is a first-class citizen: if the registry
+  is unreachable or prediction fails, the heuristic answers, loudly logged,
+  with `sdo_eta_model_serving 0` on the metrics endpoint.
 - **On traffic:** self-hosted OSRM has no live-traffic feed - its durations
   are free-flow estimates from static OSM tags. Distances are
   traffic-independent (solid ground truth); ETAs are evaluated against the
@@ -435,7 +439,7 @@ smart-delivery-ops/
 |---|---|---|
 | 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
 | 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
-| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model benchmarked (LightGBM beat the heuristic, `eta_model` registered in MLflow) |
+| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model serving from the MLflow registry with heuristic fallback (`sdo_eta_model_serving`) |
 | 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
 | 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
 

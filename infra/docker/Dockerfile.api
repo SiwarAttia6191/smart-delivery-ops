@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# libgomp1: LightGBM's OpenMP runtime, absent from the slim base image
+# (the ETA model serving in the API needs it, same as the ml image).
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
