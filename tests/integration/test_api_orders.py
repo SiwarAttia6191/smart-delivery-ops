@@ -213,9 +213,7 @@ class TestOrderFlow:
         # otherwise capture real geometry for this order).
         from domain.services import route_service
 
-        monkeypatch.setattr(
-            route_service, "_fetch_geometry", lambda base_url, key: None
-        )
+        monkeypatch.setattr(route_service, "_fetch_geometry", lambda base_url, key: None)
         ids = _seed(client)
         created = client.post(
             "/orders",
