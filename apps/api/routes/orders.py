@@ -1,14 +1,16 @@
 """Order endpoints — create, assign, transition, query."""
 
+import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db
 from apps.api.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
-from domain.models import OrderStatus
-from domain.services import order_service
+from core.exceptions import NotFoundError
+from domain.models import Order, OrderStatus
+from domain.services import order_service, route_service
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -23,6 +25,28 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         dropoff_lon=payload.dropoff_longitude,
         demand_ratio=payload.demand_ratio,
     )
+
+
+@router.get("/{order_id}/route", response_model=None)
+def get_order_route(order_id: str, db: Session = Depends(get_db)):
+    """The road geometry (GeoJSON LineString) captured for this order's
+    pickup→dropoff pair — 404 if the order doesn't exist, 404-with-reason
+    if no geometry was ever captured (OSRM was down at creation)."""
+    order = db.get(Order, order_id)
+    if order is None:
+        raise NotFoundError(f"order {order_id} not found")
+    geojson = route_service.geojson_for_order(
+        db,
+        order.pickup_latitude,
+        order.pickup_longitude,
+        order.dropoff_latitude,
+        order.dropoff_longitude,
+    )
+    if geojson is None:
+        raise NotFoundError(
+            f"no route geometry captured for order {order_id} (OSRM unavailable at creation)"
+        )
+    return Response(content=json.dumps(geojson), media_type="application/geo+json")
 
 
 @router.get("", response_model=list[OrderResponse])
