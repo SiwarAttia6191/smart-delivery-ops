@@ -170,6 +170,64 @@ class TestOrderFlow:
             "order_delivered",
         ]
 
+    def test_order_route_endpoint_serves_captured_geometry(self, client, db, monkeypatch):
+        from domain.models import RouteCache
+        from domain.services import route_service
+
+        monkeypatch.setattr(
+            route_service,
+            "_fetch_geometry",
+            lambda base_url, key: {
+                "coordinates": [[10.181621, 36.806522], [10.2385, 36.8381]],
+                "distance_m": 7645.2,
+                "duration_s": 510.6,
+            },
+        )
+        ids = _seed(client)
+        created = client.post(
+            "/orders",
+            json={
+                "customer_id": ids["customer"]["id"],
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_latitude": CUSTOMER["latitude"],
+                "dropoff_longitude": CUSTOMER["longitude"],
+            },
+        ).json()
+
+        response = client.get(f"/orders/{created['id']}/route")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("application/geo+json")
+        body = response.json()
+        assert body["type"] == "FeatureCollection"
+        assert body["features"][0]["geometry"]["type"] == "LineString"
+        assert body["features"][0]["properties"]["distance_m"] == 7645.2
+        # a second order with the same pair reuses the cached geometry
+        assert db.query(RouteCache).count() == 1
+
+    def test_order_route_unknown_order_404(self, client):
+        response = client.get("/orders/00000000-0000-0000-0000-000000000000/route")
+        assert response.status_code == 404
+
+    def test_order_route_without_geometry_404(self, client, monkeypatch):
+        # Simulate the OSRM outage at creation time (a live OSRM would
+        # otherwise capture real geometry for this order).
+        from domain.services import route_service
+
+        monkeypatch.setattr(route_service, "_fetch_geometry", lambda base_url, key: None)
+        ids = _seed(client)
+        created = client.post(
+            "/orders",
+            json={
+                "customer_id": ids["customer"]["id"],
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_latitude": 36.60,
+                "dropoff_longitude": 10.60,
+            },
+        ).json()
+        response = client.get(f"/orders/{created['id']}/route")
+        assert response.status_code == 404
+        assert "no route geometry" in response.json()["error"]["message"]
+
     def test_eta_model_serving_and_gauge(self, client, monkeypatch):
         # With the model "loaded", order ETAs come from it; the gauge agrees.
         from domain.services import eta_model_service

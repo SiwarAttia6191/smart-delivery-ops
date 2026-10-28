@@ -33,6 +33,16 @@ def engine() -> Generator[object, None, None]:
     engine.dispose()
 
 
+@pytest.fixture(autouse=True)
+def _no_route_capture(monkeypatch) -> None:
+    """Order creation best-effort-captures OSRM geometry (#58); tests must
+    not depend on (or wait for) a network service. Tests that exercise the
+    route path monkeypatch _fetch_geometry themselves and win over this."""
+    from domain.services import route_service
+
+    monkeypatch.setattr(route_service, "_fetch_geometry", lambda base_url, key: None)
+
+
 @pytest.fixture
 def db(engine) -> Generator[Session, None, None]:
     """Function-scoped session over a fresh schema (tables dropped per test)."""

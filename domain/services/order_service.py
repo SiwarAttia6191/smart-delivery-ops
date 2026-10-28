@@ -28,6 +28,7 @@ from domain.services import (
     eta_model_service,
     eta_service,
     pricing_service,
+    route_service,
 )
 from domain.services.driver_event_service import AvailabilityReason, record_availability_change
 from domain.services.pricing_service import Quote
@@ -132,6 +133,13 @@ def create_order(
     session.add(order)
     session.commit()
     session.refresh(order)
+
+    # Route geometry is a feature, not a requirement (#58): capture AFTER the
+    # order commits, best-effort, so an OSRM stall never holds or breaks the
+    # order transaction.
+    route_service.capture_for_order(
+        session, restaurant.latitude, restaurant.longitude, dropoff_lat, dropoff_lon
+    )
     return order
 
 

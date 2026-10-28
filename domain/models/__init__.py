@@ -11,6 +11,7 @@ from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
 from domain.models.restaurant import Restaurant
+from domain.models.route_cache import RouteCache
 
 __all__ = [
     "Base",
@@ -25,4 +26,5 @@ __all__ = [
     "RelayDeadLetter",
     "RelayState",
     "Restaurant",
+    "RouteCache",
 ]
