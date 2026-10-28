@@ -36,7 +36,7 @@ analytics in one system.
 - **Streaming & transforms** — Apache Kafka (KRaft, Docker) · confluent-kafka · warehouse ingestion consumer · **dbt** (medallion: raw → staging → marts, official Docker image) · **Airflow** (LocalExecutor, scheduled dbt builds + freshness)
 - **Geo layer (Phase 3)** — pluggable `DistanceProvider` (haversine / circuity / self-hosted **OSRM**) · shadow-mode comparison · challenger-vs-champion benchmark harness with snapshot-reproducible reports
 - **ML layer (Phase 3)** — **MLflow** tracking (Docker, Postgres-backed) · demand-forecast benchmark (seasonal-naive vs LightGBM vs Prophet, report committed per run) · **forecast serving loop**: pooled LightGBM writes zone-hour forecasts, the pricing engine derives `demand_ratio` from them live
-- **Route preview** — saved Tunis OSRM GeoJSON, served by `GET /routes/demo` and visualized on the project demo page
+- **Route preview & per-order geometry** — saved Tunis OSRM GeoJSON demo (`GET /routes/demo`), plus real orders capture their road path once per pickup→dropoff pair (`GET /orders/{id}/route`, `application/geo+json`) — tracking UI, delivery proof, and free benchmark pairs
 - **Testing** — pytest + TestClient, **85% coverage floor**, run on **Python 3.11/3.12/3.13**
 - **Quality gates** — Ruff (lint + format) · **mypy** (full static typing) · **pip-audit** (dependency CVEs) · Docker image build — all enforced as required CI checks behind a protected `main` branch
 - **Observability** — Prometheus metrics at `/analytics/metrics`

@@ -513,7 +513,7 @@ footer {
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">15</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">16</div><div class="l">REST endpoints</div></div>
         <div class="stat"><div class="v">89%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
@@ -692,8 +692,10 @@ footer {
     <h2>A real road route through Tunis</h2>
     <p class="lead">
       This saved GeoJSON route follows the OpenStreetMap road network between the
-      restaurant and delivery coordinates. The API exposes the same file at
-      <code>GET /routes/demo</code>.
+      restaurant and delivery coordinates — the same geometry every real order
+      now carries: <code>GET /routes/demo</code> for the demo, and
+      <code>GET /orders/{id}/route</code> serves the captured road path per
+      order, cached per pickup→dropoff pair.
     </p>
     <div class="panel">
       <div id="route-map" class="route-map" role="region" aria-label="Map showing the demo delivery route"></div>
