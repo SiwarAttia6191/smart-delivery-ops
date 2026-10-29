@@ -33,19 +33,21 @@ import random
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import select  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
+from core.config import get_settings  # noqa: E402
 from core.database import engine  # noqa: E402
 from domain.models import Customer, Driver, Order, OrderEvent, OrderStatus, Restaurant  # noqa: E402
 from domain.services import eta_service, pricing_service  # noqa: E402
 
-# Africa/Tunis is UTC+1 with no DST (same assumption the warehouse staging
-# models bake in) - a fixed offset keeps host and container identical.
-TUNIS_UTC_OFFSET = timedelta(hours=1)
+# Local business hours derive in the configured BUSINESS_TIMEZONE (#78)
+# through the tz database - no fixed offsets (DST-safe).
+
 
 # Orders per hour at weight 1.0; the shape below is classic food-delivery:
 # dead nights, a morning trickle, a 12-13h lunch spike, a 19-20h dinner peak.
@@ -95,7 +97,7 @@ def poisson(rng: random.Random, lam: float) -> int:
 
 
 def local_to_utc(local: datetime) -> datetime:
-    return (local - TUNIS_UTC_OFFSET).replace(tzinfo=UTC)
+    return local.replace(tzinfo=ZoneInfo(get_settings().business_timezone)).astimezone(UTC)
 
 
 def build_order(
@@ -213,7 +215,7 @@ def backfill(days: int, seed: int) -> None:
             print("No restaurants/customers/drivers - run scripts/seed_demo_data.py first.")
             return
 
-        now_local = datetime.now(UTC) + TUNIS_UTC_OFFSET
+        now_local = datetime.now(UTC).astimezone(ZoneInfo(get_settings().business_timezone))
         start_local = (now_local - timedelta(days=days)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )

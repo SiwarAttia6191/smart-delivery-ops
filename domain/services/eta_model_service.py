@@ -11,20 +11,19 @@ Serving rules (same discipline as the distance shadow provider):
 - The heuristic stays the champion in code (`eta_service`); this module only
   overrides it when a model is actually loaded.
 
-Africa/Tunis is fixed UTC+1 (no DST) — the same offset the forecast job and
-the warehouse staging models bake in.
+the configured business timezone (BUSINESS_TIMEZONE, #78) — resolved through
+the tz database (zoneinfo), never a fixed offset: DST-safe by construction.
 """
 
 import logging
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from core.config import get_settings
 
 logger = logging.getLogger(__name__)
-
-TUNIS_UTC_OFFSET = timedelta(hours=1)
 
 # Module state: None model = heuristic fallback. `loaded` drives the gauge.
 _model: Any | None = None
@@ -95,7 +94,8 @@ def build_features(
 ) -> dict[str, float]:
     """Feature row exactly as the benchmark's FEATURES define it. Zone cells
     round to 2 decimals — the same cells the warehouse marts grain on."""
-    local = (now if now.tzinfo else now.replace(tzinfo=UTC)) + TUNIS_UTC_OFFSET
+    tz = ZoneInfo(get_settings().business_timezone)
+    local = (now if now.tzinfo else now.replace(tzinfo=UTC)).astimezone(tz)
     return {
         "distance_km": distance_km,
         "hour_local": local.hour,

@@ -36,7 +36,7 @@ available_intervals as (
         changed_at as available_from,
         coalesce(
             next_change_at,
-            date_trunc('hour', current_timestamp AT TIME ZONE 'Africa/Tunis')
+            date_trunc('hour', current_timestamp AT TIME ZONE '{{ env_var("BUSINESS_TIMEZONE", "Africa/Tunis") }}')
                 + interval '1 hour'
         ) as available_until
     from transitions

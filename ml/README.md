@@ -57,6 +57,7 @@ records the verdict.
 - `mlflow db upgrade` fails on a **fresh** database → the compose entrypoint
   only upgrades when `alembic_version` exists; the server initializes fresh
   DBs itself.
-- Local business hours are Africa/Tunis (fixed UTC+1): **UTC = local − 1**
-  everywhere. Both off-by-one directions have bitten already — parse
-  already-local timestamps as local, and convert local→UTC with −1h.
+- Local business hours come from **`BUSINESS_TIMEZONE`** (IANA name) through
+  the tz database — never fixed offsets (both off-by-one directions have
+  bitten: parse already-local timestamps as local; convert via
+  `tz_localize(tz).tz_convert("UTC")`, not arithmetic).

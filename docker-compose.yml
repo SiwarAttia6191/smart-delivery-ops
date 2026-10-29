@@ -10,6 +10,7 @@ services:
       # Inside Docker's network the postgres service listens on its internal
       # port 5432 — the host-side 5434 mapping does not apply here.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).
@@ -147,6 +148,7 @@ services:
     environment:
       DBT_PROFILES_DIR: /usr/app
       DBT_HOST: postgres
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
       DBT_PORT: "5432"
     command: ["build", "--profiles-dir", "/usr/app"]
 
@@ -179,6 +181,7 @@ services:
       # Consumed by the DAG's dbt tasks (profiles.yml reads these env vars);
       # inside the compose network Postgres is postgres:5432.
       DBT_HOST: postgres
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
       DBT_PORT: "5432"
       # Failure-alert surface for the warehouse DAG: set to a webhook URL to
       # enable POSTs on task failure. Empty = log-only (the DAG's fallback
@@ -268,6 +271,7 @@ services:
       MLFLOW_ARTIFACT_ROOT: /mlart
       GIT_SHA: ${GIT_SHA:-unknown}
       GIT_PYTHON_REFRESH: quiet  # mlflow probes for git; silence the import warning
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
       OSRM_BASE_URL: http://osrm:5000  # ETA benchmark challenger (osrm is profile-gated)
     volumes:
       - ./ml:/ml
