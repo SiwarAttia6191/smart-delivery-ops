@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # (see README "Run it in another city").
     city: str = "tunis"
 
+    # ── Auth (#28): JWTs guard every mutating endpoint. The demo posture
+    # keeps GETs open (aggregates + demo surfaces) — a production profile
+    # closes reads per role. The default secret is DEV-ONLY: always set
+    # AUTH_JWT_SECRET outside local development.
+    auth_jwt_secret: str = "dev-only-change-me"
+    auth_token_expire_minutes: int = 720  # 12h — a working demo day
+
     # ── ETA serving (#26/#69): empty = heuristic champion; "registry" loads
     #    models:/eta_model/Production at startup, heuristic fallback on any
     #    failure (ML being down must never break quoting).

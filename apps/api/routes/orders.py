@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_writer
 from apps.api.schemas.order import OrderCreate, OrderResponse, OrderStatusUpdate
 from core.exceptions import NotFoundError
 from domain.models import Order, OrderStatus
@@ -15,7 +15,12 @@ from domain.services import order_service, route_service
 router = APIRouter(prefix="/orders", tags=["orders"])
 
 
-@router.post("", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_writer)],
+)
 def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
     return order_service.create_order(
         db,
@@ -63,7 +68,11 @@ def get_order(order_id: str, db: Session = Depends(get_db)):
     return order_service.get_order(db, order_id)
 
 
-@router.post("/{order_id}/assign", response_model=OrderResponse)
+@router.post(
+    "/{order_id}/assign",
+    response_model=OrderResponse,
+    dependencies=[Depends(require_writer)],
+)
 def assign_driver(
     order_id: str,
     vehicle: Literal["bicycle", "motorcycle", "car"] | None = Query(
@@ -75,7 +84,11 @@ def assign_driver(
     return order_service.assign_driver(db, order_id, vehicle)
 
 
-@router.post("/{order_id}/status", response_model=OrderResponse)
+@router.post(
+    "/{order_id}/status",
+    response_model=OrderResponse,
+    dependencies=[Depends(require_writer)],
+)
 def update_status(order_id: str, payload: OrderStatusUpdate, db: Session = Depends(get_db)):
     """Advance the lifecycle: pending/assigned → in_transit → delivered (or cancelled)."""
     return order_service.transition(db, order_id, payload.status)

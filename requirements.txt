@@ -18,6 +18,13 @@ mlflow-skinny>=2.19
 lightgbm>=4.5
 pandas>=2.2
 
+# ── Auth (Phase 5, #28): JWTs on mutating endpoints; bcrypt password
+# hashes; python-multipart parses the OAuth2 password form (Swagger
+# Authorize flow)
+pyjwt>=2.10
+bcrypt>=4.2
+python-multipart>=0.0.20
+
 # ── Later phases (not required for Phase 1) ─────────────────────
 # redis>=5            # Phase 2/5 — cache & availability state
 # streamlit           # Phase 4 — operations dashboard

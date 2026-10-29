@@ -57,12 +57,38 @@ def db(engine) -> Generator[Session, None, None]:
 
 @pytest.fixture
 def client(db: Session) -> Generator[TestClient, None, None]:
-    """API client wired to the same isolated session (lifespan skipped)."""
+    """API client wired to the same isolated session (lifespan skipped).
+    Unauthenticated by design — tests that must see the auth wall's 401s
+    use this; tests that just need to mutate use `authed_client`."""
 
     def _override():
         yield db
 
     app.dependency_overrides[get_db] = _override
     with TestClient(app) as c:
+        yield c
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def authed_client(db: Session) -> Generator[TestClient, None, None]:
+    """API client carrying a REAL JWT (#28): seeds an ops user in the
+    isolated schema, logs in through /auth/token (the actual flow), and
+    sends the bearer token on every request."""
+
+    def _override():
+        yield db
+
+    from core.security import hash_password
+    from domain.models import User
+
+    db.add(User(username="ops", password_hash=hash_password("ops"), role="ops"))
+    db.commit()
+    app.dependency_overrides[get_db] = _override
+    with TestClient(app) as probe:
+        token = probe.post("/auth/token", data={"username": "ops", "password": "ops"}).json()[
+            "access_token"
+        ]
+    with TestClient(app, headers={"Authorization": f"Bearer {token}"}) as c:
         yield c
     app.dependency_overrides.clear()

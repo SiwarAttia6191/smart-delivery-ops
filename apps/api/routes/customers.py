@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_writer
 from apps.api.schemas.customer import CustomerCreate, CustomerResponse
 from core.exceptions import NotFoundError
 from domain.models import Customer
@@ -12,7 +12,12 @@ from domain.models import Customer
 router = APIRouter(prefix="/customers", tags=["customers"])
 
 
-@router.post("", response_model=CustomerResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=CustomerResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_writer)],
+)
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
     customer = Customer(
         name=payload.name,
