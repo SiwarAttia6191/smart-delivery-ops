@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     distance_circuity_factor: float = 1.3
     osrm_base_url: str = "http://localhost:5000"
 
+    # ── Driver location updates (#60): a location_update event is emitted
+    # only when the driver moved further than this from the last evented
+    # position (hysteresis - volume scales with movement, not with pings).
+    # Heartbeats go silent (is_available flips false) after the stale window:
+    # the worker sweep closes their supply interval so dead drivers stop
+    # counting in the supply mart.
+    driver_location_update_threshold_m: float = 500.0
+    driver_stale_after_minutes: int = 120
+
     # ── Event pipeline (Phase 2) ───────────────────────────────
     # Host default points at the compose host mapping (localhost:9094);
     # containers override it with kafka:19092.

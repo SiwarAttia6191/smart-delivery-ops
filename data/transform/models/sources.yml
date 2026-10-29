@@ -48,7 +48,7 @@ sources:
             tests:
               - not_null
               - accepted_values:
-                  values: [availability]
+                  values: [availability, location_update]  # #60 hysteresis moves
           - name: schema_version
             tests:
               - accepted_values:

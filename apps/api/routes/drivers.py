@@ -8,7 +8,10 @@ from apps.api.deps import get_db
 from apps.api.schemas.driver import DriverCreate, DriverResponse, DriverUpdate
 from core.exceptions import NotFoundError
 from domain.models import Driver
-from domain.services.driver_event_service import record_availability_change
+from domain.services.driver_event_service import (
+    record_availability_change,
+    record_location_update,
+)
 
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
@@ -60,6 +63,9 @@ def update_driver(driver_id: int, payload: DriverUpdate, db: Session = Depends(g
     driver.longitude = payload.longitude
     driver.is_available = payload.is_available
     record_availability_change(db, driver, previous_availability, payload.is_available, "heartbeat")
+    # #60: availability events stay semantic; a large-enough move gets its own
+    # location_update event so supply follows the driver across zones.
+    record_location_update(db, driver)
     db.commit()
     db.refresh(driver)
     return driver

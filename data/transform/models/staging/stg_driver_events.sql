@@ -18,6 +18,9 @@ select
     kafka_offset,
     (payload->>'from_available')::boolean as from_available,
     (payload->>'to_available')::boolean as to_available,
+    -- #60 location_update events carry `available` (not to_available) so the
+    -- supply mart can filter moving-but-offline drivers.
+    (payload->>'available')::boolean as available,
     (payload->>'latitude')::numeric as latitude,
     (payload->>'longitude')::numeric as longitude,
     payload->>'vehicle' as vehicle,
