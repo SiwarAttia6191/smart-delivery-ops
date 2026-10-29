@@ -8,6 +8,7 @@ from apps.api.deps import get_db, require_writer
 from apps.api.schemas.driver import DriverCreate, DriverResponse, DriverUpdate
 from core.exceptions import NotFoundError
 from domain.models import Driver
+from domain.services import tenant_service
 from domain.services.driver_event_service import (
     record_availability_change,
     record_location_update,
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/drivers", tags=["drivers"])
 )
 def create_driver(payload: DriverCreate, db: Session = Depends(get_db)) -> Driver:
     driver = Driver(
+        tenant_id=tenant_service.default_id(db),
         name=payload.name,
         vehicle=payload.vehicle,
         latitude=payload.latitude,

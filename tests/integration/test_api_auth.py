@@ -121,7 +121,7 @@ class TestOpenReads:
     def test_quote_is_open_despite_being_a_post(self, client: TestClient, db):
         from domain.models import Restaurant
 
-        db.add(Restaurant(name="Chez Slah", latitude=36.8065, longitude=10.1815))
+        db.add(Restaurant(tenant_id=1, name="Chez Slah", latitude=36.8065, longitude=10.1815))
         db.commit()
         response = client.post(
             "/pricing/quote",

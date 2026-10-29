@@ -29,7 +29,8 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from core.database import run_migrations  # noqa: E402
 from domain.models import Customer, OrderEvent, Restaurant  # noqa: E402
-from domain.services.order_service import create_order  # noqa: E402
+from domain.services.order_service import create_order
+from domain.services.tenant_service import default_id  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -75,6 +76,9 @@ def seed_order(session_factory) -> tuple[int, str]:
             name="Smoke", phone="+216 20 000 000", latitude=36.8381, longitude=10.2385
         )
         restaurant = Restaurant(name="Smoke Kitchen", latitude=36.8065, longitude=10.1815)
+        tenant_id = default_id(session)
+        customer.tenant_id = tenant_id
+        restaurant.tenant_id = tenant_id
         session.add_all([customer, restaurant])
         session.commit()
         order = create_order(

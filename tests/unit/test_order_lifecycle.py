@@ -9,13 +9,16 @@ from domain.services import order_service
 
 @pytest.fixture
 def entities(db):
-    customer = Customer(name="Aziza", latitude=36.8381, longitude=10.2385)  # Lac 2
+    customer = Customer(tenant_id=1, name="Aziza", latitude=36.8381, longitude=10.2385)  # Lac 2
     restaurant = Restaurant(
+        tenant_id=1,
         name="Chez Slah",
         latitude=36.8065,
         longitude=10.1815,  # Tunis centre
     )
-    driver = Driver(name="Karim", vehicle="motorcycle", latitude=36.8100, longitude=10.1900)
+    driver = Driver(
+        tenant_id=1, name="Karim", vehicle="motorcycle", latitude=36.8100, longitude=10.1900
+    )
     db.add_all([customer, restaurant, driver])
     db.commit()
     return customer, restaurant, driver

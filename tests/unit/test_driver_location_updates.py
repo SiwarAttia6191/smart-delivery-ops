@@ -10,7 +10,7 @@ from domain.services.driver_event_service import (
 
 
 def _driver(lat: float, lon: float) -> Driver:
-    return Driver(name="Karim", vehicle="motorcycle", latitude=lat, longitude=lon)
+    return Driver(tenant_id=1, name="Karim", vehicle="motorcycle", latitude=lat, longitude=lon)
 
 
 def _positions(session, driver_id: int) -> list[tuple]:
@@ -29,6 +29,7 @@ def _seed_driver_with_event(db, lat: float, lon: float) -> Driver:
     db.flush()
     db.add(
         DriverEvent(
+            tenant_id=1,
             driver_id=driver.id,
             event_type="availability",
             payload={

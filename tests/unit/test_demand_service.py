@@ -23,6 +23,7 @@ def _seed_forecast(db, predicted: float, hour_start: datetime) -> None:
 def _seed_order(db, created_at: datetime, lat: float = 36.8381, lon: float = 10.2385) -> None:
     db.add(
         Order(
+            tenant_id=1,
             customer_id=1,
             restaurant_id=1,
             status=OrderStatus.delivered,
@@ -101,6 +102,7 @@ def test_cancelled_orders_do_not_count(db):
     _seed_forecast(db, predicted=4.0, hour_start=hour_start)
     db.add(
         Order(
+            tenant_id=1,
             customer_id=1,
             restaurant_id=1,
             status=OrderStatus.cancelled,

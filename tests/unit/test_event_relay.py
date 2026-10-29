@@ -81,7 +81,9 @@ class FakePublisher:
 
 
 def add_event(session: Session, order_id: str, event_type: str = "created") -> OrderEvent:
-    event = OrderEvent(order_id=order_id, event_type=event_type, payload={"note": event_type})
+    event = OrderEvent(
+        tenant_id=1, order_id=order_id, event_type=event_type, payload={"note": event_type}
+    )
     session.add(event)
     session.commit()
     return event
@@ -202,6 +204,7 @@ class TestClaimBasedSelection:
 
     def test_driver_events_publish_to_their_topic_keyed_by_driver(self, db: Session):
         event = DriverEvent(
+            tenant_id=1,
             driver_id=17,
             event_type="availability",
             payload={"from_available": True, "to_available": False},
@@ -225,6 +228,7 @@ class TestClaimBasedSelection:
     def test_driver_poison_event_is_quarantined(self, db: Session):
         db.add(
             DriverEvent(
+                tenant_id=1,
                 driver_id=17,
                 event_type="availability",
                 payload={"to_available": True},

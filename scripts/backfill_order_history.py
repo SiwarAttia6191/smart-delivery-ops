@@ -113,6 +113,7 @@ def build_order(
 ) -> None:
     drop_lat = customer.latitude + rng.uniform(-JITTER_DEG, JITTER_DEG)
     drop_lon = customer.longitude + rng.uniform(-JITTER_DEG, JITTER_DEG)
+    tenant_id = restaurant.tenant_id
 
     quote = pricing_service.quote_delivery(
         restaurant.latitude, restaurant.longitude, drop_lat, drop_lon
@@ -125,6 +126,7 @@ def build_order(
     delivered_utc = in_transit_utc + timedelta(minutes=rng.randint(8, 24))
 
     order = Order(
+        tenant_id=tenant_id,
         customer_id=customer.id,
         restaurant_id=restaurant.id,
         driver_id=driver.id,
@@ -150,6 +152,7 @@ def build_order(
     session.add(
         OrderEvent(
             order_id=order.id,
+            tenant_id=tenant_id,
             event_type="created",
             payload={
                 "customer_id": customer.id,
@@ -169,6 +172,7 @@ def build_order(
     session.add(
         OrderEvent(
             order_id=order.id,
+            tenant_id=tenant_id,
             event_type="assigned",
             payload={
                 "driver_id": driver.id,
@@ -181,6 +185,7 @@ def build_order(
     session.add(
         OrderEvent(
             order_id=order.id,
+            tenant_id=tenant_id,
             event_type="status",
             payload={"from": "assigned", "to": "in_transit"},
             created_at=in_transit_utc,
@@ -189,6 +194,7 @@ def build_order(
     session.add(
         OrderEvent(
             order_id=order.id,
+            tenant_id=tenant_id,
             event_type="status",
             payload={"from": "in_transit", "to": "delivered"},
             created_at=delivered_utc,

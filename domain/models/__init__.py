@@ -12,6 +12,7 @@ from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
 from domain.models.restaurant import Restaurant
 from domain.models.route_cache import RouteCache
+from domain.models.tenant import Tenant
 from domain.models.user import User
 
 __all__ = [
@@ -28,5 +29,6 @@ __all__ = [
     "RelayState",
     "Restaurant",
     "RouteCache",
+    "Tenant",
     "User",
 ]

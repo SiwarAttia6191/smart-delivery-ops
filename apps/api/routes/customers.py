@@ -8,6 +8,7 @@ from apps.api.deps import get_db, require_writer
 from apps.api.schemas.customer import CustomerCreate, CustomerResponse
 from core.exceptions import NotFoundError
 from domain.models import Customer
+from domain.services import tenant_service
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 )
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
     customer = Customer(
+        tenant_id=tenant_service.default_id(db),
         name=payload.name,
         phone=payload.phone,
         latitude=payload.latitude,

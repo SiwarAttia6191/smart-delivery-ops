@@ -25,8 +25,12 @@ class TestHaversine:
 
 class TestDriverMatching:
     def test_returns_nearest_eligible_driver(self, db):
-        near = Driver(name="Near", vehicle="motorcycle", latitude=36.8100, longitude=10.1900)
-        far = Driver(name="Far", vehicle="motorcycle", latitude=36.9500, longitude=10.3000)
+        near = Driver(
+            tenant_id=1, name="Near", vehicle="motorcycle", latitude=36.8100, longitude=10.1900
+        )
+        far = Driver(
+            tenant_id=1, name="Far", vehicle="motorcycle", latitude=36.9500, longitude=10.3000
+        )
         db.add_all([near, far])
         db.commit()
 
@@ -36,8 +40,12 @@ class TestDriverMatching:
         assert match.distance_km < 2.0
 
     def test_skips_unavailable_drivers(self, db):
-        busy = Driver(name="Busy", is_available=False, latitude=36.8070, longitude=10.1820)
-        free = Driver(name="Free", is_available=True, latitude=36.8500, longitude=10.2500)
+        busy = Driver(
+            tenant_id=1, name="Busy", is_available=False, latitude=36.8070, longitude=10.1820
+        )
+        free = Driver(
+            tenant_id=1, name="Free", is_available=True, latitude=36.8500, longitude=10.2500
+        )
         db.add_all([busy, free])
         db.commit()
 
@@ -46,8 +54,10 @@ class TestDriverMatching:
         assert match.driver.name == "Free"
 
     def test_vehicle_filter(self, db):
-        bike = Driver(name="Bike", vehicle="bicycle", latitude=36.8070, longitude=10.1820)
-        car = Driver(name="Car", vehicle="car", latitude=36.9000, longitude=10.3000)
+        bike = Driver(
+            tenant_id=1, name="Bike", vehicle="bicycle", latitude=36.8070, longitude=10.1820
+        )
+        car = Driver(tenant_id=1, name="Car", vehicle="car", latitude=36.9000, longitude=10.3000)
         db.add_all([bike, car])
         db.commit()
 
@@ -56,6 +66,6 @@ class TestDriverMatching:
         assert match.driver.name == "Car"
 
     def test_no_eligible_driver_returns_none(self, db):
-        db.add(Driver(name="Solo", is_available=False, latitude=36.8, longitude=10.1))
+        db.add(Driver(tenant_id=1, name="Solo", is_available=False, latitude=36.8, longitude=10.1))
         db.commit()
         assert driver_matching_service.find_nearest_driver(db, 36.8, 10.1) is None

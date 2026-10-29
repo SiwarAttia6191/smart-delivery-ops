@@ -8,6 +8,7 @@ from apps.api.deps import get_db, require_writer
 from apps.api.schemas.restaurant import RestaurantCreate, RestaurantResponse
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
+from domain.services import tenant_service
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
@@ -20,6 +21,7 @@ router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 )
 def create_restaurant(payload: RestaurantCreate, db: Session = Depends(get_db)) -> Restaurant:
     restaurant = Restaurant(
+        tenant_id=tenant_service.default_id(db),
         name=payload.name,
         latitude=payload.latitude,
         longitude=payload.longitude,
