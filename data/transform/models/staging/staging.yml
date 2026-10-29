@@ -21,4 +21,14 @@ models:
       - name: event_type
         tests: [not_null]
       - name: to_available
-        tests: [not_null]
+        tests:
+          - not_null:
+              # location_update rows (#60) carry `available` instead; the
+              # boolean contract is per event type.
+              config:
+                where: "event_type = 'availability'"
+      - name: available
+        tests:
+          - not_null:
+              config:
+                where: "event_type = 'location_update'"
