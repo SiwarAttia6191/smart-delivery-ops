@@ -85,11 +85,62 @@ jobs:
       - name: Build API image
         run: docker build -f infra/docker/Dockerfile.api -t smart-delivery-ops:ci .
 
+  # Data-plane smoke (#46): the only job that exercises the real pipeline —
+  # ops schema → outbox → relay (real confluent producer) → Kafka → ingest
+  # codepath → raw layer — then a full dbt build over the throwaway
+  # warehouse (parse alone cannot catch SQL breakage; PR #48's N1 proved it).
+  data-plane-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: smartops
+          POSTGRES_PASSWORD: smartops
+          POSTGRES_DB: smart_delivery_ops
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U smartops"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      kafka:
+        image: apache/kafka:3.9.0
+        env:
+          KAFKA_HEAP_OPTS: -Xmx512m -Xms512m
+        ports:
+          - 9092:9092
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies (app + dbt)
+        run: pip install -r requirements-dev.txt -r requirements-smoke.txt
+      - name: Relay → Kafka → ingest roundtrip
+        env:
+          DATABASE_URL: postgresql+psycopg://smartops:smartops@localhost:5432/smart_delivery_ops
+          WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@localhost:5432/smart_delivery_warehouse
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+        run: python scripts/data_plane_smoke.py
+      - name: dbt build over the throwaway warehouse
+        env:
+          DATABASE_URL: postgresql+psycopg://smartops:smartops@localhost:5432/smart_delivery_ops
+          WAREHOUSE_DATABASE_URL: postgresql+psycopg://smartops:smartops@localhost:5432/smart_delivery_warehouse
+          KAFKA_BOOTSTRAP_SERVERS: localhost:9092
+          DBT_HOST: localhost
+          DBT_PORT: "5432"
+        run: |
+          dbt build --project-dir data/transform --profiles-dir data/transform --no-use-colors
+
   # Aggregate gate: single required check for the branch ruleset —
   # every job above must pass (docker-build runs on main pushes only).
   ci-ok:
     if: always()
-    needs: [lint, typecheck, audit, test]
+    needs: [lint, typecheck, audit, test, data-plane-smoke]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
