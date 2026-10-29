@@ -141,12 +141,8 @@ def store_forecasts(predictions: list[dict]) -> int:
         DO UPDATE SET predicted_orders = EXCLUDED.predicted_orders, created_at = now()
         """
     )
-    window_start = min(p["ds"] for p in predictions) + pd.Timedelta(
-        hours=TUNIS_UTC_OFFSET_HOURS
-    )
-    window_end = max(p["ds"] for p in predictions) + pd.Timedelta(
-        hours=TUNIS_UTC_OFFSET_HOURS
-    )
+    window_start = min(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
+    window_end = max(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -179,7 +175,9 @@ def store_forecasts(predictions: list[dict]) -> int:
         # predictions themselves (a table-derived MAX includes the stale
         # rows and lets them survive - bit on the first attempt).
         conn.execute(
-            text("DELETE FROM demand_forecasts WHERE forecast_hour_utc < :ws OR forecast_hour_utc > :we"),
+            text(
+                "DELETE FROM demand_forecasts WHERE forecast_hour_utc < :ws OR forecast_hour_utc > :we"
+            ),
             {
                 "ws": window_start.tz_localize("UTC").to_pydatetime(),
                 "we": window_end.tz_localize("UTC").to_pydatetime(),
