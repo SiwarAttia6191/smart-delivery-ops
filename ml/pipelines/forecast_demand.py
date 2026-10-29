@@ -69,21 +69,23 @@ def load_zone_frames() -> dict[tuple[float, float], pd.DataFrame]:
     frame["ds"] = pd.to_datetime(frame["business_date"]) + pd.to_timedelta(
         frame["business_hour"], unit="h"
     )
-    global_start, global_end = frame["ds"].min(), frame["ds"].max()
+    global_start = frame["ds"].min()
     # Anchor the forecast window at wall-clock NOW (review M1): the series
-    # extends to the current Africa/Tunis hour (zeros past the last observed
-    # order) so the 24h horizon always covers the hours the API will actually
-    # look up — not the hours around the last order in the mart.
+    # ends at the previous CONFIGURED-zone hour so the 24h horizon always
+    # covers the hours the API will actually look up.
     now_local_hour = pd.Timestamp.now(tz="UTC").tz_convert(TZ_NAME).floor("h").tz_localize(None)
-    # -1h: the recursive loop predicts FROM origin+1h, so anchoring at the
-    # previous hour makes the CURRENT hour the first prediction — the hour
-    # derive_demand_ratio actually looks up. Gap hours since the last mart
-    # build are zero-filled (pessimistic lags; corrected on the next run).
-    forecast_origin = max(global_end, now_local_hour - pd.Timedelta(hours=1))
+    # The OBSERVED series always ends at the PREVIOUS local hour: the
+    # current hour is partial (its realized count is incomplete), so it is
+    # PREDICTED, never observed — the recursive loop then starts at
+    # origin+1h = the current local hour, which is exactly the hour
+    # derive_demand_ratio looks up, whenever the job ran. Gap hours since
+    # the last mart build are zero-filled (pessimistic lags; the next run
+    # corrects them); a partial current hour in the mart is truncated.
+    observed_end = now_local_hour - pd.Timedelta(hours=1)
     zones: dict[tuple[float, float], pd.DataFrame] = {}
     for (lat, lon), zone_frame in frame.groupby(["zone_lat", "zone_lon"]):
         series = zone_frame.set_index("ds")["orders"].astype(float)
-        full = pd.date_range(global_start, forecast_origin, freq="h")
+        full = pd.date_range(global_start, observed_end, freq="h")
         zones[(float(lat), float(lon))] = series.reindex(full, fill_value=0.0).rename_axis("ds")
     return zones
 
@@ -185,8 +187,8 @@ def store_forecasts(predictions: list[dict]) -> int:
                 "DELETE FROM demand_forecasts WHERE forecast_hour_utc < :ws OR forecast_hour_utc > :we"
             ),
             {
-                "ws": window_start.tz_localize("UTC").to_pydatetime(),
-                "we": window_end.tz_localize("UTC").to_pydatetime(),
+                "ws": window_start.to_pydatetime(),
+                "we": window_end.to_pydatetime(),
             },
         )
     return len(predictions)
