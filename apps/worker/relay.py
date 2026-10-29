@@ -44,6 +44,7 @@ from domain.models import Base, DriverEvent, DriverRelayDeadLetter
 from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
+from domain.services.driver_event_service import sweep_stale_drivers
 
 logger = logging.getLogger("worker.relay")
 
@@ -332,6 +333,10 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
                 relayed += relay_driver_events_once(
                     session, publisher, s.kafka_drivers_topic, s.relay_batch_size
                 )
+                # #60 stale-driver sweep: silent heartbeats stop counting as
+                # supply. Emits availability events (reason stale_sweep) that
+                # ride the same outbox → relay → warehouse path.
+                sweep_stale_drivers(session)
         except Exception:
             # Broker down, DB hiccup, ...: back off and retry instead of the
             # crash-restart cycle a bare exception would cause.

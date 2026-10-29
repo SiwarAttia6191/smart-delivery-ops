@@ -1,6 +1,14 @@
 -- Reconstruct average available-driver supply during each local hour.
 -- Availability intervals end at the next transition for that driver. The
 -- last known available interval is carried through the current hour.
+--
+-- #60: location_update events (hysteresis-based, emitted only for real
+-- movement) participate in the transition sequence, so an available
+-- driver's interval SPLITS at each move and supply tracks their current
+-- zone. The metric converges from last-evented-location toward
+-- current-location as update frequency rises; a driver gone silent past
+-- the stale window is swept offline by the worker (stale_sweep), closing
+-- their interval instead of counting forever.
 with transitions as (
 
     select
@@ -10,11 +18,12 @@ with transitions as (
         lead(source_created_at_local) over (
             partition by driver_id order by source_created_at_local, event_id
         ) as next_change_at,
-        to_available,
+        coalesce(to_available, available) as to_available,
         latitude,
         longitude
     from {{ ref('stg_driver_events') }}
     where event_type = 'availability'
+       or (event_type = 'location_update' and available)
 
 ),
 
