@@ -25,7 +25,7 @@ analytics in one system.
 | 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-stream primary-key dedupe — at-least-once end to end |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
-| ⏱️ **ETA estimation** | Prep + travel + buffer heuristic (Phase 1), upgrade path to an ML regression model |
+| ⏱️ **ETA estimation** | Served by the MLflow-registered LightGBM model (beat the heuristic 5.2 vs 17.8 min MAE on realized deliveries); calibrated heuristic as automatic fallback |
 | 📊 **Operational analytics** | KPI summary (status mix, revenue, average delivery time) + Prometheus metrics endpoint |
 | 📚 **OpenAPI / Swagger** | Typed Pydantic contracts, interactive docs at `/docs` and `/redoc` out of the box |
 
@@ -246,8 +246,8 @@ marts, accepted-values checks on event types and `schema_version`.
 
 ### 🛡️ Data quality — three lines of defense
 
-`make dbt` runs **48 nodes** per build: 9 models + **39 data tests**
-(12 source-declared, 22 column/schema tests, 5 singular business-rule tests
+`make dbt` runs **49 nodes** per build: 9 models + **40 data tests**
+(12 source-declared, 24 column/schema tests, 4 singular business-rule tests + 1 event-type contract
 including grain-uniqueness and the delivered-orders-have-assignments
 referential rule). Three lines of defense:
 

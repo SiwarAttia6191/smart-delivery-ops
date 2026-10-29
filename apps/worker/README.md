@@ -3,9 +3,18 @@
 The outbox relay tails two immutable transactional outboxes:
 `order_events` → `orders.events` and `driver_events` → `drivers.events`.
 Driver events record availability transitions (registration, heartbeat,
-assignment, delivery, and cancellation) with the driver-state change in the
-same database transaction. They snapshot location only at those transitions;
-GPS pings are out of scope.
+assignment, delivery, cancellation, stale_sweep) with the driver-state change
+in the same database transaction, plus **hysteresis location_update events**
+(#60): a heartbeat that moved the driver >500 m
+(`DRIVER_LOCATION_UPDATE_THRESHOLD_M`) emits its own event so supply follows
+the driver across zones. Continuous GPS pings remain out of scope.
+
+**The worker loop does three things per cycle** (entrypoint
+`python -m apps.worker.relay`): relay the order outbox, relay the driver
+outbox, and run the **stale-driver sweep** — available drivers whose last
+event is older than `DRIVER_STALE_AFTER_MINUTES` (120) get a forced
+`availability` event (`reason: stale_sweep`) and flip offline, so silent
+drivers stop counting as supply instead of being carried forever.
 
 - **Delivery guarantee:** at-least-once. Due rows are claimed
   (`published_at IS NULL`, `quarantined_at IS NULL` + `FOR UPDATE SKIP LOCKED`)
