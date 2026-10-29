@@ -513,7 +513,7 @@ footer {
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">16</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">17</div><div class="l">REST endpoints</div></div>
         <div class="stat"><div class="v">89%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
@@ -689,7 +689,7 @@ footer {
 <section class="section" id="route">
   <div class="swoosh">
     <span class="eyebrow">OSRM route</span>
-    <h2>A real road route through Tunis</h2>
+    <h2>A real road route through <span id="route-city-label">Tunis</span></h2>
     <p class="lead">
       This saved GeoJSON route follows the OpenStreetMap road network between the
       restaurant and delivery coordinates — the same geometry every real order
@@ -706,7 +706,7 @@ footer {
         <div class="route-map-stat">Stops<b>Restaurant → Customer</b></div>
       </div>
       <div class="route-map-links">
-        <a href="route.geojson" download="tunis-demo-route.geojson">Download route GeoJSON</a>
+        <a href="route.geojson" download="demo-route.geojson">Download route GeoJSON</a>
         <a href="https://geojson.io/" target="_blank" rel="noopener">Open geojson.io</a>
       </div>
     </div>
@@ -1255,6 +1255,20 @@ try {
   const message = error instanceof Error ? error.message : String(error);
   routeStatus.textContent = `Route map unavailable: ${message}`;
 }
+
+/* Region pack (#78): the deployment names its own city — when the local API
+   is reachable, the heading follows whatever city it serves; hosted
+   statically, the default label stands. */
+try {
+  const configResponse = await fetch("http://localhost:8010/config", {
+    signal: AbortSignal.timeout(2500),
+  });
+  if (configResponse.ok) {
+    const cityConfig = await configResponse.json();
+    const label = cityConfig.label ?? cityConfig.city;
+    if (label) document.getElementById("route-city-label").textContent = label;
+  }
+} catch { /* static fallback keeps the default city label */ }
 
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 mermaid.initialize({

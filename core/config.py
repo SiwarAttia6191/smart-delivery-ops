@@ -37,6 +37,12 @@ class Settings(BaseSettings):
     # derive through the tz database — never a fixed offset (DST-safe).
     business_timezone: str = "Africa/Tunis"
 
+    # ── Region pack (#78): which city manifest (config/cities/<city>.json)
+    # drives seeds, the demo map and /config. One deployment = one city;
+    # swapping region = fresh databases + the matching BUSINESS_TIMEZONE
+    # (see README "Run it in another city").
+    city: str = "tunis"
+
     # ── ETA serving (#26/#69): empty = heuristic champion; "registry" loads
     #    models:/eta_model/Production at startup, heuristic fallback on any
     #    failure (ML being down must never break quoting).

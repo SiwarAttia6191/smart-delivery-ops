@@ -4,13 +4,17 @@ services:
       context: .
       dockerfile: infra/docker/Dockerfile.api
     ports:
-      - "8010:8000"  # host 8010 (8000 conflicts with common local tooling) → container 8000
+      # Host ports are env-tunable so a second side-by-side deployment (e.g.
+      # deploy/cities/paris.env, #78 region pack) can shift them.
+      - "${API_HOST_PORT:-8010}:8000"  # 8000 conflicts with common local tooling → 8010
     environment:
       ENVIRONMENT: docker
       # Inside Docker's network the postgres service listens on its internal
       # port 5432 — the host-side 5434 mapping does not apply here.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}
+      # Which city manifest drives /config and the demo surfaces (#78).
+      CITY: ${CITY:-tunis}
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).
@@ -39,7 +43,7 @@ services:
       POSTGRES_PASSWORD: smartops
       POSTGRES_DB: smart_delivery_ops
     ports:
-      - "5434:5432"  # host 5434 (local PG18 service occupies 5432) → container 5432
+      - "${POSTGRES_HOST_PORT:-5434}:5432"  # host 5434 (local PG18 service occupies 5432) → container 5432
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -98,43 +102,48 @@ services:
 
   osrm-prepare:
     # One-shot map preparation: runs the MLD pipeline (extract -> partition
-    # -> customize) over the Tunisia OSM extract (matches the seed data's
-    # Tunis coordinates). Takes a few minutes and ~1GB RAM, ONCE - results
-    # persist in the bind-mounted data/osrm/. NOT part of `up -d`:
-    #   curl -L -o data/osrm/tunisia-latest.osm.pbf https://download.geofabrik.de/africa/tunisia-latest.osm.pbf
-    #   docker compose run --rm osrm-prepare
+    # -> customize) over the region's OSM extract. The region is env-tunable
+    # (#78): OSRM_EXTRACT_ID names the extract (files <id>-latest.* inside
+    # OSRM_DATA_DIR — Geofabrik's own naming), OSRM_DATA_DIR the data dir.
+    # Takes a few minutes and ~1-3GB RAM, ONCE per region - results persist
+    # in the bind-mounted dir. NOT part of `up -d`; the download happens on
+    # the HOST (the image has no curl/wget):
+    #   python scripts/fetch_osrm_extract.py --region <city>
+    #   OSRM_EXTRACT_ID=<id> OSRM_DATA_DIR=data/osrm/<id> docker compose run --rm osrm-prepare
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     profiles: ["tools"]
     volumes:
-      - ./data/osrm:/data
+      - ${OSRM_DATA_DIR:-./data/osrm}:/data
     working_dir: /data
     entrypoint: ["/bin/bash", "-c"]
     command:
       - |
         set -e
-        if [ -f /data/tunisia-latest.osrm ]; then
+        # ${OSRM_EXTRACT_ID:-tunisia} is interpolated by COMPOSE into the
+        # literal value; $$EXTRACT stays a shell variable ($$ = literal $).
+        EXTRACT=${OSRM_EXTRACT_ID:-tunisia}
+        if [ -f /data/$$EXTRACT-latest.osrm ]; then
           echo "OSRM data already prepared - skipping"
           exit 0
         fi
-        # the .pbf is downloaded on the HOST (the image has no curl/wget):
-        #   curl -L -o data/osrm/tunisia-latest.osm.pbf         #     https://download.geofabrik.de/africa/tunisia-latest.osm.pbf
-        [ -f /data/tunisia-latest.osm.pbf ] || { echo 'missing data/osrm/tunisia-latest.osm.pbf - download it first (see README)'; exit 1; }
-        osrm-extract -p /opt/car.lua /data/tunisia-latest.osm.pbf
-        osrm-partition /data/tunisia-latest.osrm
-        osrm-customize /data/tunisia-latest.osrm
+        [ -f /data/$$EXTRACT-latest.osm.pbf ] || { echo "missing /data/$$EXTRACT-latest.osm.pbf - run scripts/fetch_osrm_extract.py first"; exit 1; }
+        osrm-extract -p /opt/car.lua /data/$$EXTRACT-latest.osm.pbf
+        osrm-partition /data/$$EXTRACT-latest.osrm
+        osrm-customize /data/$$EXTRACT-latest.osrm
 
   osrm:
     # Road-network routing service (the benchmark challenger). Needs the
-    # prepared data from osrm-prepare; serves on host port 5000. No
-    # healthcheck - the image ships no curl/wget; liveness is checked by
-    # actually calling /route (the benchmark script fails loudly).
+    # prepared data from osrm-prepare; serves on host port 5000 (env-tunable
+    # for a side-by-side second region). No healthcheck - the image ships no
+    # curl/wget; liveness is checked by actually calling /route (the
+    # benchmark script fails loudly).
     image: ghcr.io/project-osrm/osrm-backend:v5.27.1
     profiles: ["tools"]
-    command: osrm-routed --algorithm mld /data/tunisia-latest.osrm
+    command: osrm-routed --algorithm mld /data/${OSRM_EXTRACT_ID:-tunisia}-latest.osrm
     ports:
-      - "5000:5000"
+      - "${OSRM_HOST_PORT:-5000}:5000"
     volumes:
-      - ./data/osrm:/data
+      - ${OSRM_DATA_DIR:-./data/osrm}:/data
 
   dbt:
     # Transformation layer: staging + marts over the warehouse raw layer.
@@ -205,7 +214,7 @@ services:
       dockerfile: infra/docker/Dockerfile.airflow
     command: webserver
     ports:
-      - "8081:8080"
+      - "${AIRFLOW_HOST_PORT:-8081}:8080"
     environment: *airflow-env
     volumes: *airflow-volumes
     depends_on:
@@ -237,7 +246,7 @@ services:
       dockerfile: infra/docker/Dockerfile.ml
     profiles: ["tools"]
     ports:
-      - "5100:5100"
+      - "${MLFLOW_HOST_PORT:-5100}:5100"
     environment:
       PGPASSWORD: smartops  # entrypoint's psql provisioning runs non-interactive
     volumes:
@@ -272,6 +281,7 @@ services:
       GIT_SHA: ${GIT_SHA:-unknown}
       GIT_PYTHON_REFRESH: quiet  # mlflow probes for git; silence the import warning
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
+      CITY: ${CITY:-tunis}  # region stamp on benchmark reports (#78)
       OSRM_BASE_URL: http://osrm:5000  # ETA benchmark challenger (osrm is profile-gated)
     volumes:
       - ./ml:/ml
@@ -304,15 +314,17 @@ services:
     # Official Apache Kafka image, KRaft mode (no ZooKeeper) — a single node
     # acting as both broker and controller, which is all a dev/demo stack needs.
     # Two listeners: containers reach it as kafka:19092, host tools (kcat,
-    # console scripts, a locally-run worker) as localhost:9094.
+    # console scripts, a locally-run worker) as localhost:9094 (env-tunable
+    # so a side-by-side second deployment shifts both the mapping AND the
+    # advertised listener together).
     image: apache/kafka:3.9.0
     ports:
-      - "9094:9094"
+      - "${KAFKA_HOST_PORT:-9094}:9094"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:19092,CONTROLLER://:9093,EXTERNAL://:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,EXTERNAL://localhost:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092,EXTERNAL://localhost:${KAFKA_HOST_PORT:-9094}
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT

@@ -1,0 +1,38 @@
+{
+  "city": "paris",
+  "label": "Paris",
+  "business_timezone": "Europe/Paris",
+  "map": { "center_lat": 48.8584, "center_lon": 2.3488, "zoom": 12 },
+  "benchmark_grid": { "center_lat": 48.8584, "center_lon": 2.3488, "spread_deg": 0.08 },
+  "backfill": { "base_rate": 2.4 },
+  "osrm": {
+    "extract_id": "ile-de-france",
+    "download_url": "https://download.geofabrik.de/europe/france/ile-de-france-latest.osm.pbf"
+  },
+  "restaurants": [
+    { "name": "Le Petit Marché — Le Marais", "latitude": 48.8575, "longitude": 2.362 },
+    { "name": "Bistro des Halles — Châtelet", "latitude": 48.862, "longitude": 2.346 },
+    { "name": "Café Défense — La Défense", "latitude": 48.89, "longitude": 2.239 },
+    { "name": "Trattoria Bastille", "latitude": 48.853, "longitude": 2.3695 },
+    { "name": "Chez Amine — Belleville", "latitude": 48.872, "longitude": 2.382 },
+    { "name": "Crêperie Montparnasse", "latitude": 48.842, "longitude": 2.322 }
+  ],
+  "drivers": [
+    { "name": "Hugo", "vehicle": "motorcycle", "latitude": 48.86, "longitude": 2.35 },
+    { "name": "Léa", "vehicle": "bicycle", "latitude": 48.856, "longitude": 2.352 },
+    { "name": "Mehdi", "vehicle": "motorcycle", "latitude": 48.873, "longitude": 2.296 },
+    { "name": "Camille", "vehicle": "car", "latitude": 48.889, "longitude": 2.24 },
+    { "name": "Yanis", "vehicle": "motorcycle", "latitude": 48.852, "longitude": 2.37 },
+    { "name": "Chloé", "vehicle": "car", "latitude": 48.843, "longitude": 2.323 },
+    { "name": "Adam", "vehicle": "bicycle", "latitude": 48.858, "longitude": 2.38 },
+    { "name": "Sofiane", "vehicle": "motorcycle", "latitude": 48.866, "longitude": 2.333 }
+  ],
+  "customers": [
+    { "name": "Élodie", "phone": "+33 6 11 11 11 11", "latitude": 48.859, "longitude": 2.347 },
+    { "name": "Thomas", "phone": "+33 6 22 22 22 22", "latitude": 48.872, "longitude": 2.348 },
+    { "name": "Nadia", "phone": "+33 6 33 33 33 33", "latitude": 48.854, "longitude": 2.372 },
+    { "name": "Pierre", "phone": "+33 6 44 44 44 44", "latitude": 48.888, "longitude": 2.242 },
+    { "name": "Amina", "phone": "+33 6 55 55 55 55", "latitude": 48.841, "longitude": 2.325 },
+    { "name": "Louis", "phone": "+33 6 66 66 66 66", "latitude": 48.865, "longitude": 2.321 }
+  ]
+}

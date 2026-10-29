@@ -37,14 +37,17 @@ feature coverage; it is a sanity report, not a causal or forecasting benchmark.
 ## `osrm/` — OSRM map data (gitignored)
 
 Road-network data for the distance benchmark and the OSRM distance
-provider. **Source:** the [Geofabrik](https://download.geofabrik.de/) Tunisia
-extract of OpenStreetMap (`tunisia-latest.osm.pbf`, ~84 MB, ODbL license) —
-chosen because the seed data's coordinates are in Tunis.
+provider. **Source:** a [Geofabrik](https://download.geofabrik.de/) OSM
+extract — every region on Earth has one; the region is configuration, not
+code (#78 region pack). The default deployment uses the Tunisia extract
+(`tunisia-latest.osm.pbf`, ~84 MB, ODbL license), matching the seed data's
+Tunis coordinates; second regions live in their own subdirectory
+(`ile-de-france/` for the verified Paris deployment, `./data/osrm/<extract_id>/`).
 
 | file | what it is |
 |---|---|
-| `tunisia-latest.osm.pbf` | raw OSM extract downloaded from Geofabrik |
-| `tunisia-latest.osrm.*` | the prepared routing graph, built ONCE by the MLD pipeline (`osrm-extract` → `osrm-partition` → `osrm-customize`, car profile) |
+| `<extract_id>-latest.osm.pbf` | raw OSM extract downloaded from Geofabrik |
+| `<extract_id>-latest.osrm.*` | the prepared routing graph, built ONCE by the MLD pipeline (`osrm-extract` → `osrm-partition` → `osrm-customize`, car profile) |
 
 **What it is NOT: live traffic.** OSRM speeds come from static OSM tags
 (maxspeed, highway class) baked in at prepare time - free-flow estimates.
@@ -55,13 +58,16 @@ legitimate source for that CSV. Consequence for evaluation: OSRM **distance**
 is traffic-independent and solid ground truth; OSRM **durations** are not
 valid ETA ground truth (see the ETA model's evaluation design, issue #26).
 
-Why gitignored: ~826 MB of binary, regenerable in two commands:
+Why gitignored: regenerable binaries, driven by the city manifest:
 
 ```bash
-curl -L -o data/osrm/tunisia-latest.osm.pbf \
-  https://download.geofabrik.de/africa/tunisia-latest.osm.pbf
-docker compose run --rm osrm-prepare     # builds the routing graph
-docker compose up -d osrm                # serves /route on localhost:5000
+# any region: manifest names the extract + download URL
+python scripts/fetch_osrm_extract.py --region <city>     # host download
+OSRM_EXTRACT_ID=<id> OSRM_DATA_DIR=data/osrm/<id> \
+  docker compose run --rm osrm-prepare                   # builds the routing graph
+OSRM_EXTRACT_ID=<id> OSRM_DATA_DIR=data/osrm/<id> \
+  docker compose --profile tools up -d osrm              # serves /route
+# defaults (OSRM_EXTRACT_ID=tunisia, OSRM_DATA_DIR=./data/osrm) = the Tunisia demo
 ```
 
 The `osrm` container is what `scripts/benchmark_geo.py` uses as ground
