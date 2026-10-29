@@ -27,7 +27,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
-from domain.models import Base, Customer, OrderEvent, Restaurant  # noqa: E402
+from core.database import run_migrations  # noqa: E402
+from domain.models import Customer, OrderEvent, Restaurant  # noqa: E402
 from domain.services.order_service import create_order  # noqa: E402
 
 REPO = Path(__file__).resolve().parents[1]
@@ -192,9 +193,11 @@ def main() -> None:
     warehouse_url = os.environ["WAREHOUSE_DATABASE_URL"]
     bootstrap = os.environ["KAFKA_BOOTSTRAP_SERVERS"]
 
-    step("1 · ops schema + warehouse raw layer")
+    step("1 · ops schema via the Alembic chain + warehouse raw layer")
+    # The chain itself is under test here: a fresh throwaway Postgres must
+    # reach head and produce the exact schema the models expect.
+    run_migrations()
     engine = create_engine(ops_url)
-    Base.metadata.create_all(engine)
     from apps.worker.ingest import RawDriverEventStore, RawEventStore
 
     RawEventStore(warehouse_url).ensure()

@@ -24,7 +24,7 @@ from apps.api.routes import (
     routes,
 )
 from core.config import get_settings
-from core.database import create_all
+from core.database import run_migrations
 from core.exceptions import DomainError
 from core.logging import configure_logging
 from domain.services import eta_model_service
@@ -43,7 +43,10 @@ ETA/pricing land in Phases 2–3 (see docs/roadmap.md).
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
-    create_all()
+    # The ops schema is owned by the Alembic chain (#28): apply pending
+    # migrations at boot. In compose the `migrate` service has already
+    # brought the DB to head before this runs — idempotent no-op here.
+    run_migrations()
     if get_settings().eta_model_source == "registry":
         eta_model_service.load_from_registry()
     yield

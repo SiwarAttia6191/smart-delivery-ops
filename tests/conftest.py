@@ -2,13 +2,21 @@
 
 import os  # noqa: E402
 from collections.abc import Generator  # noqa: E402
+from pathlib import Path  # noqa: E402
 
 # Tests must not depend on (or touch) the real PostgreSQL database:
 # pin the app-level engine to a throwaway SQLite file BEFORE the app modules
 # import and build their engine from settings. The fixtures below override
 # get_db with an in-memory engine regardless, but FastAPI's lifespan would
 # otherwise still open the configured database.
-os.environ["DATABASE_URL"] = "sqlite:///./.test_local.db"
+#
+# The lifespan now applies the Alembic chain to that file (#28), so a file
+# left over from a PREVIOUS session (or a pre-Alembic run: tables but no
+# alembic_version) would break the upgrade — the same stamp problem the
+# live demo DB has. Delete it so every session truly starts from zero.
+_TEST_DB = Path(".test_local.db")
+_TEST_DB.unlink(missing_ok=True)
+os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

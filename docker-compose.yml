@@ -1,4 +1,23 @@
 services:
+  migrate:
+    # One-shot schema bootstrap (Phase 5, #28): applies the Alembic chain
+    # to the ops database. api and worker wait for it — the old
+    # create_all-at-startup could never ALTER an existing table, which is
+    # exactly what versioned migrations are for. Idempotent: an
+    # already-current database is a no-op (the pre-Alembic live demo DB
+    # was stamped to head once, never re-DDL'd).
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.api
+    command: alembic upgrade head
+    environment:
+      ENVIRONMENT: docker
+      DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   api:
     build:
       context: .
@@ -37,6 +56,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   postgres:
@@ -76,6 +97,8 @@ services:
       kafka:
         condition: service_healthy
       kafka-init:
+        condition: service_completed_successfully
+      migrate:
         condition: service_completed_successfully
     restart: unless-stopped
 

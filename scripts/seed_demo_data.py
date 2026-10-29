@@ -24,11 +24,18 @@ from domain.models import Base, Customer, Driver, Restaurant  # noqa: E402
 
 
 def reset() -> None:
+    # --reset drops ALL tables (alembic_version included) — so the schema
+    # is rebuilt through the migration chain, not create_all, and the
+    # database stays migration-owned afterwards.
     Base.metadata.drop_all(engine)
+    from core.database import run_migrations
+
+    run_migrations()
 
 
 def seed(config: CityConfig) -> None:
-    Base.metadata.create_all(engine)
+    # Schema comes from the Alembic chain (#28) — run `make migrate` (or
+    # start the stack) before seeding a fresh database.
     session = sessionmaker(bind=engine)()
     try:
         if session.query(Customer).count() > 0:
