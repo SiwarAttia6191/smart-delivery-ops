@@ -46,6 +46,12 @@ are written down, not assumed.
     `source_created_at_local` (Africa/Tunis); the warehouse stores UTC.
 11. Map data (`data/osrm/`) is gitignored and regenerable — see
     `data/README.md`.
+12. **Schema changes go through Alembic** (#28): edit the model, then
+    `alembic revision --autogenerate -m "..."` and review the revision —
+    never edit tables by hand. `tests/unit/test_migrations_parity.py`
+    fails the build if the chain drifts from the models; CI's data-plane
+    smoke applies the chain to real Postgres on every PR. Pre-existing
+    databases are stamped to head, never re-DDL'd.
 
 ## Housekeeping
 

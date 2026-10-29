@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow airflow-trigger airflow-state ml-serving-trigger ml-retrain-trigger ml-state ml-benchmark ml-forecast eta-benchmark clean
+.PHONY: setup db-up db-down db-shell migrate seed api test lint typecheck audit smoke dbt airflow airflow-trigger airflow-state ml-serving-trigger ml-retrain-trigger ml-state ml-benchmark ml-forecast eta-benchmark clean
 
 API_PORT ?= 8010
 
@@ -16,7 +16,10 @@ db-down:          ## stop the PostgreSQL container (data persists in the pgdata 
 db-shell:         ## interactive psql inside the Postgres container
 	docker compose exec postgres psql -U smartops -d smart_delivery_ops
 
-seed:            ## seed the database with demo data (Tunis metro area)
+migrate:         ## apply the Alembic chain to the ops DB (schema owner, #28)
+	docker compose run --rm migrate
+
+seed:            ## seed the database with demo data (needs migrations first: make migrate)
 	.venv/Scripts/python scripts/seed_demo_data.py
 
 api:             ## run the API locally with reload (Swagger at http://127.0.0.1:$(API_PORT)/docs)

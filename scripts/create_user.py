@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from core.database import engine  # noqa: E402
 from core.security import ROLES, hash_password  # noqa: E402
-from domain.models import Base, User  # noqa: E402
+from domain.models import User  # noqa: E402
 
 DEMO_USERS = [
     ("admin", "admin", "admin"),
@@ -55,7 +55,7 @@ def main() -> None:
     parser.add_argument("--stdin", action="store_true", help="read the password from stdin")
     args = parser.parse_args()
 
-    Base.metadata.create_all(engine)
+    # Schema comes from the Alembic chain (#28) — start the stack first.
     session = sessionmaker(bind=engine)()
     try:
         if args.demo:

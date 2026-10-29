@@ -51,8 +51,9 @@ cd smart-delivery-ops
 # 1) install (Windows: make setup · Linux/macOS: ./scripts/bootstrap.sh)
 make setup
 
-# 2) start PostgreSQL (production database) + seed demo data + demo API users
+# 2) start PostgreSQL (production database) + migrations + seed + demo API users
 make db-up
+make migrate                            # Alembic chain — the schema's owner (#28)
 make seed
 python scripts/create_user.py --demo   # admin/admin · ops/ops · view/view (dev-only)
 
@@ -181,6 +182,25 @@ The default database is **PostgreSQL 16**, running as a Docker container
 | Database | `smart_delivery_ops` |
 | User / password | `smartops` / `smartops` |
 | Connection string | `postgresql+psycopg://smartops:smartops@localhost:5434/smart_delivery_ops` |
+
+### Schema ownership: Alembic migrations (#28)
+
+The ops schema is owned by a **versioned Alembic chain** (`migrations/`):
+the compose `migrate` one-shot service applies it before api/worker start
+(`make migrate`), and the API's lifespan re-applies idempotently on boot.
+`create_all` survives only for throwaway test schemas — and
+`tests/unit/test_migrations_parity.py` fails the build the moment the
+chain drifts from the models. The pre-Alembic demo database was **stamped**
+to head (never hand-altered); every schema change after that is a real
+revision:
+
+```bash
+alembic revision --autogenerate -m "add tenants"   # diff models vs DB
+make migrate                                        # apply
+```
+
+The warehouse's raw layer is deliberately NOT migrated: it is the ingest
+worker's stream store, rebuilt from Kafka replay by design.
 
 Connect with any client — `make db-shell` (psql inside the container), pgAdmin,
 DBeaver, TablePlus — or run SQL directly:

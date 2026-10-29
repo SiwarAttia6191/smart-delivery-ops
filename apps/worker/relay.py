@@ -40,7 +40,7 @@ from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings, get_settings
-from domain.models import Base, DriverEvent, DriverRelayDeadLetter
+from domain.models import DriverEvent, DriverRelayDeadLetter
 from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
@@ -309,9 +309,10 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
     # pool_pre_ping: recycle stale pooled connections after a Postgres restart
     # instead of crashing the worker with an OperationalError.
     engine = create_engine(s.database_url, pool_pre_ping=True)
-    # Idempotent — removes the startup race with the API when a new table
-    # (e.g. relay_state) ships in the same deployment.
-    Base.metadata.create_all(engine)
+    # The schema is owned by the Alembic chain (#28): compose starts this
+    # service only after the one-shot `migrate` service reached head, which
+    # removes the old startup race (create_all could not cover ALTERs
+    # anyway - only migrations can evolve an existing table).
     migrate_legacy_deployment(engine)
     session_factory = sessionmaker(bind=engine)
 
