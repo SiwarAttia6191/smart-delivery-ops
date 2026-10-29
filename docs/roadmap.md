@@ -84,7 +84,7 @@ production delivery platform, the gaps are:
 |---|---|---|
 | Millions of orders, years of history | ~1,500 orders / 28 days, backfilled through the real pipeline | models learn from thin data (the benchmark reports say so themselves — "a young deployment"). Only traffic fixes the volume; a longer, noisier backfill + open delivery datasets can widen the window meanwhile. |
 | Auth + multi-tenant SaaS | JWT auth wall live on every mutating endpoint (#28); one deployment = one city (#78); tenancy columns not yet on the domain tables | #35/#36 — the remaining **client-onboarding blocker**: a tenant dimension on the domain tables + per-tenant warehouses. Sequencing note: tenant_id on EXISTING tables is an ALTER — it waits for Alembic (priority 3 moves ahead of it), doing it by hand would be exactly the unmigrated-schema anti-pattern. |
-| Versioned migrations, secrets vault | ✅ **Alembic live** — the ops schema is migration-owned (compose `migrate` one-shot, parity-tested against the models, CI-applied); secrets still plaintext env | secrets hardening (Docker `_FILE` patterns / vault) remains — table stakes for operating, not just demoing. |
+| Versioned migrations, secrets vault | ✅ **closed** — Alembic owns the ops schema (compose `migrate` one-shot, parity-tested, CI-applied); credentials travel as Docker secret files (`/run/secrets/...`), absent from compose config and `docker inspect` env | production swaps in vault-injected files at the same paths — zero code change. |
 | Scheduled ML retraining | ✅ **closed** — `ml_forecast_serving` (@hourly) refreshes the forecast table the surge loop reads; `ml_retrain_benchmark` (04:15 UTC daily, after the warehouse build) re-runs both benchmarks, promotion stays champion-gated | the operational half of M1 is scheduled: the ML loop now decays honestly on a clock instead of waiting for a manual `make ml-benchmark`. |
 | Load-tested, HA, on-call | single Kafka broker, single node, log-only alerts | #76 backlog (route-cache pruning, supply overcount while worker down…) + k6 load numbers + Grafana alert rules. HA/multi-broker is a deployment-topology concern — documented, not simulated. |
 
@@ -96,9 +96,9 @@ production delivery platform, the gaps are:
 2. **Auth + tenancy foundation** (#28/#35/#36) — the **auth half shipped**
    (JWT + roles on every write); the tenancy half (tenant dimension,
    per-tenant warehouses) comes right after Alembic, which it depends on.
-3. ~~**Alembic + secrets**~~ — the **Alembic half shipped** (migration
-   chain owns the ops schema; this was also the tenancy prerequisite);
-   secrets hardening remains.
+3. ~~**Alembic + secrets**~~ ✅ **done** — the migration chain owns the
+   ops schema (and unblocked tenancy); credentials are Docker secret
+   files now, with vault injection as the documented production path.
 4. **Load test + observability** (#76) — replace "it works" with measured
    latencies and alert rules.
 5. **Data depth** — 180-day backfill with more realistic noise, open

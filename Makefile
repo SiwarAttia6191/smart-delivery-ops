@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell migrate seed api test lint typecheck audit smoke dbt airflow airflow-trigger airflow-state ml-serving-trigger ml-retrain-trigger ml-state ml-benchmark ml-forecast eta-benchmark clean
+.PHONY: setup secrets db-up db-down db-shell migrate seed api test lint typecheck audit smoke dbt airflow airflow-trigger airflow-state ml-serving-trigger ml-retrain-trigger ml-state ml-benchmark ml-forecast eta-benchmark clean
 
 API_PORT ?= 8010
 
@@ -8,6 +8,7 @@ setup:            ## create venv + install dev dependencies
 	.venv/Scripts/python -m pip install -r requirements-dev.txt
 
 db-up:            ## start the PostgreSQL container (production database)
+	.venv/Scripts/python scripts/ensure_secrets.py 2>/dev/null || python scripts/ensure_secrets.py
 	docker compose up -d postgres
 
 db-down:          ## stop the PostgreSQL container (data persists in the pgdata volume)
@@ -15,6 +16,9 @@ db-down:          ## stop the PostgreSQL container (data persists in the pgdata 
 
 db-shell:         ## interactive psql inside the Postgres container
 	docker compose exec postgres psql -U smartops -d smart_delivery_ops
+
+secrets:          ## generate the local secrets files (secrets/, gitignored)
+	.venv/Scripts/python scripts/ensure_secrets.py 2>/dev/null || python scripts/ensure_secrets.py
 
 migrate:         ## apply the Alembic chain to the ops DB (schema owner, #28)
 	docker compose run --rm migrate
