@@ -145,7 +145,16 @@ def main() -> None:
     train, test = values.iloc[:-holdout], values.iloc[-holdout:]
     actual = list(test)
 
-    snapshot = {"git_sha": git_sha(), "max_event_id": max_event_id(), "hours_observed": len(values)}
+    snapshot = {
+        "git_sha": git_sha(),
+        "max_event_id": max_event_id(),
+        "hours_observed": len(values),
+        # Region pack (#78): every report names its city — calendar features
+        # mean different things per region, so provenance is not optional.
+        # Env vars, not core.config: the ml container does not ship core/.
+        "region": os.environ.get("CITY", "tunis"),
+        "business_timezone": os.environ.get("BUSINESS_TIMEZONE", "Africa/Tunis"),
+    }
     print(f"snapshot: {snapshot} | holdout: {holdout} h")
 
     runs: list[dict] = []
@@ -163,6 +172,8 @@ def main() -> None:
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5100"))
     mlflow.set_experiment(EXPERIMENT)
+    # Region pack (#78): runs are filterable by city across regions.
+    mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
     for run in runs:
         with mlflow.start_run(run_name=f"demand_{run['name'].split(' ')[0]}"):
             mlflow.log_params(
@@ -197,6 +208,7 @@ def render_report(runs: list[dict], snapshot: dict, series: pd.DataFrame, holdou
     lines = [
         "# Demand forecasting benchmark",
         "",
+        f"* Region: `{snapshot['region']}` (business timezone `{snapshot['business_timezone']}`)",
         f"* Snapshot: `max(event_id)={snapshot['max_event_id']}`, git `{snapshot['git_sha']}`, "
         f"{snapshot['hours_observed']} observed hours, holdout {holdout} h",
         f"* Runs logged to MLflow experiment `{EXPERIMENT}`",

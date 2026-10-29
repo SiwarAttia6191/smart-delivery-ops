@@ -3,8 +3,9 @@
 The demand-forecasting benchmark (#25) trains on whatever the warehouse
 holds. A demo deployment that has only seen a handful of manual test orders
 has ~2 days of history - not enough for any model to stretch its legs. This
-script backfills a few weeks of *synthetic but realistic* Tunis food-delivery
-traffic: lunch and dinner peaks, quiet nights, heavier weekends.
+script backfills a few weeks of *synthetic but realistic* food-delivery
+traffic for the configured city (manifest coordinates + volume, #78): lunch
+and dinner peaks, quiet nights, heavier weekends.
 
 Honesty contract (same one the benchmark harness follows):
 - The harness itself never fabricates data - it reads the warehouse as-is.
@@ -25,6 +26,7 @@ events are deliberately NOT backfilled: supply history is a separate story
 Usage (repo root, needs `docker compose up -d postgres worker ingest`):
     python scripts/backfill_order_history.py                # 28 days
     python scripts/backfill_order_history.py --days 14
+    BUSINESS_TIMEZONE=Europe/Paris python scripts/backfill_order_history.py --region paris
 """
 
 import argparse
@@ -42,6 +44,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from core.config import get_settings  # noqa: E402
 from core.database import engine  # noqa: E402
+from domain.city_config import CityConfig, ensure_business_timezone, load_city_config  # noqa: E402
 from domain.models import Customer, Driver, Order, OrderEvent, OrderStatus, Restaurant  # noqa: E402
 from domain.services import eta_service, pricing_service  # noqa: E402
 
@@ -193,7 +196,10 @@ def build_order(
     )
 
 
-def backfill(days: int, seed: int) -> None:
+def backfill(days: int, seed: int, config: CityConfig) -> None:
+    # The environment zone is what dbt grains and ML features derive in;
+    # writing a city's history under a different zone would mis-grain it.
+    ensure_business_timezone(config, get_settings().business_timezone)
     rng = random.Random(seed)
     session = sessionmaker(bind=engine)()
     try:
@@ -215,7 +221,7 @@ def backfill(days: int, seed: int) -> None:
             print("No restaurants/customers/drivers - run scripts/seed_demo_data.py first.")
             return
 
-        now_local = datetime.now(UTC).astimezone(ZoneInfo(get_settings().business_timezone))
+        now_local = datetime.now(UTC).astimezone(ZoneInfo(config.business_timezone))
         start_local = (now_local - timedelta(days=days)).replace(
             hour=0, minute=0, second=0, microsecond=0
         )
@@ -225,7 +231,7 @@ def backfill(days: int, seed: int) -> None:
             day_local = start_local + timedelta(days=day)
             weekend = day_local.weekday() >= 5
             for hour, weight in HOUR_WEIGHTS.items():
-                lam = BASE_RATE * weight * (WEEKEND_FACTOR if weekend else 1.0)
+                lam = config.backfill.base_rate * weight * (WEEKEND_FACTOR if weekend else 1.0)
                 for _ in range(poisson(rng, lam)):
                     created_local = day_local.replace(hour=hour) + timedelta(
                         minutes=rng.randint(0, 59)
@@ -260,5 +266,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--days", type=int, default=28)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--region", default=get_settings().city)
     args = parser.parse_args()
-    backfill(args.days, args.seed)
+    backfill(args.days, args.seed, load_city_config(args.region))

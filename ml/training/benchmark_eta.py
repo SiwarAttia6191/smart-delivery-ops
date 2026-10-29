@@ -186,6 +186,11 @@ def main() -> None:
         "max_event_id": max_event_id(),
         "orders_total": len(frame),
         "holdout_orders": holdout_n,
+        # Region pack (#78): every report names its city — calendar features
+        # mean different things per region, so provenance is not optional.
+        # Env vars, not core.config: the ml container does not ship core/.
+        "region": os.environ.get("CITY", "tunis"),
+        "business_timezone": os.environ.get("BUSINESS_TIMEZONE", "Africa/Tunis"),
     }
     print(f"snapshot: {snapshot}")
 
@@ -203,6 +208,8 @@ def main() -> None:
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5100"))
     mlflow.set_experiment(EXPERIMENT)
+    # Region pack (#78): runs are filterable by city across regions.
+    mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
     champion_mae = next(
         (r["metrics"]["mae_overall"] for r in runs if r["name"].startswith("heuristic")), None
     )
@@ -284,6 +291,7 @@ def render_report(runs: list[dict], snapshot: dict, holdout: pd.DataFrame) -> st
     lines = [
         "# ETA benchmark",
         "",
+        f"* Region: `{snapshot['region']}` (business timezone `{snapshot['business_timezone']}`)",
         f"* Snapshot: `max(event_id)={snapshot['max_event_id']}`, git `{snapshot['git_sha']}`, "
         f"{snapshot['orders_total']} realized deliveries, holdout {snapshot['holdout_orders']} (newest)",
         f"* Runs logged to MLflow experiment `{EXPERIMENT}`; ground truth = created → delivered span",

@@ -79,6 +79,36 @@ curl localhost:8010/analytics/summary
 
 Or run the full end-to-end scenario: `make smoke`.
 
+## 🌍 Run it in another city
+
+The platform is region-parameterized (#78): **one deployment = one city**, driven by a
+manifest in [`config/cities/`](config/cities) — seed coordinates, business timezone
+(IANA, DST-safe), benchmark grid, OSRM extract, demo map view. Tunis ships as the
+default; **Paris** runs end-to-end as the second verified region (Europe/Paris grains
+cross the October DST boundary, the Île-de-France extract routes its orders).
+
+Bring up a second city **side-by-side** (fresh compose project, shifted ports, the
+Tunis demo untouched):
+
+```bash
+python scripts/fetch_osrm_extract.py --region paris    # ~300 MB Geofabrik extract (host)
+docker compose --env-file deploy/cities/paris.env -p paris up -d \
+    postgres api worker ingest kafka kafka-init osrm mlflow
+docker compose --env-file deploy/cities/paris.env -p paris run --rm osrm-prepare
+
+# seed + backfill against the Paris stack (host port 5435), manifest zone enforced
+DATABASE_URL=postgresql+psycopg://smartops:smartops@localhost:5435/smart_delivery_ops \
+BUSINESS_TIMEZONE=Europe/Paris python scripts/seed_demo_data.py --region paris
+DATABASE_URL=postgresql+psycopg://smartops:smartops@localhost:5435/smart_delivery_ops \
+BUSINESS_TIMEZONE=Europe/Paris python scripts/backfill_order_history.py --region paris
+```
+
+The timezone guards itself: seed/backfill **refuse to run** when `BUSINESS_TIMEZONE`
+disagrees with the manifest — no city's history can be mis-grained by a stale env.
+`GET /config` serves the active manifest (label, timezone, map view) so the demo page
+follows the city. Adding a new city = one JSON file; swapping the default deployment's
+map region = `OSRM_EXTRACT_ID` + `OSRM_DATA_DIR` (see `.env.example`).
+
 ## 🎮 Try it live — Swagger walkthrough
 
 The fastest way to feel the whole lifecycle is the interactive docs at
@@ -422,6 +452,7 @@ smart-delivery-ops/
 │   ├── dashboard/      # Phase 4 — Streamlit operations dashboard
 │   └── worker/         # Phase 2 — event bus consumers (outbox relay, ingestion)
 ├── core/               # config, database, logging, exceptions
+├── config/cities/      # region pack (#78): one manifest per city (tunis, paris)
 ├── data/transform/     # dbt project: staging + warehouse marts (Phase 2)
 ├── domain/
 │   ├── models/         # SQLAlchemy entities (Customer, Driver, Restaurant, Order, OrderEvent)
@@ -430,6 +461,7 @@ smart-delivery-ops/
 ├── data/               # transform/ (dbt) · osrm/ (map data, gitignored) · benchmarks/ (reports) — see data/README.md
 ├── ml/                 # Phase 3 — training (benchmark_demand), pipelines (forecast serving)
 ├── infra/              # docker, kubernetes, monitoring
+├── deploy/cities/      # side-by-side second-city deployment envs (paris.env)
 ├── tests/              # unit + integration
 ├── scripts/            # seed, smoke test, bootstrap
 └── docs/               # architecture, data model, API, ML design, roadmap

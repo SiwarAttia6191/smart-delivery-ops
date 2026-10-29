@@ -11,13 +11,15 @@ of the outbox and the git SHA, so any run can be traced to an exact
 dataset. Data comes from two sources:
   - REAL pairs: created events that carry coordinates (the pipeline's own
     traffic),
-  - SYNTHETIC pairs: a seeded, deterministic grid around the Tunis seed
-    area, so every bucket has enough samples from day one.
+  - SYNTHETIC pairs: a seeded, deterministic grid around the city's seed
+    area (city manifest, #78), so every bucket has enough samples from
+    day one.
 
 Usage:
     python scripts/benchmark_geo.py                  # real + synthetic
     python scripts/benchmark_geo.py --synthetic 50   # more synthetic pairs
     python scripts/benchmark_geo.py --no-real        # synthetic only
+    python scripts/benchmark_geo.py --region paris   # another city's grid
 """
 
 import argparse
@@ -32,15 +34,12 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
 from core.config import get_settings
+from domain.city_config import BenchmarkGrid, load_city_config
 from domain.models import OrderEvent
 from domain.rules.geo import CircuityAdjustedProvider, HaversineProvider, OsrmProvider
 
 BUCKETS = [(0.0, 2.0), (2.0, 5.0), (5.0, 10.0), (10.0, float("inf"))]
 BUCKET_LABELS = ["<2km", "2-5km", "5-10km", ">10km"]
-
-# Tunis seed area (matches scripts/seed_demo_data.py)
-CENTER_LAT, CENTER_LON = 36.8065, 10.1815
-SPREAD_DEG = 0.15  # ~±16 km
 
 
 def git_sha() -> str:
@@ -69,15 +68,17 @@ def real_pairs(session: Session) -> list[tuple[float, float, float, float]]:
     return pairs
 
 
-def synthetic_pairs(count: int, seed: int = 42) -> list[tuple[float, float, float, float]]:
-    """Deterministic grid sample around the Tunis seed area."""
+def synthetic_pairs(
+    count: int, grid: BenchmarkGrid, seed: int = 42
+) -> list[tuple[float, float, float, float]]:
+    """Deterministic grid sample around the city's seed area."""
     rng = random.Random(seed)
     return [
         (
-            CENTER_LAT + rng.uniform(-SPREAD_DEG, SPREAD_DEG),
-            CENTER_LON + rng.uniform(-SPREAD_DEG, SPREAD_DEG),
-            CENTER_LAT + rng.uniform(-SPREAD_DEG, SPREAD_DEG),
-            CENTER_LON + rng.uniform(-SPREAD_DEG, SPREAD_DEG),
+            grid.center_lat + rng.uniform(-grid.spread_deg, grid.spread_deg),
+            grid.center_lon + rng.uniform(-grid.spread_deg, grid.spread_deg),
+            grid.center_lat + rng.uniform(-grid.spread_deg, grid.spread_deg),
+            grid.center_lon + rng.uniform(-grid.spread_deg, grid.spread_deg),
         )
         for _ in range(count)
     ]
@@ -147,10 +148,12 @@ def main() -> None:
     parser.add_argument("--synthetic", type=int, default=40, help="synthetic pairs to add")
     parser.add_argument("--osrm", default=None, help="OSRM base URL (default from settings)")
     parser.add_argument("--no-real", action="store_true", help="skip real order pairs")
+    parser.add_argument("--region", default=None, help="city manifest (default CITY env / tunis)")
     args = parser.parse_args()
 
     settings = get_settings()
     osrm_url = (args.osrm or settings.osrm_base_url).rstrip("/")
+    config = load_city_config(args.region or settings.city)
 
     pairs: list[tuple[float, float, float, float]] = []
     real_count = 0
@@ -163,7 +166,7 @@ def main() -> None:
                 session.scalar(select(OrderEvent.id).order_by(OrderEvent.id.desc()).limit(1)) or 0
             )
         real_count = len(pairs)
-    pairs += synthetic_pairs(args.synthetic)
+    pairs += synthetic_pairs(args.synthetic, config.benchmark_grid)
     synthetic_count = len(pairs) - real_count
 
     osrm = OsrmProvider(osrm_url)
