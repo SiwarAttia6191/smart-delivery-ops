@@ -473,7 +473,7 @@ smart-delivery-ops/
 |---|---|---|
 | 1 | Foundation & MVP — orders, dispatch, pricing, API, tests | ✅ **done** |
 | 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
-| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model serving from the MLflow registry with heuristic fallback (`sdo_eta_model_serving`) |
+| 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model serving from the MLflow registry with heuristic fallback (`sdo_eta_model_serving`); multi-region region pack (Paris verified side-by-side) |
 | 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
 | 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
 
