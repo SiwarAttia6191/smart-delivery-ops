@@ -136,7 +136,7 @@ class TestServiceInjection:
         from domain.models import Driver
         from domain.services import driver_matching_service
 
-        db.add(Driver(name="D", latitude=36.9, longitude=10.3, is_available=True))
+        db.add(Driver(tenant_id=1, name="D", latitude=36.9, longitude=10.3, is_available=True))
         db.commit()
 
         match = driver_matching_service.find_nearest_driver(

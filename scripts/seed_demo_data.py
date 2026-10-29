@@ -20,7 +20,8 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from core.config import get_settings  # noqa: E402
 from core.database import engine  # noqa: E402
 from domain.city_config import CityConfig, load_city_config  # noqa: E402
-from domain.models import Base, Customer, Driver, Restaurant  # noqa: E402
+from domain.models import Base, Customer, Driver, Restaurant
+from domain.services import tenant_service  # noqa: E402
 
 
 def reset() -> None:
@@ -41,17 +42,32 @@ def seed(config: CityConfig) -> None:
         if session.query(Customer).count() > 0:
             print("Database already seeded — use --reset to reseed.")
             return
+        tenant_id = tenant_service.default_id(session)
         session.add_all(
             [
-                Restaurant(name=r.name, latitude=r.latitude, longitude=r.longitude)
+                Restaurant(
+                    tenant_id=tenant_id, name=r.name, latitude=r.latitude, longitude=r.longitude
+                )
                 for r in config.restaurants
             ]
             + [
-                Driver(name=d.name, vehicle=d.vehicle, latitude=d.latitude, longitude=d.longitude)
+                Driver(
+                    tenant_id=tenant_id,
+                    name=d.name,
+                    vehicle=d.vehicle,
+                    latitude=d.latitude,
+                    longitude=d.longitude,
+                )
                 for d in config.drivers
             ]
             + [
-                Customer(name=c.name, phone=c.phone, latitude=c.latitude, longitude=c.longitude)
+                Customer(
+                    tenant_id=tenant_id,
+                    name=c.name,
+                    phone=c.phone,
+                    latitude=c.latitude,
+                    longitude=c.longitude,
+                )
                 for c in config.customers
             ]
         )

@@ -24,6 +24,7 @@ class OrderEvent(Base):
     __tablename__ = "order_events"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     order_id: Mapped[str] = mapped_column(ForeignKey("orders.id"), index=True)
     event_type: Mapped[str] = mapped_column(String(30))  # created | assigned | status
     payload: Mapped[dict] = mapped_column(JSON, default=dict)

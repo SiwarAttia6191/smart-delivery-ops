@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from core.config import get_settings
 from domain.models import Driver, DriverEvent
 from domain.rules.geo import haversine_km
+from domain.services import tenant_service
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +48,10 @@ def record_availability_change(
         payload["order_id"] = order_id
     session.add(
         DriverEvent(
+            tenant_id=driver.tenant_id,
             driver_id=driver.id,
             event_type="availability",
-            payload=payload,
+            payload=tenant_service.stamp_payload(payload, driver.tenant_id),
         )
     )
 
@@ -89,23 +91,28 @@ def record_location_update(session: Session, driver: Driver) -> bool:
             return False
     session.add(
         DriverEvent(
+            tenant_id=driver.tenant_id,
             driver_id=driver.id,
             event_type="location_update",
-            payload={
-                "latitude": driver.latitude,
-                "longitude": driver.longitude,
-                "vehicle": driver.vehicle,
-                # lets the supply mart filter moving-but-offline drivers out
-                "available": driver.is_available,
-                "distance_from_last_m": (
-                    round(
-                        haversine_km(last[0], last[1], driver.latitude, driver.longitude) * 1000.0,
-                        1,
-                    )
-                    if last
-                    else None
-                ),
-            },
+            payload=tenant_service.stamp_payload(
+                {
+                    "latitude": driver.latitude,
+                    "longitude": driver.longitude,
+                    "vehicle": driver.vehicle,
+                    # lets the supply mart filter moving-but-offline drivers out
+                    "available": driver.is_available,
+                    "distance_from_last_m": (
+                        round(
+                            haversine_km(last[0], last[1], driver.latitude, driver.longitude)
+                            * 1000.0,
+                            1,
+                        )
+                        if last
+                        else None
+                    ),
+                },
+                driver.tenant_id,
+            ),
         )
     )
     return True

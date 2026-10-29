@@ -29,6 +29,7 @@ from domain.services import (
     eta_service,
     pricing_service,
     route_service,
+    tenant_service,
 )
 from domain.services.driver_event_service import AvailabilityReason, record_availability_change
 from domain.services.pricing_service import Quote
@@ -43,7 +44,16 @@ _ALLOWED_TRANSITIONS: dict[OrderStatus, set[OrderStatus]] = {
 
 
 def _event(session: Session, order: Order, event_type: str, payload: dict[str, Any]) -> None:
-    session.add(OrderEvent(order=order, event_type=event_type, payload=payload))
+    # Event envelope (#35): the tenant rides inside the payload (the raw
+    # layer stores payloads as received) and as the queryable column.
+    session.add(
+        OrderEvent(
+            order=order,
+            tenant_id=order.tenant_id,
+            event_type=event_type,
+            payload=tenant_service.stamp_payload(payload, order.tenant_id),
+        )
+    )
 
 
 def _get_order(session: Session, order_id: str) -> Order:
@@ -88,6 +98,7 @@ def create_order(
     )
 
     order = Order(
+        tenant_id=tenant_service.default_id(session),
         customer=customer,
         restaurant=restaurant,
         status=OrderStatus.pending,

@@ -65,6 +65,18 @@ erDiagram
     }
 ```
 
+## Tenancy (#35)
+
+Every business row carries `tenant_id` → `tenants` (id, slug, name, city).
+Today one tenant exists (`default`, inserted by migration 002 and
+backfilled onto all rows); the resolution point is
+`domain/services/tenant_service.py` — a single function the isolation
+layer (#36) will replace with JWT-claim resolution. Event payloads carry
+`tenant_id` too (the envelope), so the warehouse's raw layer inherits the
+dimension as-received. Deliberately tenant-agnostic for now: `users`
+(binding arrives with #36's claims), `route_cache` and `demand_forecasts`
+(deployment-level aggregates).
+
 ## Order lifecycle
 
 ```mermaid

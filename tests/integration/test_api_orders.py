@@ -64,6 +64,7 @@ class TestOutboxMetrics:
         event.quarantined_at = event.created_at
         db.add(
             DriverEvent(
+                tenant_id=1,
                 driver_id=driver["id"],
                 event_type="availability",
                 payload={"from_available": True, "to_available": False},

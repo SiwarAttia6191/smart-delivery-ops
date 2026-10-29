@@ -42,6 +42,17 @@ def engine() -> Generator[object, None, None]:
 
 
 @pytest.fixture(autouse=True)
+def default_tenant(db):
+    """Every business row carries tenant_id (#35): seed the deployment's
+    default tenant once per test — deterministic id 1 on the fresh schema,
+    which fixture constructions stamp directly."""
+    from domain.services import tenant_service
+
+    tenant_service.resolve_default(db)
+    db.commit()
+
+
+@pytest.fixture(autouse=True)
 def _no_route_capture(monkeypatch) -> None:
     """Order creation best-effort-captures OSRM geometry (#58); tests must
     not depend on (or wait for) a network service. Tests that exercise the

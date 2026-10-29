@@ -30,6 +30,7 @@ class Order(Base):
     __tablename__ = "orders"
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     customer_id: Mapped[int] = mapped_column(ForeignKey("customers.id"), index=True)
     restaurant_id: Mapped[int] = mapped_column(ForeignKey("restaurants.id"), index=True)
     driver_id: Mapped[int | None] = mapped_column(ForeignKey("drivers.id"), nullable=True)

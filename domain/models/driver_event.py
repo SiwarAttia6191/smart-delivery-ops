@@ -16,6 +16,7 @@ class DriverEvent(Base):
     __tablename__ = "driver_events"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True)
     driver_id: Mapped[int] = mapped_column(ForeignKey("drivers.id"), index=True)
     event_type: Mapped[str] = mapped_column(String(30))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
