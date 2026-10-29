@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     pricing_surge_tier3_ratio: float = 2.00
     pricing_surge_tier3_multiplier: float = 2.00
 
+    # ── Business timezone (#78): IANA zone name. Storage stays UTC; local
+    # business grains (dbt staging, ML calendar features, forecast row keys)
+    # derive through the tz database — never a fixed offset (DST-safe).
+    business_timezone: str = "Africa/Tunis"
+
     # ── ETA serving (#26/#69): empty = heuristic champion; "registry" loads
     #    models:/eta_model/Production at startup, heuristic fallback on any
     #    failure (ML being down must never break quoting).

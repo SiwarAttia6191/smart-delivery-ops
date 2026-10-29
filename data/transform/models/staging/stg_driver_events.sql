@@ -12,7 +12,7 @@ select
     event_type,
     schema_version,
     source_created_at,
-    source_created_at AT TIME ZONE 'Africa/Tunis' as source_created_at_local,
+    source_created_at AT TIME ZONE '{{ env_var("BUSINESS_TIMEZONE", "Africa/Tunis") }}' as source_created_at_local,
     ingested_at,
     kafka_partition,
     kafka_offset,

@@ -21,8 +21,9 @@ select
     event_type,
     schema_version,
     source_created_at,
-    -- Africa/Tunis is UTC+1 with no DST: stable business day/hour boundaries.
-    source_created_at AT TIME ZONE 'Africa/Tunis' as source_created_at_local,
+    -- Business grains derive in the configured zone (#78) — IANA name,
+    -- resolved by Postgres (DST-aware). Storage stays UTC.
+    source_created_at AT TIME ZONE '{{ env_var("BUSINESS_TIMEZONE", "Africa/Tunis") }}' as source_created_at_local,
     ingested_at,
     -- Kafka lineage (per-partition freshness, replay debugging) - projected
     -- into silver so downstream never reads raw directly.

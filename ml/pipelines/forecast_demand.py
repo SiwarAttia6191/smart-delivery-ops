@@ -1,3 +1,5 @@
+# mypy: ignore-errors
+# ml/ sits outside the typing gate (same as dags/)
 """Serving-side demand forecast (#25): pooled LightGBM → ops demand_forecasts.
 
 The benchmark (ml/training/benchmark_demand.py) decides which model family
@@ -16,9 +18,9 @@ domain/services/demand_service.py picks them up on the quote path. Runs in
 the ml-bench container (make ml-forecast), AFTER the warehouse marts are
 built - it reads analytics.mart_demand_timeseries like the benchmark does.
 
-Time policy: the mart's business_date/business_hour are Africa/Tunis local
-(fixed UTC+1, no DST); forecast_hour_utc converts them back so the API can
-look rows up with UTC wall-clock hours.
+Time policy: the mart's business_date/business_hour are LOCAL wall clock in
+the configured BUSINESS_TIMEZONE; forecast_hour_utc converts them through
+the tz database so the API can look rows up with UTC wall-clock hours.
 """
 
 import os
@@ -29,12 +31,18 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 HORIZON_HOURS = 24
-# Africa/Tunis is fixed UTC+1: UTC = local - 1. The forecast row for the
-# local hour ds lands at ds - 1h UTC (the API looks rows up by UTC wall
-# clock). REVIEW LESSON: the original +1 went the WRONG DIRECTION - every
-# forecast was labelled with the demand of the local hour one ahead of the
-# UTC hour the API looked up.
-TUNIS_UTC_OFFSET_HOURS = -1
+# Local↔UTC conversion goes through the tz database (#78): forecast rows
+# are keyed by UTC wall clock, the mart's business hours are LOCAL (the
+# configured BUSINESS_TIMEZONE). REVIEW LESSON: hand arithmetic (+1/-1)
+# has bitten twice — localize then convert, never offset math.
+TZ_NAME = os.environ.get("BUSINESS_TIMEZONE", "Africa/Tunis")
+
+
+def local_hours_to_utc(ds_local: pd.Timestamp) -> pd.Timestamp:
+    """Naive local business hour -> tz-aware UTC hour (DST-safe)."""
+    return ds_local.tz_localize(TZ_NAME).tz_convert("UTC")
+
+
 LAGS = (1, 2, 24)
 CALENDAR = ("hour", "dow")
 ZONE_FEATURES = ("zone_lat", "zone_lon")
@@ -66,9 +74,7 @@ def load_zone_frames() -> dict[tuple[float, float], pd.DataFrame]:
     # extends to the current Africa/Tunis hour (zeros past the last observed
     # order) so the 24h horizon always covers the hours the API will actually
     # look up — not the hours around the last order in the mart.
-    now_local_hour = (
-        pd.Timestamp.now(tz="UTC").tz_convert("Africa/Tunis").floor("h").tz_localize(None)
-    )
+    now_local_hour = pd.Timestamp.now(tz="UTC").tz_convert(TZ_NAME).floor("h").tz_localize(None)
     # -1h: the recursive loop predicts FROM origin+1h, so anchoring at the
     # previous hour makes the CURRENT hour the first prediction — the hour
     # derive_demand_ratio actually looks up. Gap hours since the last mart
@@ -141,8 +147,8 @@ def store_forecasts(predictions: list[dict]) -> int:
         DO UPDATE SET predicted_orders = EXCLUDED.predicted_orders, created_at = now()
         """
     )
-    window_start = min(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
-    window_end = max(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
+    window_start = local_hours_to_utc(min(p["ds"] for p in predictions))
+    window_end = local_hours_to_utc(max(p["ds"] for p in predictions))
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -159,8 +165,8 @@ def store_forecasts(predictions: list[dict]) -> int:
             )
         )
         for p in predictions:
-            # local business hour → UTC wall-clock hour (fixed UTC+1 zone)
-            hour_utc = (p["ds"] + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)).tz_localize("UTC")
+            # local business hour → UTC wall-clock hour (tz database, #78)
+            hour_utc = local_hours_to_utc(p["ds"])
             conn.execute(
                 upsert,
                 {
