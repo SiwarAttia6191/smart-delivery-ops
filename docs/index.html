@@ -570,7 +570,35 @@ footer {
   </div>
 </section>
 
-<!-- ── DEMO ─────────────────────────────────────────────────────── -->
+<!-- ── OLD WAY vs PLATFORM WAY (#29) ───────────────────────────── -->
+<section class="section" id="compare">
+  <div class="swoosh">
+    <span class="eyebrow">Why bother</span>
+    <h2>The old way vs the platform way</h2>
+    <p class="lead">
+      Same delivery business, two operating models. Every "platform way" claim
+      links to the code that makes it true — no vibes.
+    </p>
+    <div class="compare-grid">
+      <div class="compare-col old">
+        <h3>📞 The old way — phone calls and spreadsheets</h3>
+        <div class="compare-row"><span class="tick">✗</span><span>Dispatch: "who's free?" — call drivers one by one, hope someone answers.</span></div>
+        <div class="compare-row"><span class="tick">✗</span><span>Pricing: a flat fee someone picked in 2019, same at noon and at midnight.</span></div>
+        <div class="compare-row"><span class="tick">✗</span><span>Records: "it probably delivered" — no trail, so disputes end in refunds.</span></div>
+        <div class="compare-row"><span class="tick">✗</span><span>Forecasting: none — yesterday's queue size is the plan.</span></div>
+      </div>
+      <div class="compare-col platform">
+        <h3>⚡ The platform way — this repository</h3>
+        <div class="compare-row"><span class="tick">✓</span><span>Dispatch: the <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/driver_matching_service.py">nearest-available-driver algorithm</a> picks with a vehicle filter, in milliseconds.</span></div>
+        <div class="compare-row"><span class="tick">✓</span><span>Pricing: <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/rules/pricing_rules.py">auditable tiers</a> — base + per-km, surge from the live demand ratio, hard-capped.</span></div>
+        <div class="compare-row"><span class="tick">✓</span><span>Records: an <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/apps/worker">immutable event log</a> — every transition on Kafka, replayable, quality-gated in the warehouse.</span></div>
+        <div class="compare-row"><span class="tick">✓</span><span>Forecasting: <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/ml/pipelines/forecast_demand.py">zone-hour demand forecasts</a> feed the surge tiers, refreshed hourly by Airflow.</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SERVICES ─────────────────────────────────────────────────── -->
 <!-- ── SERVICES ─────────────────────────────────────────────────── -->
 <section class="section" id="services">
   <div class="swoosh">
@@ -754,6 +782,36 @@ flowchart LR
   </div>
 </section>
 
+<!-- ── INTEGRATIONS (#30) ──────────────────────────────────────── -->
+<section class="section" id="integrations">
+  <div class="swoosh">
+    <span class="eyebrow">Stack</span>
+    <h2>Runs on the boring, proven stack</h2>
+    <p class="lead">
+      Everything below is in the compose file and the CI pipeline today —
+      the dashed entries are the deliberate next steps, grayed until they land.
+    </p>
+    <div class="strip">
+      <span class="strip-item">FastAPI</span>
+      <span class="strip-item">PostgreSQL 16</span>
+      <span class="strip-item">Kafka (KRaft)</span>
+      <span class="strip-item">dbt</span>
+      <span class="strip-item">Airflow</span>
+      <span class="strip-item">MLflow</span>
+      <span class="strip-item">LightGBM · Prophet</span>
+      <span class="strip-item">OSRM (self-hosted)</span>
+      <span class="strip-item">Swagger / OpenAPI</span>
+      <span class="strip-item">Prometheus</span>
+      <span class="strip-item">Docker Compose</span>
+      <span class="strip-item">GitHub Actions</span>
+      <span class="strip-item planned">Redis cache</span>
+      <span class="strip-item planned">Streamlit dashboard</span>
+      <span class="strip-item planned">OpenTelemetry</span>
+      <span class="strip-item planned">Kubernetes</span>
+    </div>
+  </div>
+</section>
+
 <!-- ── ANALYTICS ────────────────────────────────────────────────── -->
 <section class="section" id="analytics">
   <div class="swoosh">
@@ -775,6 +833,43 @@ flowchart LR
       <div class="axis"><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>23:00</span></div>
       <p class="chart-note">Hover the bars — lunch and dinner peaks are exactly what the live demand forecaster was trained on and predicts per zone.</p>
     </div>
+  </div>
+</section>
+
+<!-- ── FAQ (#31) ───────────────────────────────────────────────── -->
+<section class="section" id="faq">
+  <div class="swoosh">
+    <span class="eyebrow">FAQ</span>
+    <h2>The questions an interviewer actually asks</h2>
+    <details class="faq">
+      <summary>Is this production-ready?</summary>
+      <p>Direct answer: the core platform, the data plane and the ML loop are; the honest distance to a real-life system is published in
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/roadmap.md">docs/roadmap.md</a> — JWT auth and versioned migrations are live, per-tenant isolation and load testing are the named next steps. Every claim links to code or a benchmark.</p>
+    </details>
+    <details class="faq">
+      <summary>How accurate is the ETA?</summary>
+      <p>Benchmarked, not claimed: the LightGBM model beats the heuristic champion on a time holdout (MAE 5.1 vs 17.8 minutes overall; 5.1 vs 22.1 on &gt;10 km trips — reports in
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/benchmarks">data/benchmarks</a>). Promotion to the serving registry only happens if a challenger beats the champion, and the heuristic stays as the fallback so quoting never breaks.</p>
+    </details>
+    <details class="faq">
+      <summary>Why is surge capped at 2.0×?</summary>
+      <p>Modern platforms run in a 1.2×–2.5× band; capping at 2.0× with the demand ratio floored at 0.5 and capped at 2.5 keeps surge explainable to customers and auditable in
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/rules/pricing_rules.py">pricing_rules.py</a>. The ratio itself derives from observed vs forecast demand per zone-hour — not from a manager's hunch.</p>
+    </details>
+    <details class="faq">
+      <summary>How do you handle time zones and DST?</summary>
+      <p>Storage is UTC everywhere; local business grains derive through the IANA tz database
+      (<code>BUSINESS_TIMEZONE</code>) — never a fixed offset. The backfill window deliberately crosses the October DST transition, so the marts prove it: the same 7 pm local hour is 17:00 UTC in summer and 18:00 UTC in winter.</p>
+    </details>
+    <details class="faq">
+      <summary>Is it multi-tenant?</summary>
+      <p>The foundation is shipped: a <code>tenants</code> table and <code>tenant_id</code> on every business table, applied to the live database by a versioned migration, with the tenant riding inside the event envelope to the warehouse. The isolation layer — JWT tenant claims replacing the default-tenant resolver, row filtering — is
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/issues/36">issue #36</a>, next in the queue.</p>
+    </details>
+    <details class="faq">
+      <summary>What happens when the ML model is wrong or down?</summary>
+      <p>Three guards: the champion heuristic always stays as the fallback (a down registry costs a gauge point, not outages); promotion is champion-gated so a bad challenger never serves; and every forecast hour is predicted, never observed — the current hour can't be priced on partial data.</p>
+    </details>
   </div>
 </section>
 
@@ -1207,6 +1302,27 @@ $("btn-reset").addEventListener("click", () => {
 });
 
 buttons();
+
+/* ── compare / strip / faq (quick wins #29-31) ──────────────────── */
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+.compare-col { border: 1px solid rgba(124,108,255,.25); border-radius: 14px; padding: 1.2rem 1.3rem; background: rgba(124,108,255,.05); }
+.compare-col.platform { border-color: rgba(56,225,255,.4); background: rgba(56,225,255,.06); }
+.compare-col h3 { margin: 0 0 .9rem; font-size: 1rem; }
+.compare-row { display: flex; gap: .6rem; padding: .55rem 0; border-top: 1px dashed rgba(255,255,255,.12); font-size: .92rem; }
+.compare-row:first-of-type { border-top: 0; }
+.compare-row .tick { color: #38e1ff; }
+.compare-col.old .compare-row .tick { color: #ff6b81; }
+.compare-row a { color: #38e1ff; text-decoration: none; }
+.compare-row a:hover { text-decoration: underline; }
+.strip { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: center; margin-top: 1.4rem; }
+.strip-item { border: 1px solid rgba(56,225,255,.35); color: #c9f6ff; border-radius: 999px; padding: .38rem .85rem; font-size: .85rem; }
+.strip-item.planned { border-style: dashed; border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.45); }
+details.faq { border: 1px solid rgba(124,108,255,.25); border-radius: 12px; padding: .85rem 1.1rem; margin-bottom: .7rem; background: rgba(124,108,255,.04); }
+details.faq summary { cursor: pointer; font-weight: 600; }
+details.faq[open] summary { color: #38e1ff; }
+details.faq p { margin: .7rem 0 0; font-size: .93rem; color: rgba(255,255,255,.82); }
+details.faq code { font-size: .85em; }
+@media (max-width: 860px) { .compare-grid { grid-template-columns: 1fr; } }
 
 /* ── mermaid architecture diagram ────────────────────────────────── */
 const routeStatus = document.getElementById("route-map-status");
