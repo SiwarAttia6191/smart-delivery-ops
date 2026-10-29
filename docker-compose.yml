@@ -196,9 +196,22 @@ services:
       # enable POSTs on task failure. Empty = log-only (the DAG's fallback
       # logs loudly so the gap stays discoverable).
       AIRFLOW_ALERT_WEBHOOK: ""
+      # ML loop (scheduled retraining): the DAG tasks read these to grain
+      # themselves and reach the tracking server / the city manifest.
+      MLFLOW_TRACKING_URI: http://mlflow:5100
+      CITY: ${CITY:-tunis}
+      OSRM_BASE_URL: http://osrm:5000
     volumes: &airflow-volumes
       - ./dags:/opt/airflow/dags
       - ./data/transform:/opt/transform
+      # Scheduled ML tasks run in-process (fat-worker pattern): ml code is
+      # bind-mounted live (cwd /home/airflow/mlrun), reports land in the
+      # committed evidence dir, and the read-only ./.git gives every run its
+      # exact GIT_SHA. Artifacts flow through the tracking server - no
+      # artifact volume needed here.
+      - ./ml:/home/airflow/mlrun/ml
+      - ./data/benchmarks:/home/airflow/mlrun/data/benchmarks
+      - ./.git:/opt/git:ro
       # LocalExecutor writes task logs into the SCHEDULER's filesystem; the
       # webserver needs the same volume or every "View log" in the UI fails.
       - airflow-logs:/opt/airflow/logs

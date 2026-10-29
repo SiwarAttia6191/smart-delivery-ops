@@ -1,4 +1,4 @@
-.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow ml-benchmark ml-forecast eta-benchmark clean
+.PHONY: setup db-up db-down db-shell seed api test lint typecheck audit smoke dbt airflow airflow-trigger airflow-state ml-serving-trigger ml-retrain-trigger ml-state ml-benchmark ml-forecast eta-benchmark clean
 
 API_PORT ?= 8010
 
@@ -47,6 +47,16 @@ airflow-trigger: ## trigger the warehouse DAG immediately (UI: http://localhost:
 
 airflow-state:   ## show recent runs and task states of the warehouse DAG
 	docker compose exec airflow-scheduler airflow dags list-runs -d warehouse_daily_build
+
+ml-serving-trigger: ## trigger the hourly forecast-serving DAG now (else it fires at :00)
+	docker compose exec airflow-scheduler airflow dags trigger ml_forecast_serving
+
+ml-retrain-trigger: ## trigger the daily retrain/benchmark DAG now (else 04:15 UTC daily)
+	docker compose exec airflow-scheduler airflow dags trigger ml_retrain_benchmark
+
+ml-state:        ## show recent runs of both ML DAGs
+	docker compose exec airflow-scheduler airflow dags list-runs -d ml_forecast_serving
+	docker compose exec airflow-scheduler airflow dags list-runs -d ml_retrain_benchmark
 
 ml-benchmark:    ## run the demand-forecasting benchmark (logs to MLflow, UI :5100)
 	docker compose up -d mlflow

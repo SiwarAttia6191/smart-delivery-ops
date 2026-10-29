@@ -58,14 +58,16 @@ def load_zone_frames() -> dict[tuple[float, float], pd.DataFrame]:
     data — same convention as the benchmark's global reindex.
     """
     engine = create_engine(os.environ["WAREHOUSE_DATABASE_URL"])
-    with engine.connect() as conn:
-        frame = pd.read_sql(
-            text(
-                "SELECT zone_lat, zone_lon, business_date, business_hour, orders "
-                "FROM analytics.mart_demand_timeseries ORDER BY 1, 2, 3, 4"
-            ),
-            conn,
-        )
+    # read_sql gets the ENGINE, not a Connection: on SQLAlchemy 1.4 (the
+    # airflow fat-worker image) pandas treats a Connection as a raw DBAPI
+    # handle and rejects the text() query; an Engine works on 1.4 and 2.0.
+    frame = pd.read_sql(
+        text(
+            "SELECT zone_lat, zone_lon, business_date, business_hour, orders "
+            "FROM analytics.mart_demand_timeseries ORDER BY 1, 2, 3, 4"
+        ),
+        engine,
+    )
     frame["ds"] = pd.to_datetime(frame["business_date"]) + pd.to_timedelta(
         frame["business_hour"], unit="h"
     )
@@ -210,6 +212,11 @@ def main() -> None:
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5100"))
     mlflow.set_experiment("demand_forecasting")
     with mlflow.start_run(run_name="demand_forecast_serving"):
+        # Traceability (same tags the benchmarks set): which code and which
+        # city produced this serving run — the runs table grows hourly once
+        # the Airflow loop is live, so provenance is what keeps it readable.
+        mlflow.set_tag("git_sha", git_sha)
+        mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
         mlflow.log_params(
             {
                 "model": "pooled_lightgbm",

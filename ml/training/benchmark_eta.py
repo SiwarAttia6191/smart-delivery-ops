@@ -47,7 +47,13 @@ import mlflow
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-REPORT_DIR = Path("/ml/benchmarks") if Path("/ml/benchmarks").exists() else Path("data/benchmarks")
+# BENCHMARK_REPORT_DIR (the Airflow ML tasks set it — the fat-worker
+# container's cwd is not the ml image's WORKDIR /ml), else the ml-bench
+# container's bind-mounted /ml/benchmarks, else the repo layout.
+REPORT_DIR = Path(
+    os.environ.get("BENCHMARK_REPORT_DIR")
+    or ("/ml/benchmarks" if Path("/ml/benchmarks").exists() else "data/benchmarks")
+)
 EXPERIMENT = "eta_benchmark"
 REGISTERED_MODEL = "eta_model"
 
@@ -75,28 +81,30 @@ def git_sha() -> str:
 def load_realized_deliveries() -> pd.DataFrame:
     """One row per delivered order: realized duration + quote-time features."""
     engine = create_engine(os.environ["WAREHOUSE_DATABASE_URL"])
-    with engine.connect() as conn:
-        frame = pd.read_sql(
-            text(
-                """
-                SELECT c.order_id,
-                       c.source_created_at,
-                       c.source_created_at_local,
-                       c.distance_km::float8          AS distance_km,
-                       c.pickup_latitude::float8      AS pickup_lat,
-                       c.pickup_longitude::float8     AS pickup_lon,
-                       c.dropoff_latitude::float8     AS dropoff_lat,
-                       c.dropoff_longitude::float8    AS dropoff_lon,
-                       extract(epoch from (d.source_created_at - c.source_created_at)) / 60.0
-                                                      AS duration_min
-                FROM staging.stg_order_events c
-                JOIN staging.stg_order_events d ON d.order_id = c.order_id
-                WHERE c.event_type = 'created'
-                  AND d.event_type = 'status' AND d.status_to = 'delivered'
-                """
-            ),
-            conn,
-        )
+    # read_sql gets the ENGINE, not a Connection: on SQLAlchemy 1.4 (the
+    # airflow fat-worker image) pandas treats a Connection as a raw DBAPI
+    # handle and rejects the text() query; an Engine works on 1.4 and 2.0.
+    frame = pd.read_sql(
+        text(
+            """
+            SELECT c.order_id,
+                   c.source_created_at,
+                   c.source_created_at_local,
+                   c.distance_km::float8          AS distance_km,
+                   c.pickup_latitude::float8      AS pickup_lat,
+                   c.pickup_longitude::float8     AS pickup_lon,
+                   c.dropoff_latitude::float8     AS dropoff_lat,
+                   c.dropoff_longitude::float8    AS dropoff_lon,
+                   extract(epoch from (d.source_created_at - c.source_created_at)) / 60.0
+                                                  AS duration_min
+            FROM staging.stg_order_events c
+            JOIN staging.stg_order_events d ON d.order_id = c.order_id
+            WHERE c.event_type = 'created'
+              AND d.event_type = 'status' AND d.status_to = 'delivered'
+            """
+        ),
+        engine,
+    )
     # source_created_at_local is ALREADY Africa/Tunis naive wall clock
     # (staging: timestamptz AT TIME ZONE). Parsing it with utc=True and
     # tz_convert-ing shifted hour_local +1h — a train/serve skew against
@@ -208,13 +216,15 @@ def main() -> None:
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5100"))
     mlflow.set_experiment(EXPERIMENT)
-    # Region pack (#78): runs are filterable by city across regions.
-    mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
     champion_mae = next(
         (r["metrics"]["mae_overall"] for r in runs if r["name"].startswith("heuristic")), None
     )
     for run in runs:
         with mlflow.start_run(run_name=f"eta_{run['name'].split(' ')[0]}"):
+            # Region pack (#78): runs are filterable by city across regions.
+            # INSIDE the run — a fluent call outside one would START a
+            # dangling auto-named run and collide with the loop below.
+            mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
             mlflow.log_params({"model": run["name"], **snapshot})
             if run["metrics"]:
                 mlflow.log_metrics(run["metrics"])

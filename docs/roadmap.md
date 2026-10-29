@@ -78,14 +78,14 @@ production delivery platform, the gaps are:
 | Millions of orders, years of history | ~1,500 orders / 28 days, backfilled through the real pipeline | models learn from thin data (the benchmark reports say so themselves — "a young deployment"). Only traffic fixes the volume; a longer, noisier backfill + open delivery datasets can widen the window meanwhile. |
 | Auth + multi-tenant SaaS | open API, one deployment = one city (#78) | #28/#35/#36 — the actual **client-onboarding blocker**: JWT + roles, a tenant dimension on the domain tables, per-tenant warehouses. |
 | Versioned migrations, secrets vault | `create_all` schema bootstrap, plaintext env vars | Alembic revision chain + Docker secrets — table stakes for operating, not just demoing. |
-| Scheduled ML retraining | benchmarks + serving run on demand (`docker compose run --rm ml-bench`) | the operational half of M1: an Airflow DAG triggers retrain → benchmark → registry promotion on schedule, so the champion decays honestly instead of silently. |
+| Scheduled ML retraining | ✅ **closed** — `ml_forecast_serving` (@hourly) refreshes the forecast table the surge loop reads; `ml_retrain_benchmark` (04:15 UTC daily, after the warehouse build) re-runs both benchmarks, promotion stays champion-gated | the operational half of M1 is scheduled: the ML loop now decays honestly on a clock instead of waiting for a manual `make ml-benchmark`. |
 | Load-tested, HA, on-call | single Kafka broker, single node, log-only alerts | #76 backlog (route-cache pruning, supply overcount while worker down…) + k6 load numbers + Grafana alert rules. HA/multi-broker is a deployment-topology concern — documented, not simulated. |
 
 **Priority order (portfolio value × product value per unit of effort):**
 
-1. **Scheduled retraining** — small, closes the biggest "it's a demo ML
-   loop" criticism; Airflow and the registry already exist, the DAG just
-   wires them together.
+1. ~~**Scheduled retraining**~~ ✅ **done** — Airflow now runs the ML loop
+   (hourly serving, daily benchmark/promotion); Airflow and the registry
+   existed, the DAG just wires them together.
 2. **Auth + tenancy foundation** (#28/#35/#36) — turns "impressive demo"
    into "onboarding a client is conceivable"; biggest product gap.
 3. **Alembic + secrets** — production credibility baseline; unblocks

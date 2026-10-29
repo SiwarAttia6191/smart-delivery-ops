@@ -26,7 +26,13 @@ import mlflow
 import pandas as pd
 from sqlalchemy import create_engine, text
 
-REPORT_DIR = Path("/ml/benchmarks") if Path("/ml/benchmarks").exists() else Path("data/benchmarks")
+# BENCHMARK_REPORT_DIR (the Airflow ML tasks set it — the fat-worker
+# container's cwd is not the ml image's WORKDIR /ml), else the ml-bench
+# container's bind-mounted /ml/benchmarks, else the repo layout.
+REPORT_DIR = Path(
+    os.environ.get("BENCHMARK_REPORT_DIR")
+    or ("/ml/benchmarks" if Path("/ml/benchmarks").exists() else "data/benchmarks")
+)
 EXPERIMENT = "demand_forecasting"
 
 
@@ -40,15 +46,17 @@ def load_series() -> pd.DataFrame:
     """Global demand series: orders per business-date × local-hour, from the
     warehouse timeseries mart (zoned rows summed; sparse zones aggregate)."""
     engine = create_engine(os.environ["WAREHOUSE_DATABASE_URL"])
-    with engine.connect() as conn:
-        frame = pd.read_sql(
-            text(
-                "SELECT business_date, business_hour, SUM(orders)::int AS orders "
-                "FROM analytics.mart_demand_timeseries "
-                "GROUP BY 1, 2 ORDER BY 1, 2"
-            ),
-            conn,
-        )
+    # read_sql gets the ENGINE, not a Connection: on SQLAlchemy 1.4 (the
+    # airflow fat-worker image) pandas treats a Connection as a raw DBAPI
+    # handle and rejects the text() query; an Engine works on 1.4 and 2.0.
+    frame = pd.read_sql(
+        text(
+            "SELECT business_date, business_hour, SUM(orders)::int AS orders "
+            "FROM analytics.mart_demand_timeseries "
+            "GROUP BY 1, 2 ORDER BY 1, 2"
+        ),
+        engine,
+    )
     frame["ds"] = pd.to_datetime(frame["business_date"]) + pd.to_timedelta(
         frame["business_hour"], unit="h"
     )
@@ -172,10 +180,12 @@ def main() -> None:
 
     mlflow.set_tracking_uri(os.environ.get("MLFLOW_TRACKING_URI", "http://localhost:5100"))
     mlflow.set_experiment(EXPERIMENT)
-    # Region pack (#78): runs are filterable by city across regions.
-    mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
     for run in runs:
         with mlflow.start_run(run_name=f"demand_{run['name'].split(' ')[0]}"):
+            # Region pack (#78): runs are filterable by city across regions.
+            # INSIDE the run — a fluent call outside one would START a
+            # dangling auto-named run and collide with the loop below.
+            mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
             mlflow.log_params(
                 {
                     "model": run["name"],

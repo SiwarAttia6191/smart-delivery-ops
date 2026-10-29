@@ -1,5 +1,31 @@
 FROM apache/airflow:2.10.5-python3.12
 
+# git: the ML tasks stamp every benchmark run with the exact trained code
+# (GIT_SHA via the read-only ./.git mount). libgomp1: LightGBM's OpenMP
+# runtime, absent from the base image (same as the api/ml images).
+USER root
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+USER airflow
+
+# ML tasks live in their own virtualenv — same reasoning as the dbt venv
+# below: pandas' SQL-io layer requires SQLAlchemy >= 2.0, Airflow 2.10 pins
+# 1.4, and no single environment satisfies both. An isolated venv sidesteps
+# the three-way pin fight entirely. Versions mirror infra/docker/Dockerfile.ml
+# so artifacts stay compatible (mlflow 2.19 also needs sqlalchemy <2.1);
+# +psycopg2 URLs serve the harness's create_engine here.
+# prophet wheels bundle the compiled CmdStan model, so no compiler needed.
+RUN python -m venv /home/airflow/ml-venv \
+    && /home/airflow/ml-venv/bin/pip install --no-cache-dir \
+    "mlflow==2.19.*" \
+    "lightgbm>=4.5" \
+    "prophet>=1.1.6" \
+    "pandas>=2.2" \
+    "sqlalchemy>=2.0,<2.1" \
+    "psycopg2-binary>=2.9" \
+    httpx
+
 # dbt lives in its own virtualenv: dbt-core and apache-airflow have history
 # of conflicting transitive pins, and an isolated venv sidesteps the problem
 # entirely while keeping `dbt` on PATH for the DAG's BashOperators.
