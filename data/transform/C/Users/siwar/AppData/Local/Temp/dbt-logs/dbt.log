@@ -1,0 +1,245 @@
+17:44:04.246650 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01be7143e0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01be7153a0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01be75f440>]}
+
+
+============================== 17:44:04.253946 | ef5d5722-c36b-4cec-8444-01ae788e2945 ==============================
+17:44:04.253946 [info ] [MainThread]: Running with dbt=1.12.6
+17:44:04.255172 [debug] [MainThread]: running dbt with arguments {'send_anonymous_usage_stats': 'True', 'use_colors': 'False', 'empty': 'False', 'static_parser': 'True', 'invocation_command': 'dbt build --select assert_delivered_orders_have_assignments --no-use-colors', 'no_print': 'None', 'indirect_selection': 'eager', 'profiles_dir': '/opt/transform', 'log_path': '/opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-logs', 'fail_fast': 'False', 'version_check': 'True', 'introspect': 'True', 'write_json': 'True', 'quiet': 'False', 'cache_selected_only': 'False', 'maximum_seed_size_mib': '1', 'log_cache_events': 'False', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'use_experimental_parser': 'False', 'debug': 'False', 'hints_enabled': 'True', 'log_format': 'default', 'printer_width': '80', 'warn_error': 'None', 'partial_parse': 'True', 'target_path': 'C:/Users/siwar/AppData/Local/Temp/dbt-target2'}
+17:44:04.429539 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'project_id', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01bd30a5d0>]}
+17:44:04.484756 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'adapter_info', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01c02899d0>]}
+17:44:04.486690 [info ] [MainThread]: Registered adapter: postgres=1.9.1
+17:44:04.583127 [debug] [MainThread]: checksum: cac35439f5cfcefa692a1b20e3516df9cf676a7ef17d00e3fd0347876c1511b3, vars: {}, profile: warehouse, target: dev, version: 1.12.6
+17:44:04.585891 [info ] [MainThread]: Unable to do partial parsing because saved manifest not found. Starting full parse.
+17:44:04.586782 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'partial_parser', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01be265d00>]}
+17:44:06.257306 [warn ] [MainThread]: [WARNING][MissingArgumentsPropertyInGenericTestDeprecation]: Deprecated
+functionality
+Found top-level arguments to test `between` defined on
+'mart_demand_by_zone_hour' in package 'smart_delivery_ops'
+(models/marts/marts.yml). Arguments to generic tests should be nested under the
+`arguments` property.
+17:44:06.259078 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'deprecation', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'property_': 'warn', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01b853f890>]}
+17:44:06.565634 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'load_project', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01ba99f710>]}
+17:44:06.843112 [debug] [MainThread]: Wrote artifact WritableManifest to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/manifest.json
+17:44:06.851990 [debug] [MainThread]: Wrote artifact SemanticManifest to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/semantic_manifest.json
+17:44:06.885773 [debug] [MainThread]: Wrote artifact OsiDocument to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/osi_document.json
+17:44:06.955483 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'resource_counts', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01b84b23c0>]}
+17:44:06.956996 [info ] [MainThread]: Found 9 models, 71 data tests, 2 sources, 478 macros
+17:44:06.961259 [info ] [MainThread]: 
+17:44:06.962746 [info ] [MainThread]: Concurrency: 4 threads (target='dev')
+17:44:06.963773 [info ] [MainThread]: 
+17:44:06.964915 [debug] [MainThread]: Acquiring new postgres connection 'master'
+17:44:06.970399 [debug] [ThreadPool]: Acquiring new postgres connection 'list_smart_delivery_warehouse_analytics'
+17:44:06.971300 [debug] [ThreadPool]: Acquiring new postgres connection 'list_smart_delivery_warehouse_staging'
+17:44:07.043530 [debug] [ThreadPool]: Using postgres connection "list_smart_delivery_warehouse_analytics"
+17:44:07.044131 [debug] [ThreadPool]: Using postgres connection "list_smart_delivery_warehouse_staging"
+17:44:07.044803 [debug] [ThreadPool]: On list_smart_delivery_warehouse_analytics: BEGIN
+17:44:07.045558 [debug] [ThreadPool]: On list_smart_delivery_warehouse_staging: BEGIN
+17:44:07.046271 [debug] [ThreadPool]: Opening a new connection, currently in state init
+17:44:07.047004 [debug] [ThreadPool]: Opening a new connection, currently in state init
+17:44:07.082357 [debug] [ThreadPool]: SQL status: BEGIN in 0.035 seconds
+17:44:07.082850 [debug] [ThreadPool]: SQL status: BEGIN in 0.037 seconds
+17:44:07.083599 [debug] [ThreadPool]: Using postgres connection "list_smart_delivery_warehouse_staging"
+17:44:07.084414 [debug] [ThreadPool]: Using postgres connection "list_smart_delivery_warehouse_analytics"
+17:44:07.085239 [debug] [ThreadPool]: On list_smart_delivery_warehouse_staging: /* {"app": "dbt", "dbt_version": "1.12.6", "profile_name": "warehouse", "target_name": "dev", "connection_name": "list_smart_delivery_warehouse_staging"} */
+select
+      'smart_delivery_warehouse' as database,
+      tablename as name,
+      schemaname as schema,
+      'table' as type
+    from pg_tables
+    where schemaname ilike 'staging'
+    union all
+    select
+      'smart_delivery_warehouse' as database,
+      viewname as name,
+      schemaname as schema,
+      'view' as type
+    from pg_views
+    where schemaname ilike 'staging'
+    union all
+    select
+      'smart_delivery_warehouse' as database,
+      matviewname as name,
+      schemaname as schema,
+      'materialized_view' as type
+    from pg_matviews
+    where schemaname ilike 'staging'
+  
+17:44:07.085993 [debug] [ThreadPool]: On list_smart_delivery_warehouse_analytics: /* {"app": "dbt", "dbt_version": "1.12.6", "profile_name": "warehouse", "target_name": "dev", "connection_name": "list_smart_delivery_warehouse_analytics"} */
+select
+      'smart_delivery_warehouse' as database,
+      tablename as name,
+      schemaname as schema,
+      'table' as type
+    from pg_tables
+    where schemaname ilike 'analytics'
+    union all
+    select
+      'smart_delivery_warehouse' as database,
+      viewname as name,
+      schemaname as schema,
+      'view' as type
+    from pg_views
+    where schemaname ilike 'analytics'
+    union all
+    select
+      'smart_delivery_warehouse' as database,
+      matviewname as name,
+      schemaname as schema,
+      'materialized_view' as type
+    from pg_matviews
+    where schemaname ilike 'analytics'
+  
+17:44:07.092391 [debug] [ThreadPool]: SQL status: SELECT 7 in 0.005 seconds
+17:44:07.092974 [debug] [ThreadPool]: SQL status: SELECT 2 in 0.006 seconds
+17:44:07.094919 [debug] [ThreadPool]: On list_smart_delivery_warehouse_analytics: ROLLBACK
+17:44:07.096832 [debug] [ThreadPool]: On list_smart_delivery_warehouse_staging: ROLLBACK
+17:44:07.098355 [debug] [ThreadPool]: On list_smart_delivery_warehouse_analytics: Close
+17:44:07.099090 [debug] [ThreadPool]: On list_smart_delivery_warehouse_staging: Close
+17:44:07.105424 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.106541 [debug] [MainThread]: On master: BEGIN
+17:44:07.107309 [debug] [MainThread]: Opening a new connection, currently in state init
+17:44:07.115249 [debug] [MainThread]: SQL status: BEGIN in 0.008 seconds
+17:44:07.116635 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.117768 [debug] [MainThread]: On master: /* {"app": "dbt", "dbt_version": "1.12.6", "profile_name": "warehouse", "target_name": "dev", "connection_name": "master"} */
+select distinct
+        dependent_namespace.nspname as dependent_schema,
+        dependent_class.relname as dependent_name,
+        referenced_namespace.nspname as referenced_schema,
+        referenced_class.relname as referenced_name
+
+    -- Query for views: views are entries in pg_class with an entry in pg_rewrite, but we avoid
+    -- a seq scan on pg_rewrite by leveraging the fact there is an "internal" row in pg_depend for
+    -- the view...
+    from pg_class as dependent_class
+    join pg_namespace as dependent_namespace on dependent_namespace.oid = dependent_class.relnamespace
+    join pg_depend as dependent_depend on dependent_depend.refobjid = dependent_class.oid
+        and dependent_depend.classid = 'pg_rewrite'::regclass
+        and dependent_depend.refclassid = 'pg_class'::regclass
+        and dependent_depend.deptype = 'i'
+
+    -- ... and via pg_depend (that has a row per column, hence the need for "distinct" above, and
+    -- making sure to exclude the internal row to avoid a view appearing to depend on itself)...
+    join pg_depend as joining_depend on joining_depend.objid = dependent_depend.objid
+        and joining_depend.classid = 'pg_rewrite'::regclass
+        and joining_depend.refclassid = 'pg_class'::regclass
+        and joining_depend.refobjid != dependent_depend.refobjid
+
+    -- ... we can find the tables they query from in pg_class, but excluding system tables. Note we
+    -- don't need need to exclude _dependent_ system tables, because they only query from other
+    -- system tables, and so are automatically excluded by excluding _referenced_ system tables
+    join pg_class as referenced_class on referenced_class.oid = joining_depend.refobjid
+    join pg_namespace as referenced_namespace on referenced_namespace.oid = referenced_class.relnamespace
+        and referenced_namespace.nspname != 'information_schema'
+        and referenced_namespace.nspname not like 'pg\_%'
+
+    order by
+        dependent_schema, dependent_name, referenced_schema, referenced_name;
+17:44:07.125019 [debug] [MainThread]: SQL status: SELECT 2 in 0.006 seconds
+17:44:07.127196 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'runnable_timing', 'label': 'ef5d5722-c36b-4cec-8444-01ae788e2945', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01b85b8440>]}
+17:44:07.128176 [debug] [MainThread]: On master: ROLLBACK
+17:44:07.129126 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.129657 [debug] [MainThread]: On master: BEGIN
+17:44:07.130570 [debug] [MainThread]: SQL status: BEGIN in 0.000 seconds
+17:44:07.131187 [debug] [MainThread]: On master: COMMIT
+17:44:07.131754 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.132353 [debug] [MainThread]: On master: COMMIT
+17:44:07.133146 [debug] [MainThread]: SQL status: COMMIT in 0.000 seconds
+17:44:07.133740 [debug] [MainThread]: On master: Close
+17:44:07.140023 [debug] [Thread-1 (]: Began running node test.smart_delivery_ops.assert_delivered_orders_have_assignments
+17:44:07.141397 [info ] [Thread-1 (]: 1 of 1 START test assert_delivered_orders_have_assignments ..................... [RUN]
+17:44:07.142500 [debug] [Thread-1 (]: Re-using an available connection from the pool (formerly list_smart_delivery_warehouse_staging, now test.smart_delivery_ops.assert_delivered_orders_have_assignments)
+17:44:07.143363 [debug] [Thread-1 (]: Began compiling node test.smart_delivery_ops.assert_delivered_orders_have_assignments
+17:44:07.149241 [debug] [Thread-1 (]: Writing injected SQL for node "test.smart_delivery_ops.assert_delivered_orders_have_assignments"
+17:44:07.164090 [debug] [Thread-1 (]: Began executing node test.smart_delivery_ops.assert_delivered_orders_have_assignments
+17:44:07.181143 [debug] [Thread-1 (]: Writing runtime sql for node "test.smart_delivery_ops.assert_delivered_orders_have_assignments"
+17:44:07.194485 [debug] [Thread-1 (]: Using postgres connection "test.smart_delivery_ops.assert_delivered_orders_have_assignments"
+17:44:07.195731 [debug] [Thread-1 (]: On test.smart_delivery_ops.assert_delivered_orders_have_assignments: BEGIN
+17:44:07.197096 [debug] [Thread-1 (]: Opening a new connection, currently in state closed
+17:44:07.205657 [debug] [Thread-1 (]: SQL status: BEGIN in 0.009 seconds
+17:44:07.206911 [debug] [Thread-1 (]: Using postgres connection "test.smart_delivery_ops.assert_delivered_orders_have_assignments"
+17:44:07.207581 [debug] [Thread-1 (]: On test.smart_delivery_ops.assert_delivered_orders_have_assignments: /* {"app": "dbt", "dbt_version": "1.12.6", "profile_name": "warehouse", "target_name": "dev", "node_id": "test.smart_delivery_ops.assert_delivered_orders_have_assignments"} */
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  -- Business-rule referential test across the event stream: our state machine
+-- forbids reaching 'delivered' without a prior 'assigned' event (pending
+-- orders can only be cancelled). A delivered order with no assignment means
+-- the lifecycle or the pipeline dropped an event.
+
+with delivered as (
+
+    select distinct order_id
+    from "smart_delivery_warehouse"."staging"."stg_order_events"
+    where event_type = 'status'
+      and status_to = 'delivered'
+
+),
+
+assigned as (
+
+    select distinct order_id
+    from "smart_delivery_warehouse"."staging"."stg_order_events"
+    where event_type = 'assigned'
+
+)
+
+select d.order_id
+from delivered d
+left join assigned a on a.order_id = d.order_id
+where a.order_id is null
+  
+  
+      
+    ) dbt_internal_test
+17:44:07.216221 [debug] [Thread-1 (]: SQL status: SELECT 1 in 0.008 seconds
+17:44:07.220573 [debug] [Thread-1 (]: On test.smart_delivery_ops.assert_delivered_orders_have_assignments: ROLLBACK
+17:44:07.221550 [debug] [Thread-1 (]: On test.smart_delivery_ops.assert_delivered_orders_have_assignments: Close
+17:44:07.222611 [error] [Thread-1 (]: 1 of 1 FAIL 47 assert_delivered_orders_have_assignments ........................ [FAIL 47 in 0.08s]
+17:44:07.223449 [debug] [Thread-1 (]: Finished running node test.smart_delivery_ops.assert_delivered_orders_have_assignments
+17:44:07.224353 [debug] [Thread-7 (]: Marking all children of 'test.smart_delivery_ops.assert_delivered_orders_have_assignments' to be skipped because of status 'fail'.  Reason: Got 47 results, configured to fail if != 0.
+17:44:07.226701 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.227333 [debug] [MainThread]: On master: BEGIN
+17:44:07.227894 [debug] [MainThread]: Opening a new connection, currently in state closed
+17:44:07.234456 [debug] [MainThread]: SQL status: BEGIN in 0.006 seconds
+17:44:07.235429 [debug] [MainThread]: On master: COMMIT
+17:44:07.236274 [debug] [MainThread]: Using postgres connection "master"
+17:44:07.236953 [debug] [MainThread]: On master: COMMIT
+17:44:07.237790 [debug] [MainThread]: SQL status: COMMIT in 0.000 seconds
+17:44:07.238386 [debug] [MainThread]: On master: Close
+17:44:07.239252 [debug] [MainThread]: Connection 'master' was properly closed.
+17:44:07.239881 [debug] [MainThread]: Connection 'list_smart_delivery_warehouse_analytics' was properly closed.
+17:44:07.240477 [debug] [MainThread]: Connection 'test.smart_delivery_ops.assert_delivered_orders_have_assignments' was properly closed.
+17:44:07.241190 [info ] [MainThread]: 
+17:44:07.241828 [info ] [MainThread]: Finished running 1 test in 0 hours 0 minutes and 0.28 seconds (0.28s).
+17:44:07.242765 [debug] [MainThread]: Command end result
+17:44:07.317443 [debug] [MainThread]: Wrote artifact WritableManifest to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/manifest.json
+17:44:07.323648 [debug] [MainThread]: Wrote artifact SemanticManifest to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/semantic_manifest.json
+17:44:07.330473 [debug] [MainThread]: Wrote artifact OsiDocument to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/osi_document.json
+17:44:07.341533 [debug] [MainThread]: Wrote artifact RunExecutionResult to /opt/transform/C:/Users/siwar/AppData/Local/Temp/dbt-target2/run_results.json
+17:44:07.342559 [info ] [MainThread]: 
+17:44:07.343328 [info ] [MainThread]: Completed with 1 error, 0 partial successes, and 0 warnings:
+17:44:07.343983 [info ] [MainThread]: 
+17:44:07.344629 [error] [MainThread]: [ERROR]: in test assert_delivered_orders_have_assignments (tests/assert_delivered_orders_have_assignments.sql)
+17:44:07.345348 [error] [MainThread]:   Got 47 results, configured to fail if != 0
+17:44:07.346041 [info ] [MainThread]: 
+17:44:07.346840 [info ] [MainThread]:   compiled code at C:/Users/siwar/AppData/Local/Temp/dbt-target2/compiled/smart_delivery_ops/tests/assert_delivered_orders_have_assignments.sql
+17:44:07.347424 [info ] [MainThread]: 
+17:44:07.348059 [info ] [MainThread]: Done. PASS=0 WARN=0 ERROR=1 SKIP=0 NO-OP=0 REUSED=0 TOTAL=1
+17:44:07.349169 [warn ] [MainThread]: [WARNING][DeprecationsSummary]: Deprecated functionality
+Summary of encountered deprecations:
+- MissingArgumentsPropertyInGenericTestDeprecation: 8 occurrences
+To see all deprecation instances instead of just the first occurrence of each,
+run command again with the `--show-all-deprecations` flag. You may also need to
+run with `--no-partial-parse` as some deprecations are only encountered during
+parsing.
+17:44:07.353612 [debug] [MainThread]: Resource report: {"command_name": "build", "command_success": false, "command_wall_clock_time": 3.2168891, "process_in_blocks": "0", "process_kernel_time": 0.483895, "process_mem_max_rss": "144084", "process_out_blocks": "0", "process_user_time": 4.068754}
+17:44:07.354826 [debug] [MainThread]: Command `dbt build` failed at 17:44:07.354666 after 3.22 seconds
+17:44:07.355735 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01be7153a0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01ba9fe0c0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x7f01bd57bd10>]}
+17:44:07.356475 [debug] [MainThread]: Flushing usage events
+17:44:07.857895 [debug] [MainThread]: An error was encountered while trying to flush usage events

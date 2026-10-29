@@ -97,7 +97,11 @@ def load_realized_deliveries() -> pd.DataFrame:
             ),
             conn,
         )
-    local = pd.to_datetime(frame["source_created_at_local"], utc=True).dt.tz_convert("Africa/Tunis")
+    # source_created_at_local is ALREADY Africa/Tunis naive wall clock
+    # (staging: timestamptz AT TIME ZONE). Parsing it with utc=True and
+    # tz_convert-ing shifted hour_local +1h — a train/serve skew against
+    # eta_model_service (review M2). Parse as the naive local it is.
+    local = pd.to_datetime(frame["source_created_at_local"])
     frame["hour_local"] = local.dt.hour
     frame["dow"] = local.dt.dayofweek
     frame["pickup_zone"] = frame["pickup_lat"].round(2)

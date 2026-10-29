@@ -18,7 +18,7 @@ data/
 ## `transform/` — the dbt project
 
 Sources (`raw.order_events`, landed by the Kafka ingestion consumer) →
-staging (typed, JSON flattened once) → four `analytics.*` marts. The
+staging (typed, JSON flattened once) → seven `analytics.*` marts. The
 medallion layering and every model are documented in the main README under
 "Warehouse transformations". Run with `make dbt`.
 

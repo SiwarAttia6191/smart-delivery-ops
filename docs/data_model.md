@@ -58,7 +58,7 @@ erDiagram
     DRIVER_EVENT {
         int id PK
         int driver_id FK
-        string event_type "availability"
+        string event_type "availability | location_update"
         json payload
         datetime created_at
         datetime published_at
@@ -91,5 +91,8 @@ Notes:
   events; continuous GPS pings remain out of scope.
 - Pickup coordinates are **snapshotted** at creation so later restaurant
   edits never mutate historical orders.
-- Phase 2 warehouse tables (`demand_forecast`, `pricing_history`,
-  `assignment_history`) derive from `order_events`.
+- Phase 2+ warehouse marts (`analytics.*`: daily order summary, demand by
+  zone-hour, driver utilization, driver supply, demand vs supply, pricing
+  history, demand timeseries) derive from the raw event streams via dbt.
+  Demand forecasts land in the OPS database (`demand_forecasts`), written by
+  the serving job — the API has no warehouse connection.

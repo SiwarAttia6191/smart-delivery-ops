@@ -49,11 +49,14 @@ Interactive versions: **/docs** (Swagger UI) and **/redoc** when the API is runn
 |---|---|---|
 | POST | `/pricing/quote` | Fee breakdown for a route (`restaurant_id` **or** pickup lat/lon) |
 
+`demand_ratio` on order creation and quotes is optional: omit it and the API derives it live from the `demand_forecasts` table (observed vs forecast demand for the dropoff zone-hour, floored 0.5 / capped 2.5, neutral 1.0 when no forecast covers the hour).
+
 ## Routes
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/routes/demo` | Return the saved Tunis demo route as a GeoJSON FeatureCollection |
+| GET | `/orders/{id}/route` | The order's captured road geometry (GeoJSON LineString, cached per pickup→dropoff pair); 404 if OSRM was unavailable at creation |
 
 ## Analytics
 

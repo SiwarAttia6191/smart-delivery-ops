@@ -140,7 +140,7 @@ jobs:
   # every job above must pass (docker-build runs on main pushes only).
   ci-ok:
     if: always()
-    needs: [lint, typecheck, audit, test, data-plane-smoke]
+    needs: [lint, typecheck, audit, test, data-plane-smoke, docker-build]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:

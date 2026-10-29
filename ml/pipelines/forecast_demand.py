@@ -29,7 +29,12 @@ import pandas as pd
 from sqlalchemy import create_engine, text
 
 HORIZON_HOURS = 24
-TUNIS_UTC_OFFSET_HOURS = 1  # Africa/Tunis: fixed UTC+1, no DST
+# Africa/Tunis is fixed UTC+1: UTC = local - 1. The forecast row for the
+# local hour ds lands at ds - 1h UTC (the API looks rows up by UTC wall
+# clock). REVIEW LESSON: the original +1 went the WRONG DIRECTION - every
+# forecast was labelled with the demand of the local hour one ahead of the
+# UTC hour the API looked up.
+TUNIS_UTC_OFFSET_HOURS = -1
 LAGS = (1, 2, 24)
 CALENDAR = ("hour", "dow")
 ZONE_FEATURES = ("zone_lat", "zone_lon")
@@ -57,10 +62,22 @@ def load_zone_frames() -> dict[tuple[float, float], pd.DataFrame]:
         frame["business_hour"], unit="h"
     )
     global_start, global_end = frame["ds"].min(), frame["ds"].max()
+    # Anchor the forecast window at wall-clock NOW (review M1): the series
+    # extends to the current Africa/Tunis hour (zeros past the last observed
+    # order) so the 24h horizon always covers the hours the API will actually
+    # look up — not the hours around the last order in the mart.
+    now_local_hour = (
+        pd.Timestamp.now(tz="UTC").tz_convert("Africa/Tunis").floor("h").tz_localize(None)
+    )
+    # -1h: the recursive loop predicts FROM origin+1h, so anchoring at the
+    # previous hour makes the CURRENT hour the first prediction — the hour
+    # derive_demand_ratio actually looks up. Gap hours since the last mart
+    # build are zero-filled (pessimistic lags; corrected on the next run).
+    forecast_origin = max(global_end, now_local_hour - pd.Timedelta(hours=1))
     zones: dict[tuple[float, float], pd.DataFrame] = {}
     for (lat, lon), zone_frame in frame.groupby(["zone_lat", "zone_lon"]):
         series = zone_frame.set_index("ds")["orders"].astype(float)
-        full = pd.date_range(global_start, global_end, freq="h")
+        full = pd.date_range(global_start, forecast_origin, freq="h")
         zones[(float(lat), float(lon))] = series.reindex(full, fill_value=0.0).rename_axis("ds")
     return zones
 
@@ -124,6 +141,8 @@ def store_forecasts(predictions: list[dict]) -> int:
         DO UPDATE SET predicted_orders = EXCLUDED.predicted_orders, created_at = now()
         """
     )
+    window_start = min(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
+    window_end = max(p["ds"] for p in predictions) + pd.Timedelta(hours=TUNIS_UTC_OFFSET_HOURS)
     with engine.begin() as conn:
         conn.execute(
             text(
@@ -151,13 +170,18 @@ def store_forecasts(predictions: list[dict]) -> int:
                     "pred": round(p["predicted_orders"], 3),
                 },
             )
-        # prune AFTER the upsert so stale rows (from any earlier run with
-        # different anchoring) can't survive beside the fresh window
+        # The table is a SNAPSHOT of this run's window, not history: prune
+        # everything outside the fresh window's bounds, computed from the
+        # predictions themselves (a table-derived MAX includes the stale
+        # rows and lets them survive - bit on the first attempt).
         conn.execute(
             text(
-                "DELETE FROM demand_forecasts "
-                "WHERE forecast_hour_utc < now() - '48 hours'::interval"
-            )
+                "DELETE FROM demand_forecasts WHERE forecast_hour_utc < :ws OR forecast_hour_utc > :we"
+            ),
+            {
+                "ws": window_start.tz_localize("UTC").to_pydatetime(),
+                "we": window_end.tz_localize("UTC").to_pydatetime(),
+            },
         )
     return len(predictions)
 

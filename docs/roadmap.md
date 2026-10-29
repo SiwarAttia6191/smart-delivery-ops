@@ -15,27 +15,30 @@
 - [x] CI (lint + tests), Docker Compose, Prometheus metrics endpoint
 - [x] Docs: architecture, data model, API, ML design
 
-## Phase 2 — Data engineering layer 🔜
+## Phase 2 — Data engineering layer ✅
 
 **Goal:** make the system analytics-ready.
 
-- [ ] Event bus (Kafka or RabbitMQ) + `apps/worker` consumer
-- [ ] Streaming ingestion into `data/ingestion`
-- [ ] Warehouse tables (`data/warehouse/schema`) + curated queries
-- [ ] ETL with validation / quality checks (`data/pipeline`)
-- [ ] Raw event archive (`data/raw`)
-- [ ] Optional Airflow / dbt orchestration
+- [x] Event bus (Kafka, KRaft single-node) + outbox relay + warehouse ingest (`apps/worker`)
+- [x] Warehouse raw layer with per-event dedupe (`raw.order_events`, `raw.driver_events`)
+- [x] dbt medallion marts (raw → staging → `analytics.*`)
+- [x] Data-quality gates + source freshness (49 dbt nodes)
+- [x] Airflow orchestration (`warehouse_daily_build`, 03:00 UTC)
+- [x] CI data-plane smoke (relay → Kafka → ingest → raw roundtrip + dbt build)
 
-## Phase 3 — AI / ML intelligence 🔜
+## Phase 3 — AI / ML intelligence ✅
 
 **Goal:** prediction and optimization over the event history.
 
-- [ ] Feature engineering pipeline (`ml/features`)
-- [ ] Hourly demand forecasting by zone (Prophet vs LightGBM benchmark)
-- [ ] ETA regression model replacing the heuristic
-- [ ] Demand-aware dynamic pricing (forecast → `demand_ratio`)
-- [ ] Load-aware driver allocation
-- [ ] Model registry + evaluation + drift monitoring
+- [x] Geo layer: pluggable distance providers benchmarked against OSRM, live shadow mode
+- [x] Driver-supply events (availability outbox) + supply marts
+- [x] Demand forecasting benchmarked in MLflow (seasonal-naive vs LightGBM vs Prophet)
+- [x] Forecast serving: zone-hour forecasts → live `demand_ratio` → surge tiers
+- [x] ETA model benchmarked against the heuristic (LightGBM won, registered `eta_model`)
+- [x] ETA serving from the MLflow registry with heuristic fallback
+- [x] Per-order route geometry (OSRM pair cache, GeoJSON endpoint)
+- [x] Location-update hysteresis + stale-driver sweep (supply follows drivers)
+- [ ] Load-aware driver allocation (next up — needs the demand/supply marts it now has)
 
 ## Phase 4 — Dashboard & BI 🔜
 
