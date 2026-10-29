@@ -167,15 +167,18 @@ def main() -> None:
     synthetic_count = len(pairs) - real_count
 
     osrm = OsrmProvider(osrm_url)
-    ground_truth: list[float] = []
+    # collect (pair, truth) TOGETHER: trimming pairs[:len(truth)] after the
+    # loop misaligned every pair after a mid-run failure (review m3)
+    scored: list[tuple[tuple[float, float, float, float], float]] = []
     skipped = 0
-    for lat1, lon1, lat2, lon2 in pairs:
+    for pair in pairs:
         try:
-            ground_truth.append(osrm.distance_km(lat1, lon1, lat2, lon2))
+            scored.append((pair, osrm.distance_km(*pair)))
         except Exception as exc:  # noqa: BLE001 - one bad pair must not kill the run
             skipped += 1
             print(f"skip pair (OSRM failed: {exc})")
-    pairs = pairs[: len(ground_truth)]
+    pairs = [p for p, _ in scored]
+    ground_truth = [t for _, t in scored]
     if skipped:
         print(f"WARNING: {skipped} pair(s) skipped - OSRM failures reduce coverage")
 

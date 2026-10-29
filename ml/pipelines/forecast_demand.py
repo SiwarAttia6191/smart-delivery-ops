@@ -57,10 +57,18 @@ def load_zone_frames() -> dict[tuple[float, float], pd.DataFrame]:
         frame["business_hour"], unit="h"
     )
     global_start, global_end = frame["ds"].min(), frame["ds"].max()
+    # Anchor the forecast window at wall-clock NOW (review M1): the series
+    # extends to the current Africa/Tunis hour (zeros past the last observed
+    # order) so the 24h horizon always covers the hours the API will actually
+    # look up — not the hours around the last order in the mart.
+    now_local_hour = (
+        pd.Timestamp.now(tz="UTC").tz_convert("Africa/Tunis").floor("h").tz_localize(None)
+    )
+    forecast_origin = max(global_end, now_local_hour)
     zones: dict[tuple[float, float], pd.DataFrame] = {}
     for (lat, lon), zone_frame in frame.groupby(["zone_lat", "zone_lon"]):
         series = zone_frame.set_index("ds")["orders"].astype(float)
-        full = pd.date_range(global_start, global_end, freq="h")
+        full = pd.date_range(global_start, forecast_origin, freq="h")
         zones[(float(lat), float(lon))] = series.reindex(full, fill_value=0.0).rename_axis("ds")
     return zones
 

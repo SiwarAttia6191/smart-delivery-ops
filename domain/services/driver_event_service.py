@@ -118,7 +118,11 @@ def sweep_stale_drivers(session: Session) -> int:
     stale_sweep) and flips to unavailable. Returns the number swept."""
     settings = get_settings()
     cutoff = datetime.now(UTC) - timedelta(minutes=settings.driver_stale_after_minutes)
-    drivers = session.scalars(sa.select(Driver).where(Driver.is_available.is_(True))).all()
+    # FOR UPDATE: a heartbeat committing mid-sweep must not be overwritten
+    # by the sweep's flip (review m2) - the row lock serializes them.
+    drivers = session.scalars(
+        sa.select(Driver).where(Driver.is_available.is_(True)).with_for_update()
+    ).all()
     swept = 0
     for driver in drivers:
         last_event_at = session.scalar(

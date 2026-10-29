@@ -104,7 +104,7 @@ def metrics(db: Session = Depends(get_db)) -> Response:
         "# HELP sdo_outbox_quarantined Events quarantined by the relay (dead letters)",
         "# TYPE sdo_outbox_quarantined gauge",
         f"sdo_outbox_quarantined {_outbox_quarantined(db)}",
-        "# HELP sdo_outbox_last_relay_age_seconds Seconds since the last successful relay (-1 = never)",
+        "# HELP sdo_outbox_last_relay_age_seconds Seconds since the last successful ORDER relay (driver relays do not update it) (-1 = never)",
         "# TYPE sdo_outbox_last_relay_age_seconds gauge",
         f"sdo_outbox_last_relay_age_seconds {_last_relay_age(db)}",
         # ── ETA serving (#69): 1 = the registered eta_model answers order

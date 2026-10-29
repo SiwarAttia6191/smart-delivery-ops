@@ -105,11 +105,23 @@ def get_distance_provider(settings: Settings | None = None) -> DistanceProvider:
 
 def get_shadow_provider(settings: Settings | None = None) -> DistanceProvider | None:
     """Optional shadow challenger: computed on every distance call and logged,
-    never used for business decisions, until the benchmark says otherwise."""
+    never used for business decisions, until the benchmark says otherwise.
+
+    Cached per (provider name, osrm base url): OsrmProvider holds an
+    httpx.Client, and rebuilding it per quote churned sockets every call
+    (review m1)."""
     s = settings or get_settings()
     if not s.distance_shadow_provider:
         return None
-    return build_provider(s.distance_shadow_provider, s)
+    key = (s.distance_shadow_provider, s.osrm_base_url)
+    cached = _shadow_cache.get(key)
+    if cached is None:
+        cached = build_provider(s.distance_shadow_provider, s)
+        _shadow_cache[key] = cached
+    return cached
+
+
+_shadow_cache: dict[tuple[str, str], DistanceProvider] = {}
 
 
 def resolve_distance(
@@ -142,7 +154,9 @@ def resolve_distance(
                 shadow_km,
                 delta,
             )
-        except Exception:  # noqa: BLE001 - a shadow failure must never break the champion
-            logger.exception("shadow provider failed; champion unaffected")
+        except Exception as exc:  # noqa: BLE001 - a shadow failure must never break the champion
+            # plain warning, not a traceback: when OSRM is down this fires per
+            # quote and the stack adds nothing (review m1)
+            logger.warning("shadow provider failed (%s); champion unaffected", exc)
 
     return distance
