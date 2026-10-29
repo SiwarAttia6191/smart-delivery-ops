@@ -593,7 +593,7 @@ footer {
         <div class="ico">🔮</div>
         <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked</span></div>
         <h3>Demand-aware surge</h3>
-        <p>The fee already knows what this hour usually looks like: zone-hour demand forecasts feed the surge tiers automatically, so pricing anticipates the lunch rush instead of reacting to it. Gradient boosting benchmarked against a seasonal-naive baseline (MAE 1.16 vs 2.39).</p>
+        <p>The fee already knows what this hour usually looks like: zone-hour demand forecasts feed the surge tiers automatically, so pricing anticipates the lunch rush instead of reacting to it. The forecast refreshes itself hourly on Airflow; gradient boosting benchmarked against a seasonal-naive baseline (MAE 1.16 vs 2.39).</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/ml/pipelines/forecast_demand.py" target="_blank" rel="noopener">forecast_demand.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/benchmarks" target="_blank" rel="noopener">benchmark reports</a></p>
       </div>
       <div class="card">

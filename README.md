@@ -430,16 +430,31 @@ table → pricing.
 
 ### ⏰ Orchestration (Airflow)
 
-The whole warehouse routine is scheduled: **Airflow 2.10 (LocalExecutor)**
-runs the `warehouse_daily_build` DAG daily at 03:00 — `dbt build` (all 45
-checks) followed by `dbt source freshness`, with retries and exponential
-backoff. UI at `localhost:8081` (admin/admin in dev); CLI shortcuts:
-`make airflow-trigger`, `make airflow-state`.
+The warehouse routine AND the ML loop are scheduled: **Airflow 2.10
+(LocalExecutor)** runs three DAGs — UI at `localhost:8081` (admin/admin in
+dev):
 
+| DAG | schedule | what it does |
+|---|---|---|
+| `warehouse_daily_build` | 03:00 UTC daily | `dbt build` (all 49 checks) + `dbt source freshness` |
+| `ml_forecast_serving` | hourly | retrains the pooled LightGBM and refreshes the next-24h `demand_forecasts` the surge loop reads — the loop can no longer go dormant because nobody ran `make ml-forecast` |
+| `ml_retrain_benchmark` | 04:15 UTC daily (after the warehouse build) | re-runs both benchmarks on the accumulated history; the ETA benchmark's promotion stays champion-gated — a model that can't beat the heuristic never reaches Production |
+
+CLI shortcuts: `make airflow-trigger` / `airflow-state`,
+`make ml-serving-trigger` / `ml-retrain-trigger` / `ml-state`.
+
+- The ML tasks run **in-process** (the same fat-worker pattern as the dbt
+  tasks): the Airflow image carries mlflow/lightgbm/prophet, the `ml/`
+  code is bind-mounted live, and every run stamps its exact `GIT_SHA` from
+  the read-only `.git` mount. The documented production upgrade path is
+  `KubernetesPodOperator` to isolate training from the scheduler.
+- `max_active_runs=1` on the serving DAG — two concurrent forecast
+  snapshots would race their prune windows.
 - dbt lives in an **isolated venv** inside the Airflow image — dbt-core and
   apache-airflow have conflicting transitive pins; the venv sidesteps them.
-- Tasks are **idempotent by construction** (marts fully rebuilt per run), so
-  Airflow's re-run/backfill machinery is safe to lean on.
+- Tasks are **idempotent by construction** (marts fully rebuilt per run,
+  forecast tables are per-run snapshots), so Airflow's re-run/backfill
+  machinery is safe to lean on.
 - The Airflow metadata database lives on the same Postgres instance and is
   self-provisioned on first boot, like everything else in this stack.
 
