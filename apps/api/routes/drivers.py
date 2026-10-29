@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_writer
 from apps.api.schemas.driver import DriverCreate, DriverResponse, DriverUpdate
 from core.exceptions import NotFoundError
 from domain.models import Driver
@@ -16,7 +16,12 @@ from domain.services.driver_event_service import (
 router = APIRouter(prefix="/drivers", tags=["drivers"])
 
 
-@router.post("", response_model=DriverResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=DriverResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_writer)],
+)
 def create_driver(payload: DriverCreate, db: Session = Depends(get_db)) -> Driver:
     driver = Driver(
         name=payload.name,
@@ -52,7 +57,11 @@ def get_driver(driver_id: int, db: Session = Depends(get_db)) -> Driver:
     return driver
 
 
-@router.patch("/{driver_id}", response_model=DriverResponse)
+@router.patch(
+    "/{driver_id}",
+    response_model=DriverResponse,
+    dependencies=[Depends(require_writer)],
+)
 def update_driver(driver_id: int, payload: DriverUpdate, db: Session = Depends(get_db)) -> Driver:
     """Update a driver's live location and availability (heartbeat)."""
     driver = db.get(Driver, driver_id)

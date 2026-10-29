@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db
+from apps.api.deps import get_db, require_writer
 from apps.api.schemas.restaurant import RestaurantCreate, RestaurantResponse
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
@@ -12,7 +12,12 @@ from domain.models import Restaurant
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
 
-@router.post("", response_model=RestaurantResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=RestaurantResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_writer)],
+)
 def create_restaurant(payload: RestaurantCreate, db: Session = Depends(get_db)) -> Restaurant:
     restaurant = Restaurant(
         name=payload.name,

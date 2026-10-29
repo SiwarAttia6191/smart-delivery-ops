@@ -2,6 +2,31 @@
 
 Interactive versions: **/docs** (Swagger UI) and **/redoc** when the API is running.
 
+## Authentication (#28)
+
+Every **mutating** endpoint requires a bearer token; GETs and
+`POST /pricing/quote` (a pure computation) stay open — the demo posture.
+
+```bash
+# OAuth2 password flow (Swagger UI: the green Authorize button)
+curl -X POST localhost:8010/auth/token -d "username=ops&password=ops"
+# → {"access_token": "...", "token_type": "bearer"}
+
+curl -X POST localhost:8010/orders -H "Authorization: Bearer $TOKEN" ...
+```
+
+| role | can | token lifetime |
+|---|---|---|
+| `viewer` | reads only (writes → 403) | 12 h |
+| `ops` | read + create/advance orders, drivers, customers, restaurants | 12 h |
+| `admin` | everything `ops` can (user management arrives with tenancy) | 12 h |
+
+Tokens are HS256 JWTs signed with `AUTH_JWT_SECRET` (default is
+DEV-ONLY — see `.env.example`). Demo users: `python scripts/create_user.py --demo`
+(`admin/admin`, `ops/ops`, `view/view` — dev-only, matching the Airflow
+UI's dev credentials). Unknown user and wrong password return the same
+401, so the endpoint can't be used to enumerate accounts.
+
 ## Health
 
 | Method | Path | Description |

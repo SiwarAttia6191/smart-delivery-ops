@@ -33,16 +33,16 @@ class TestHealth:
 
 
 class TestDriverEvents:
-    def test_registration_and_heartbeat_record_availability_changes(self, client, db):
-        created = client.post("/drivers", json=DRIVER)
+    def test_registration_and_heartbeat_record_availability_changes(self, authed_client, db):
+        created = authed_client.post("/drivers", json=DRIVER)
         assert created.status_code == 201
         driver = created.json()
 
-        unchanged = client.patch(
+        unchanged = authed_client.patch(
             f"/drivers/{driver['id']}",
             json={"latitude": 36.81, "longitude": 10.19, "is_available": True},
         )
-        unavailable = client.patch(
+        unavailable = authed_client.patch(
             f"/drivers/{driver['id']}",
             json={"latitude": 36.81, "longitude": 10.19, "is_available": False},
         )
@@ -58,8 +58,8 @@ class TestDriverEvents:
 
 
 class TestOutboxMetrics:
-    def test_metrics_include_driver_backlog_and_quarantine(self, client, db):
-        driver = client.post("/drivers", json=DRIVER).json()
+    def test_metrics_include_driver_backlog_and_quarantine(self, authed_client, db):
+        driver = authed_client.post("/drivers", json=DRIVER).json()
         event = db.query(DriverEvent).filter_by(driver_id=driver["id"]).one()
         event.quarantined_at = event.created_at
         db.add(
@@ -79,18 +79,18 @@ class TestOutboxMetrics:
         )
         db.commit()
 
-        metrics = client.get("/analytics/metrics").text
+        metrics = authed_client.get("/analytics/metrics").text
 
         assert "sdo_outbox_unpublished 1" in metrics
         assert "sdo_outbox_quarantined 1" in metrics
 
-    def test_metrics_calculate_age_from_driver_relay(self, client, db):
-        driver = client.post("/drivers", json=DRIVER).json()
+    def test_metrics_calculate_age_from_driver_relay(self, authed_client, db):
+        driver = authed_client.post("/drivers", json=DRIVER).json()
         event = db.query(DriverEvent).filter_by(driver_id=driver["id"]).one()
         event.published_at = datetime.now(UTC) - timedelta(seconds=5)
         db.commit()
 
-        metrics = client.get("/analytics/metrics").text
+        metrics = authed_client.get("/analytics/metrics").text
         age = next(
             line
             for line in metrics.splitlines()
@@ -116,10 +116,10 @@ class TestRoutes:
 
 
 class TestOrderFlow:
-    def test_quote_then_create_assign_deliver(self, client, db):
-        ids = _seed(client)
+    def test_quote_then_create_assign_deliver(self, authed_client, db):
+        ids = _seed(authed_client)
 
-        quote = client.post(
+        quote = authed_client.post(
             "/pricing/quote",
             json={
                 "restaurant_id": ids["restaurant"]["id"],
@@ -130,7 +130,7 @@ class TestOrderFlow:
         assert quote["distance_km"] > 0
         assert quote["total"] >= 3.0
 
-        created = client.post(
+        created = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -145,20 +145,24 @@ class TestOrderFlow:
         assert order["delivery_fee"] == quote["total"]
         order_id = order["id"]
 
-        assigned = client.post(f"/orders/{order_id}/assign").json()
+        assigned = authed_client.post(f"/orders/{order_id}/assign").json()
         assert assigned["status"] == "assigned"
         assert assigned["driver_id"] == ids["driver"]["id"]
 
-        in_transit = client.post(f"/orders/{order_id}/status", json={"status": "in_transit"}).json()
+        in_transit = authed_client.post(
+            f"/orders/{order_id}/status", json={"status": "in_transit"}
+        ).json()
         assert in_transit["status"] == "in_transit"
 
-        delivered = client.post(f"/orders/{order_id}/status", json={"status": "delivered"}).json()
+        delivered = authed_client.post(
+            f"/orders/{order_id}/status", json={"status": "delivered"}
+        ).json()
         assert delivered["status"] == "delivered"
         assert delivered["delivered_at"] is not None
         assert len(delivered["events"]) == 4
 
         # Driver was freed and shows as available again.
-        drivers = client.get("/drivers", params={"available": True}).json()
+        drivers = authed_client.get("/drivers", params={"available": True}).json()
         assert any(d["id"] == ids["driver"]["id"] for d in drivers)
         driver_events = (
             db.query(DriverEvent).filter_by(driver_id=ids["driver"]["id"]).order_by(DriverEvent.id)
@@ -170,7 +174,7 @@ class TestOrderFlow:
             "order_delivered",
         ]
 
-    def test_order_route_endpoint_serves_captured_geometry(self, client, db, monkeypatch):
+    def test_order_route_endpoint_serves_captured_geometry(self, authed_client, db, monkeypatch):
         from domain.models import RouteCache
         from domain.services import route_service
 
@@ -183,8 +187,8 @@ class TestOrderFlow:
                 "duration_s": 510.6,
             },
         )
-        ids = _seed(client)
-        created = client.post(
+        ids = _seed(authed_client)
+        created = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -194,7 +198,7 @@ class TestOrderFlow:
             },
         ).json()
 
-        response = client.get(f"/orders/{created['id']}/route")
+        response = authed_client.get(f"/orders/{created['id']}/route")
         assert response.status_code == 200
         assert response.headers["content-type"].startswith("application/geo+json")
         body = response.json()
@@ -208,14 +212,14 @@ class TestOrderFlow:
         response = client.get("/orders/00000000-0000-0000-0000-000000000000/route")
         assert response.status_code == 404
 
-    def test_order_route_without_geometry_404(self, client, monkeypatch):
+    def test_order_route_without_geometry_404(self, authed_client, monkeypatch):
         # Simulate the OSRM outage at creation time (a live OSRM would
         # otherwise capture real geometry for this order).
         from domain.services import route_service
 
         monkeypatch.setattr(route_service, "_fetch_geometry", lambda base_url, key: None)
-        ids = _seed(client)
-        created = client.post(
+        ids = _seed(authed_client)
+        created = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -224,11 +228,11 @@ class TestOrderFlow:
                 "dropoff_longitude": 10.60,
             },
         ).json()
-        response = client.get(f"/orders/{created['id']}/route")
+        response = authed_client.get(f"/orders/{created['id']}/route")
         assert response.status_code == 404
         assert "no route geometry" in response.json()["error"]["message"]
 
-    def test_eta_model_serving_and_gauge(self, client, monkeypatch):
+    def test_eta_model_serving_and_gauge(self, authed_client, monkeypatch):
         # With the model "loaded", order ETAs come from it; the gauge agrees.
         from domain.services import eta_model_service
 
@@ -247,8 +251,8 @@ class TestOrderFlow:
         monkeypatch.setattr(eta_model_service, "_model", FakeModel())
         monkeypatch.setattr(eta_model_service, "_loaded", True)
 
-        ids = _seed(client)
-        created = client.post(
+        ids = _seed(authed_client)
+        created = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -259,19 +263,19 @@ class TestOrderFlow:
         ).json()
         assert created["eta_minutes"] == 25  # round(25.4); heuristic would differ
 
-        metrics = client.get("/analytics/metrics").text
+        metrics = authed_client.get("/analytics/metrics").text
         gauge = next(
             line for line in metrics.splitlines() if line.startswith("sdo_eta_model_serving ")
         )
         assert gauge.rsplit(" ", 1)[1] == "1"
 
-    def test_eta_heuristic_fallback_gauge_zero(self, client):
+    def test_eta_heuristic_fallback_gauge_zero(self, authed_client):
         # No model loaded: heuristic answers, gauge reports the fallback.
         from domain.services import eta_model_service
 
         eta_model_service.reset_state()
-        ids = _seed(client)
-        created = client.post(
+        ids = _seed(authed_client)
+        created = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -282,17 +286,17 @@ class TestOrderFlow:
         ).json()
         assert created["eta_minutes"] == _eta_heuristic_for(created["distance_km"])
 
-        metrics = client.get("/analytics/metrics").text
+        metrics = authed_client.get("/analytics/metrics").text
         gauge = next(
             line for line in metrics.splitlines() if line.startswith("sdo_eta_model_serving ")
         )
         assert gauge.rsplit(" ", 1)[1] == "0"
 
-    def test_quote_without_forecasts_derives_neutral_ratio(self, client):
+    def test_quote_without_forecasts_derives_neutral_ratio(self, authed_client):
         # No demand_forecasts rows: derivation must fall back to 1.0, never
         # spike a customer's fee on missing data.
-        ids = _seed(client)
-        quote = client.post(
+        ids = _seed(authed_client)
+        quote = authed_client.post(
             "/pricing/quote",
             json={
                 "restaurant_id": ids["restaurant"]["id"],
@@ -307,9 +311,9 @@ class TestOrderFlow:
         assert response.status_code == 404
         assert response.json()["error"]["code"] == "not_found"
 
-    def test_invalid_transition_conflict(self, client):
-        ids = _seed(client)
-        order = client.post(
+    def test_invalid_transition_conflict(self, authed_client):
+        ids = _seed(authed_client)
+        order = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -318,13 +322,13 @@ class TestOrderFlow:
                 "dropoff_longitude": 10.24,
             },
         ).json()
-        response = client.post(f"/orders/{order['id']}/status", json={"status": "delivered"})
+        response = authed_client.post(f"/orders/{order['id']}/status", json={"status": "delivered"})
         assert response.status_code == 409
 
-    def test_assign_without_drivers_conflict(self, client):
-        customer = client.post("/customers", json=CUSTOMER).json()
-        restaurant = client.post("/restaurants", json=RESTAURANT).json()
-        order = client.post(
+    def test_assign_without_drivers_conflict(self, authed_client):
+        customer = authed_client.post("/customers", json=CUSTOMER).json()
+        restaurant = authed_client.post("/restaurants", json=RESTAURANT).json()
+        order = authed_client.post(
             "/orders",
             json={
                 "customer_id": customer["id"],
@@ -333,13 +337,13 @@ class TestOrderFlow:
                 "dropoff_longitude": 10.24,
             },
         ).json()
-        response = client.post(f"/orders/{order['id']}/assign")
+        response = authed_client.post(f"/orders/{order['id']}/assign")
         assert response.status_code == 409
         assert response.json()["error"]["code"] == "no_driver_available"
 
-    def test_assigned_status_via_endpoint_is_rejected(self, client):
-        ids = _seed(client)
-        order = client.post(
+    def test_assigned_status_via_endpoint_is_rejected(self, authed_client):
+        ids = _seed(authed_client)
+        order = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -348,14 +352,14 @@ class TestOrderFlow:
                 "dropoff_longitude": 10.24,
             },
         ).json()
-        response = client.post(f"/orders/{order['id']}/status", json={"status": "assigned"})
+        response = authed_client.post(f"/orders/{order['id']}/status", json={"status": "assigned"})
         assert response.status_code == 422  # schema-level guard
 
 
 class TestAnalytics:
-    def test_summary_reflects_delivered_order(self, client):
-        ids = _seed(client)
-        order = client.post(
+    def test_summary_reflects_delivered_order(self, authed_client):
+        ids = _seed(authed_client)
+        order = authed_client.post(
             "/orders",
             json={
                 "customer_id": ids["customer"]["id"],
@@ -364,15 +368,15 @@ class TestAnalytics:
                 "dropoff_longitude": 10.2385,
             },
         ).json()
-        client.post(f"/orders/{order['id']}/assign")
-        client.post(f"/orders/{order['id']}/status", json={"status": "in_transit"})
-        client.post(f"/orders/{order['id']}/status", json={"status": "delivered"})
+        authed_client.post(f"/orders/{order['id']}/assign")
+        authed_client.post(f"/orders/{order['id']}/status", json={"status": "in_transit"})
+        authed_client.post(f"/orders/{order['id']}/status", json={"status": "delivered"})
 
-        summary = client.get("/analytics/summary").json()
+        summary = authed_client.get("/analytics/summary").json()
         assert summary["orders_total"] == 1
         assert summary["orders_by_status"]["delivered"] == 1
         assert summary["delivered_revenue"] == order["delivery_fee"]
         assert summary["average_delivery_minutes"] is not None
 
-        metrics = client.get("/analytics/metrics").text
+        metrics = authed_client.get("/analytics/metrics").text
         assert 'sdo_orders_total{status="delivered"} 1' in metrics

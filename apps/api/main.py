@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from apps.api.routes import (
     analytics,
+    auth,
     city_config,
     customers,
     drivers,
@@ -72,6 +73,7 @@ def create_app() -> FastAPI:
 
     for router in (
         health.router,
+        auth.router,
         customers.router,
         restaurants.router,
         drivers.router,

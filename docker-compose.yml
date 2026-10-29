@@ -15,6 +15,9 @@ services:
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}
       # Which city manifest drives /config and the demo surfaces (#78).
       CITY: ${CITY:-tunis}
+      # JWT signing secret for the auth wall (#28). The default is
+      # DEV-ONLY (documented); real deployments set their own.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:-dev-only-change-me}
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).

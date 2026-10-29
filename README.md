@@ -51,9 +51,10 @@ cd smart-delivery-ops
 # 1) install (Windows: make setup · Linux/macOS: ./scripts/bootstrap.sh)
 make setup
 
-# 2) start PostgreSQL (production database) + seed demo data
+# 2) start PostgreSQL (production database) + seed demo data + demo API users
 make db-up
 make seed
+python scripts/create_user.py --demo   # admin/admin · ops/ops · view/view (dev-only)
 
 # 3) run the API
 make api
@@ -62,12 +63,15 @@ make api
 Open **http://127.0.0.1:8010/docs** for the interactive Swagger UI, then try:
 
 ```bash
-# quote a delivery
+# get a token (every MUTATING endpoint requires one — GETs and /pricing/quote stay open)
+TOKEN=$(curl -s -X POST localhost:8010/auth/token -d "username=ops&password=ops" | python -c "import json,sys; print(json.load(sys.stdin)['access_token'])")
+
+# quote a delivery (open — a pure read)
 curl -X POST localhost:8010/pricing/quote -H "Content-Type: application/json" \
   -d '{"restaurant_id": 1, "dropoff_latitude": 36.8381, "dropoff_longitude": 10.2385, "demand_ratio": 1.3}'
 
-# place + dispatch + deliver an order
-curl -X POST localhost:8010/orders -H "Content-Type: application/json" \
+# place + dispatch + deliver an order (Bearer required)
+curl -X POST localhost:8010/orders -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"customer_id": 1, "restaurant_id": 1, "dropoff_latitude": 36.8381, "dropoff_longitude": 10.2385}'
 curl -X POST localhost:8010/orders/<ORDER_ID>/assign
 curl -X POST localhost:8010/orders/<ORDER_ID>/status -H "Content-Type: application/json" -d '{"status": "in_transit"}'
@@ -115,6 +119,11 @@ The fastest way to feel the whole lifecycle is the interactive docs at
 **http://127.0.0.1:8010/docs** (start the API first: `make api`). Every step
 below was executed against the real API with PostgreSQL behind it — the
 captures are genuine responses, not mockups.
+
+**0 · Authorize** — mutating endpoints need a JWT (#28): click the green
+**Authorize** button, log in with the demo `ops` / `ops` credentials
+(OAuth2 password flow), and every subsequent "Try it out" rides the token.
+The captures below are exactly what you see afterwards.
 
 **1 · Open the docs** — all endpoint groups are listed by tag (health,
 customers, restaurants, drivers, orders, pricing, analytics):
@@ -490,7 +499,7 @@ smart-delivery-ops/
 | 2 | Data engineering — event ingestion, warehouse, ETL | ✅ **done** — dual Kafka outboxes (orders + drivers), warehouse ingestion with per-stream dedupe, dbt medallion marts under 46 data-quality checks, Airflow-scheduled builds |
 | 3 | AI/ML — geo benchmarking, demand forecasting, ETA model | 🟡 **in progress** — geo benchmarked with live shadow mode; demand forecasting serving surge pricing; ETA model serving from the MLflow registry with heuristic fallback (`sdo_eta_model_serving`); multi-region region pack (Paris verified side-by-side) |
 | 4 | Dashboard & BI — KPIs, trends, zone maps, drill-downs | 🔜 |
-| 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection already in) |
+| 5 | Production readiness — auth, caching, migrations, tracing, multi-tenancy | 🟡 partially (Docker, CI/CD, metrics, branch protection, **JWT auth wall on every mutating endpoint** already in) |
 
 Details: [docs/roadmap.md](docs/roadmap.md) · Architecture: [docs/architecture.md](docs/architecture.md)
 

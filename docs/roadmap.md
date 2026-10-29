@@ -59,7 +59,10 @@
 - [x] GitHub Actions CI
 - [x] `/analytics/metrics` Prometheus endpoint
 - [x] Dependabot
-- [ ] Authentication + authorization (JWT, roles)
+- [x] Authentication + authorization (JWT, roles) — OAuth2 password flow
+      (`POST /auth/token`), bcrypt hashes, `ops`/`admin` writer roles via
+      FastAPI dependencies on every mutating endpoint; GETs + quote stay
+      open as the documented demo posture; demo users via `create_user.py`
 - [ ] Redis cache / availability state
 - [ ] Alembic migrations
 - [ ] OpenTelemetry tracing, structured logs to a sink
@@ -76,7 +79,7 @@ production delivery platform, the gaps are:
 | real-life system | this repo today | the gap, and what closes it |
 |---|---|---|
 | Millions of orders, years of history | ~1,500 orders / 28 days, backfilled through the real pipeline | models learn from thin data (the benchmark reports say so themselves — "a young deployment"). Only traffic fixes the volume; a longer, noisier backfill + open delivery datasets can widen the window meanwhile. |
-| Auth + multi-tenant SaaS | open API, one deployment = one city (#78) | #28/#35/#36 — the actual **client-onboarding blocker**: JWT + roles, a tenant dimension on the domain tables, per-tenant warehouses. |
+| Auth + multi-tenant SaaS | JWT auth wall live on every mutating endpoint (#28); one deployment = one city (#78); tenancy columns not yet on the domain tables | #35/#36 — the remaining **client-onboarding blocker**: a tenant dimension on the domain tables + per-tenant warehouses. Sequencing note: tenant_id on EXISTING tables is an ALTER — it waits for Alembic (priority 3 moves ahead of it), doing it by hand would be exactly the unmigrated-schema anti-pattern. |
 | Versioned migrations, secrets vault | `create_all` schema bootstrap, plaintext env vars | Alembic revision chain + Docker secrets — table stakes for operating, not just demoing. |
 | Scheduled ML retraining | ✅ **closed** — `ml_forecast_serving` (@hourly) refreshes the forecast table the surge loop reads; `ml_retrain_benchmark` (04:15 UTC daily, after the warehouse build) re-runs both benchmarks, promotion stays champion-gated | the operational half of M1 is scheduled: the ML loop now decays honestly on a clock instead of waiting for a manual `make ml-benchmark`. |
 | Load-tested, HA, on-call | single Kafka broker, single node, log-only alerts | #76 backlog (route-cache pruning, supply overcount while worker down…) + k6 load numbers + Grafana alert rules. HA/multi-broker is a deployment-topology concern — documented, not simulated. |
@@ -86,8 +89,9 @@ production delivery platform, the gaps are:
 1. ~~**Scheduled retraining**~~ ✅ **done** — Airflow now runs the ML loop
    (hourly serving, daily benchmark/promotion); Airflow and the registry
    existed, the DAG just wires them together.
-2. **Auth + tenancy foundation** (#28/#35/#36) — turns "impressive demo"
-   into "onboarding a client is conceivable"; biggest product gap.
+2. **Auth + tenancy foundation** (#28/#35/#36) — the **auth half shipped**
+   (JWT + roles on every write); the tenancy half (tenant dimension,
+   per-tenant warehouses) comes right after Alembic, which it depends on.
 3. **Alembic + secrets** — production credibility baseline; unblocks
    schema evolution the dashboard phase will want anyway.
 4. **Load test + observability** (#76) — replace "it works" with measured

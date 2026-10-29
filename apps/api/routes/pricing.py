@@ -12,6 +12,8 @@ from domain.services import demand_service, pricing_service
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
 
+# POST by shape but a pure READ: computes a fee, mutates nothing — open
+# under the demo auth posture (#28), like every GET.
 @router.post("/quote", response_model=QuoteResponse)
 def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse:
     """Quote a delivery fee before an order is placed."""
