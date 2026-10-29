@@ -207,11 +207,13 @@ Design notes:
   Kafka header.
 - **Driver supply:** registration, dispatch, delivery/cancellation, and
   heartbeat availability transitions are committed to `driver_events` with
-  the driver row. Location is snapshotted only when availability changes;
-  continuous GPS pings are explicitly out of scope. The resulting supply
-  metric is **last-evented-location supply** - a driver stays counted in the
-  zone of their last transition (issue #60 carries the location-update
-  design that converges it toward current-location supply).
+  the driver row. Location moves beyond a hysteresis threshold (500 m,
+  config) emit their own `location_update` event (#60), so the supply mart
+  tracks a driver **across zones** while continuous GPS pings stay out of
+  scope. Heartbeats that go silent past a stale window (120 min, config)
+  are swept offline by the worker (`stale_sweep`) - silent drivers stop
+  counting as supply instead of being carried forever. The supply metric
+  converges toward current-location supply as update frequency rises.
 - **Warehouse ingestion:** one `ingest` consumer (group `warehouse-ingest`)
   subscribes to both topics and lands them into `raw.order_events` and
   `raw.driver_events` in the **separate warehouse database**. It commits Kafka
