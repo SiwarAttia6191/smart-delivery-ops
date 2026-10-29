@@ -41,8 +41,13 @@ with DAG(
 ) as dag:
     # dbt's log/target dirs default into the bind-mounted project, which
     # belongs to another container's uid — redirect via env vars (there are
-    # no --log-dir/--target-path CLI flags).
-    dbt_env = "DBT_LOG_PATH=/tmp/dbt-logs DBT_TARGET_PATH=/tmp/dbt-target"
+    # no --log-dir/--target-path CLI flags). The credential comes from the
+    # mounted Docker secret (#28 secrets half); profiles.yml reads
+    # DBT_PASSWORD, host runs fall back to its documented dev default.
+    dbt_env = (
+        "DBT_LOG_PATH=/tmp/dbt-logs DBT_TARGET_PATH=/tmp/dbt-target "
+        "DBT_PASSWORD=$(cat /run/secrets/db_password | tr -d '\r')"
+    )
 
     dbt_build = BashOperator(
         task_id="dbt_build",

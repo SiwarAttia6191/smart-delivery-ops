@@ -1,8 +1,23 @@
 """Application settings, loaded from environment variables or a local .env file."""
 
+import urllib.parse
 from functools import lru_cache
+from pathlib import Path
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+def _url_with_password(url: str, password: str) -> str:
+    """Replace the password component of a SQLAlchemy URL (secret-file support)."""
+    parts = urllib.parse.urlsplit(url)
+    host = parts.hostname or ""
+    port = f":{parts.port}" if parts.port else ""
+    userinfo = parts.username or ""
+    if password:
+        userinfo = f"{userinfo}:{urllib.parse.quote(password, safe='')}"
+    netloc = f"{userinfo}@{host}{port}" if userinfo else f"{host}{port}"
+    return urllib.parse.urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 class Settings(BaseSettings):
@@ -45,10 +60,20 @@ class Settings(BaseSettings):
 
     # ── Auth (#28): JWTs guard every mutating endpoint. The demo posture
     # keeps GETs open (aggregates + demo surfaces) — a production profile
-    # closes reads per role. The default secret is DEV-ONLY: always set
+    # closes reads per role. The default secret is DEV-ONLY: real
+    # deployments mount AUTH_JWT_SECRET_FILE (a Docker secret) or set
     # AUTH_JWT_SECRET outside local development.
     auth_jwt_secret: str = "dev-only-change-me"
     auth_token_expire_minutes: int = 720  # 12h — a working demo day
+
+    # ── Secrets (#28 secrets half): credential files mounted as Docker
+    # secrets. When set, the file's contents OVERRIDE the password in both
+    # database URLs / the JWT secret — the inline values in the URLs and
+    # the compose defaults become dev fallbacks, not the source of truth.
+    # Local dev generates them with scripts/ensure_secrets.py; production
+    # mounts vault-managed files — no code change.
+    db_password_file: str | None = None
+    jwt_secret_file: str | None = None
 
     # ── ETA serving (#26/#69): empty = heuristic champion; "registry" loads
     #    models:/eta_model/Production at startup, heuristic fallback on any
@@ -100,6 +125,19 @@ class Settings(BaseSettings):
     )
     kafka_group_id: str = "warehouse-ingest"
     ingest_batch_size: int = 500
+
+    @model_validator(mode="after")
+    def _absorb_secret_files(self) -> "Settings":
+        """Docker-secret files override inline credentials (see secrets block)."""
+        if self.db_password_file:
+            password = Path(self.db_password_file).read_text(encoding="utf-8").strip()
+            if not password:
+                raise ValueError(f"secret file {self.db_password_file} is empty")
+            self.database_url = _url_with_password(self.database_url, password)
+            self.warehouse_database_url = _url_with_password(self.warehouse_database_url, password)
+        if self.jwt_secret_file:
+            self.auth_jwt_secret = Path(self.jwt_secret_file).read_text(encoding="utf-8").strip()
+        return self
 
 
 @lru_cache

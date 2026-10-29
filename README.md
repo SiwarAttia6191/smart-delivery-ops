@@ -202,6 +202,24 @@ make migrate                                        # apply
 The warehouse's raw layer is deliberately NOT migrated: it is the ingest
 worker's stream store, rebuilt from Kafka replay by design.
 
+### 🔐 Secrets (#28)
+
+Credentials live in **gitignored files** (`secrets/`), mounted as Docker
+secrets at `/run/secrets/...` — they no longer travel as plaintext values
+in compose config or `docker inspect` output:
+
+| secret file | consumed by | how |
+|---|---|---|
+| `secrets/db_password.txt` | postgres, api, worker, ingest, migrate, mlflow, airflow, dbt | native `POSTGRES_PASSWORD_FILE`; settings `DB_PASSWORD_FILE` (overrides the URL's password); bash `$(cat ...)` |
+| `secrets/jwt_secret.txt` | api | settings `JWT_SECRET_FILE` (random per deployment — rotations invalidate tokens) |
+| `secrets/airflow_conn.txt` | airflow | `SQL_ALCHEMY_CONN_CMD` (Airflow runs the command and uses stdout) |
+
+`make secrets` (also part of `make setup` / `make db-up` /
+`scripts/bootstrap.sh`) generates the dev defaults idempotently.
+**Production**: mount vault-injected files at the same paths — no code
+change. **Rotation**: update `secrets/db_password.txt`, `ALTER USER` in
+Postgres, restart the consumers; the compose files never change.
+
 Connect with any client — `make db-shell` (psql inside the container), pgAdmin,
 DBeaver, TablePlus — or run SQL directly:
 

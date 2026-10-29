@@ -12,6 +12,7 @@ venv/
 env/
 
 # Environment / secrets
+secrets/
 .env
 
 # Databases

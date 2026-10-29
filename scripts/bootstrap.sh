@@ -7,6 +7,7 @@ python -m venv .venv
 source .venv/bin/activate 2>/dev/null || source .venv/Scripts/activate
 python -m pip install --upgrade pip --quiet
 python -m pip install -r requirements-dev.txt --quiet
+python scripts/ensure_secrets.py
 python scripts/seed_demo_data.py
 
 echo
