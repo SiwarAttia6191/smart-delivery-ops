@@ -25,10 +25,17 @@ from domain.services import tenant_service  # noqa: E402
 
 
 def reset() -> None:
-    # --reset drops ALL tables (alembic_version included) — so the schema
-    # is rebuilt through the migration chain, not create_all, and the
-    # database stays migration-owned afterwards.
+    # --reset drops ALL tables — so the schema is rebuilt through the
+    # migration chain, not create_all, and the database stays
+    # migration-owned afterwards. alembic_version must go TOO: Base.metadata
+    # never contains it, and a leftover head stamp would make
+    # run_migrations() a silent no-op over an empty schema (a latent bug
+    # since the chain landed — #86 was the first flow to run --reset again).
     Base.metadata.drop_all(engine)
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
     from core.database import run_migrations
 
     run_migrations()

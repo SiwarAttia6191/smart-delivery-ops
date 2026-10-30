@@ -22,7 +22,7 @@ analytics in one system.
 | Domain | What it does |
 |---|---|
 | 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
-| 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-stream primary-key dedupe — at-least-once end to end |
+| 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-incarnation primary-key dedupe (a rebuilt ops database can never collide with an older incarnation's ids) — at-least-once end to end |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
 | ⏱️ **ETA estimation** | Served by the MLflow-registered LightGBM model (beat the heuristic 5.2 vs 17.8 min MAE on realized deliveries); calibrated heuristic as automatic fallback |
@@ -455,10 +455,12 @@ The forecast loop is end-to-end: warehouse → training → benchmark → servin
 table → pricing.
 
 - **Training input**: `mart_demand_timeseries` — every zone's hourly demand
-  as a time-ordered series (a young deployment's history is real: the demo
-  backfill, `scripts/backfill_order_history.py`, pushes four weeks of
-  realistic Tunis traffic through the *actual* pipeline — outbox → Kafka →
-  ingest → dbt — so every layer exercises production behavior).
+  as a time-ordered series (the demo backfill,
+  `scripts/backfill_order_history.py`, pushes 180 days of structured Tunis
+  traffic through the *actual* pipeline — outbox → Kafka → ingest → dbt —
+  with drift, weekend/holiday spikes, weather dips, outage hours, per-zone
+  heterogeneity and overdispersed counts, so seasonality has something real
+  to learn and every layer exercises production behavior).
 - **Benchmark** (`make ml-benchmark`, one-shot container): seasonal-naive
   baseline vs LightGBM vs Prophet on a time-based holdout (never random —
   the future must not leak into training). Every run logs params, metrics
@@ -565,6 +567,8 @@ one commit and explains what landed and why.
 15. **`docs: README + live Swagger walkthrough`** — this README, including the step-by-step "Try it out" guide with genuine captures of executed requests.
 
 ## 📖 Documentation
+
+- [`docs/runbook.md`](docs/runbook.md) — recovery story (incarnation tokens), the supply-overcount monitoring note, the ETA hot-reload semantics, and the compose memory budget.
 
 - [Architecture overview](docs/architecture.md) — system diagram and design decisions
 - [API reference](docs/api.md) — endpoint catalogue (also live at `/docs`)
