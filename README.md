@@ -172,6 +172,24 @@ The local port is configurable: `make api API_PORT=9090` (default **8010**, chos
 
 **Docker (PostgreSQL profile):** `docker compose up --build` → API on **http://127.0.0.1:8010**, Postgres on :5434.
 
+## 📊 Dashboard (Phase 4, #27)
+
+A one-page **Streamlit** app over the dbt marts — order volume, fulfillment
+rate, revenue, demand-vs-supply by zone, driver utilization, the ML
+forecast vs actual demand, and the per-tenant breakdown the isolation layer
+(#36) feeds via `mart_tenant_daily`. Read-only by construction: the
+dashboard holds no write path to anything. It ships in the stack:
+
+```bash
+docker compose up -d dashboard      # http://localhost:8501
+```
+
+![Operational dashboard](docs/images/dashboard.png)
+
+The sidebar filters scope every card and chart: a sliding time window and a
+tenant selector. The forecast-vs-actual chart is the one sanctioned read
+outside the marts — the serving DAG writes predictions to the ops DB.
+
 ## 🗄️ Database
 
 The default database is **PostgreSQL 16**, running as a Docker container

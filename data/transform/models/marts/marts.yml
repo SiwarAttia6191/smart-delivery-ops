@@ -97,3 +97,15 @@ models:
               max: 2.0
       - name: fee_per_km
         tests: [non_negative]
+
+  - name: mart_tenant_daily
+    description: "Per-tenant daily funnel: the dashboard tenant filter reads
+      this. Additive - deployment-wide mart grains are unchanged."
+    columns:
+      - name: tenant_id
+        tests: [not_null]
+      - name: business_date
+        tests: [not_null]
+      - name: fulfillment_pct
+        tests:
+          - not_null

@@ -443,6 +443,26 @@ services:
       retries: 12
       start_period: 20s
 
+  dashboard:
+    # Phase 4 KPI dashboard (#27): Streamlit over the dbt marts, one page,
+    # read-only. The tenant filter reads mart_tenant_daily (#36 follow-
+    # through); forecast-vs-actual is the one sanctioned ops-DB read.
+    mem_limit: 512m
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.dashboard
+    ports:
+      - "${DASHBOARD_HOST_PORT:-8501}:8501"
+    environment:
+      BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}
+    secrets: [db_password]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
 volumes:
   pgdata:
   kafkadata:

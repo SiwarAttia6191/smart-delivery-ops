@@ -214,6 +214,7 @@ def build_order(
             tenant_id=tenant_id,
             event_type="created",
             payload={
+                "tenant_id": tenant_id,
                 "customer_id": customer.id,
                 "restaurant_id": restaurant.id,
                 "distance_km": quote.distance_km,
@@ -234,6 +235,7 @@ def build_order(
             tenant_id=tenant_id,
             event_type="assigned",
             payload={
+                "tenant_id": tenant_id,
                 "driver_id": driver.id,
                 "match_distance_km": round(rng.uniform(0.2, 3.5), 2),
                 "vehicle": driver.vehicle,
@@ -246,7 +248,7 @@ def build_order(
             order_id=order.id,
             tenant_id=tenant_id,
             event_type="status",
-            payload={"from": "assigned", "to": "in_transit"},
+            payload={"tenant_id": tenant_id, "from": "assigned", "to": "in_transit"},
             created_at=in_transit_utc,
         )
     )
@@ -255,7 +257,7 @@ def build_order(
             order_id=order.id,
             tenant_id=tenant_id,
             event_type="status",
-            payload={"from": "in_transit", "to": "delivered"},
+            payload={"tenant_id": tenant_id, "from": "in_transit", "to": "delivered"},
             created_at=delivered_utc,
         )
     )
