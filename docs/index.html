@@ -1174,9 +1174,13 @@ if (THREE) {
 
 <script type="module">
 /* ── section reveal on scroll ────────────────────────────────────── */
-/* Scroll-position based (deliberately not IntersectionObserver: some
-   embedded/webview browsers never deliver IO callbacks, which would leave
-   every section stuck at opacity 0 — a scroll listener fires everywhere). */
+/* Position-checked reveal driven by a rAF loop (plus scroll/resize as
+   fast paths). Deliberately not IntersectionObserver and not solely
+   scroll-event based: some embedded/webview browsers never deliver IO
+   callbacks (or scroll events for programmatic scrolls), which would
+   leave every section stuck at opacity 0. rAF demonstrably runs
+   everywhere the page renders; the loop stops itself once every
+   section is revealed. */
 const revealSwooshes = () =>
   document.querySelectorAll(".swoosh:not(.in)").forEach((el) => {
     if (el.getBoundingClientRect().top < innerHeight * 0.92) el.classList.add("in");
@@ -1184,6 +1188,11 @@ const revealSwooshes = () =>
 addEventListener("scroll", revealSwooshes, { passive: true });
 addEventListener("resize", revealSwooshes, { passive: true });
 revealSwooshes();
+const revealLoop = () => {
+  revealSwooshes();
+  if (document.querySelector(".swoosh:not(.in)")) requestAnimationFrame(revealLoop);
+};
+requestAnimationFrame(revealLoop);
 
 /* ── demand-by-hour chart (sample data) ──────────────────────────── */
 const HOURS = [
