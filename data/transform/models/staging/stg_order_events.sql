@@ -30,6 +30,7 @@ select
     kafka_partition,
     kafka_offset,
     -- created events
+    (payload->>'tenant_id')::int                       as tenant_id,
     (payload->>'customer_id')::int                     as customer_id,
     (payload->>'restaurant_id')::int                   as restaurant_id,
     (payload->>'distance_km')::numeric                 as distance_km,
