@@ -1191,8 +1191,12 @@ revealSwooshes();
 const revealLoop = () => {
   revealSwooshes();
   if (document.querySelector(".swoosh:not(.in)")) requestAnimationFrame(revealLoop);
+  else clearInterval(revealTimer);
 };
 requestAnimationFrame(revealLoop);
+/* Timers keep firing where rAF is throttled (backgrounded/occluded tabs);
+   both loops stop themselves once every section is revealed. */
+const revealTimer = setInterval(revealLoop, 400);
 
 /* ── demand-by-hour chart (sample data) ──────────────────────────── */
 const HOURS = [
