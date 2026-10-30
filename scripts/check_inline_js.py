@@ -27,7 +27,9 @@ def main() -> None:
     html = Path(args.page).read_text(encoding="utf-8")
     modules = re.findall(r'<script type="module">(.*?)</script>', html, re.S)
     if not modules:
-        raise SystemExit(f"no inline module scripts found in {args.page} — did the page change shape?")
+        raise SystemExit(
+            f"no inline module scripts found in {args.page} — did the page change shape?"
+        )
 
     failures = 0
     with tempfile.TemporaryDirectory() as tmp:
