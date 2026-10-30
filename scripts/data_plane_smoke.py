@@ -188,6 +188,114 @@ def dbt_build() -> None:
         raise SystemExit(f"dbt build failed with exit {result.returncode}")
 
 
+def rls_proof(engine) -> None:
+    """#36 acceptance: isolation enforced by the DATABASE ENGINE.
+
+    Two tenants, one customer row each. Every session goes through the SAME
+    mechanics the app uses (core.tenancy pins app.current_tenant per
+    transaction via set_config LOCAL) — then we assert the engine, not a
+    WHERE clause, hid the other tenant. Also proves the WITH CHECK side
+    (a session cannot INSERT into someone else's tenant) and the explicit
+    bypass GUC the internal services (relay, benchmarks) rely on.
+    """
+    from core.tenancy import TENANT_GUC, reset_request_tenant, set_request_tenant
+    from domain.models import Customer, Tenant
+
+    step("6 · RLS proof — two tenants, enforced by Postgres")
+    # The bypass engine (the one internal services use) also performs the
+    # SETUP: creating tenants + their rows is a platform operation no
+    # single tenant scope could do (WITH CHECK would reject it).
+    import core.tenancy
+
+    bypass_engine = create_engine(engine.url)  # NOT str(url): that masks the password
+    core.tenancy.mark_tenant_bypass(bypass_engine)
+    with sessionmaker(bind=bypass_engine)() as s:
+        a = Tenant(slug="rls-a", name="RLS proof A")
+        b = Tenant(slug="rls-b", name="RLS proof B")
+        s.add_all([a, b])
+        s.flush()
+        s.add(Customer(tenant_id=a.id, name="cust-a", latitude=36.8, longitude=10.18))
+        s.add(Customer(tenant_id=b.id, name="cust-b", latitude=36.8, longitude=10.18))
+        s.commit()
+        a_id, b_id = a.id, b.id
+
+    # THE PROOF RUNS AS A LEAST-PRIVILEGE ROLE, not the bootstrap superuser:
+    # a superuser (POSTGRES_USER) bypasses RLS by definition, so proving
+    # against it would prove nothing. sdo_smoke is what a real app
+    # deployment connects as.
+    with bypass_engine.connect() as conn:
+        conn.execute(
+            text(
+                "DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sdo_smoke') "
+                "THEN CREATE ROLE sdo_smoke LOGIN PASSWORD 'sdo_smoke'; END IF; END $$"
+            )
+        )
+        conn.execute(text("GRANT USAGE ON SCHEMA public TO sdo_smoke"))
+        conn.execute(
+            text("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO sdo_smoke")
+        )
+        conn.execute(text("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO sdo_smoke"))
+        conn.commit()  # 2.0-style: no explicit commit = rolled back on close
+    # str(URL) masks the password as *** — build from the URL object
+    app_url = engine.url.set(username="sdo_smoke", password="sdo_smoke")
+    app_engine = create_engine(app_url)
+    app_factory = sessionmaker(bind=app_engine)
+
+    def scoped_count(tenant_id: int) -> int:
+        reset = set_request_tenant(tenant_id)
+        try:
+            with app_factory() as s:
+                # a deliberate full scan: only RLS may narrow what comes back
+                return len(s.query(Customer).all())
+        finally:
+            reset_request_tenant(reset)
+
+    seen_a, seen_b, seen_default = scoped_count(a_id), scoped_count(b_id), scoped_count(1)
+    # each scope sees exactly its own row: A→1, B→1, default→1 (the customer
+    # step 3 seeded through the real service). No scope sees a neighbor's row.
+    assert seen_a == 1, f"tenant A should see exactly its 1 customer, saw {seen_a}"
+    assert seen_b == 1, f"tenant B should see exactly its 1 customer, saw {seen_b}"
+    assert seen_default == 1, (
+        f"default tenant should see exactly its 1 seeded customer, saw {seen_default}"
+    )
+    print(f"scoped SELECT: A saw {seen_a}, B saw {seen_b}, default saw {seen_default} — no leaks")
+
+    # WITH CHECK: writing into another tenant's scope must be rejected
+    denied = False
+    reset = set_request_tenant(a_id)
+    try:
+        with app_factory() as s:
+            s.add(Customer(tenant_id=b_id, name="smuggled", latitude=0.0, longitude=0.0))
+            try:
+                s.commit()
+            except Exception:
+                denied = True
+                s.rollback()
+    finally:
+        reset_request_tenant(reset)
+    assert denied, "RLS WITH CHECK must reject a cross-tenant INSERT"
+    print("cross-tenant INSERT: rejected by WITH CHECK")
+
+    # bypass: the flag relay/benchmarks set must see across tenants — also
+    # proven as the least-privilege role (bypass is a GUC, not a privilege).
+    # dispose() first: the scoped phase's connections are pooled WITHOUT
+    # the bypass GUC (connect events fire only on new connections).
+    core.tenancy.mark_tenant_bypass(app_engine)
+    app_engine.dispose()
+    with app_engine.connect() as conn:
+        count = conn.execute(text("SELECT COUNT(*) FROM customers")).scalar_one()
+    app_engine.dispose()
+    assert count >= 3, f"bypass session should see all tenants' customers, saw {count}"
+    print(f"bypass session: saw {count} customers across tenants (>= 3 expected)")
+
+    # and a plain GUC sanity: the app GUC name is exactly what policies use
+    with engine.connect() as conn:
+        conn.execute(text(f"SELECT set_config('{TENANT_GUC}', '1', true)"))
+        val = conn.execute(text(f"SELECT current_setting('{TENANT_GUC}', true)")).scalar_one()
+    assert val == "1", f"GUC roundtrip failed: {val!r}"
+    print("GUC roundtrip ok")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--with-dbt", action="store_true")
@@ -236,6 +344,8 @@ def main() -> None:
     if args.with_dbt:
         step("6 · dbt build over the throwaway warehouse")
         dbt_build()
+
+    rls_proof(engine)
 
     step("SMOKE PASS")
 

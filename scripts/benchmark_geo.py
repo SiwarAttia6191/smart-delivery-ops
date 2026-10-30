@@ -160,6 +160,9 @@ def main() -> None:
     max_event_id = 0
     if not args.no_real:
         engine = create_engine(settings.database_url)
+        import core.tenancy
+
+        core.tenancy.mark_tenant_bypass(engine)  # orders/events are RLS-scoped (#36)
         with Session(engine) as session:
             pairs = real_pairs(session)
             max_event_id = (

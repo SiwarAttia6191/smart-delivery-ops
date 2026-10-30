@@ -14,6 +14,7 @@ via ``config.attributes["db_url"]``.
 from alembic import context
 from sqlalchemy import engine_from_config, pool
 
+import core.tenancy  # noqa: F401  (#36: seed app.current_tenant on migration connections)
 from core.config import get_settings
 from domain.models import Base
 
@@ -51,6 +52,16 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
+        # Migrations are platform operations: they may touch every tenant's
+        # rows (backfills), so the connection claims the explicit bypass GUC
+        # the RLS policies (migration 003) accept. Postgres-only; other
+        # dialects (the SQLite parity test) have no GUCs to set. The
+        # commit matters: exec_driver_sql auto-begins a transaction, and
+        # alembic leaves commit to the caller once the connection is
+        # already in one — the whole upgrade would silently roll back.
+        if connection.dialect.name == "postgresql":
+            connection.exec_driver_sql("SET app.tenant_bypass = '1'")
+            connection.commit()
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

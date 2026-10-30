@@ -12,3 +12,11 @@ class AnalyticsSummary(BaseModel):
     drivers_available: int
     drivers_total: int
     restaurants_active: int
+
+
+class TenantBreakdown(AnalyticsSummary):
+    """Per-tenant slice of the same summary (#36)."""
+
+    tenant_id: int
+    tenant_slug: str
+    tenant_name: str

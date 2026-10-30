@@ -34,7 +34,10 @@ services:
       ENVIRONMENT: docker
       # Inside Docker's network the postgres service listens on its internal
       # port 5432 — the host-side 5434 mapping does not apply here.
-      DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
+      # Runtime role is sdo_app (#36): a least-privilege login the RLS
+      # policies (migration 003) apply to — the bootstrap superuser would
+      # bypass row security by definition. migrate keeps the admin role.
+      DATABASE_URL: postgresql+psycopg://sdo_app:sdo_app@postgres:5432/smart_delivery_ops
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}
       # Which city manifest drives /config and the demo surfaces (#78).
       CITY: ${CITY:-tunis}
@@ -43,7 +46,7 @@ services:
       # scripts/ensure_secrets.py). The inline AUTH_JWT_SECRET default
       # stays as the host-dev fallback only.
       JWT_SECRET_FILE: /run/secrets/jwt_secret
-      DB_PASSWORD_FILE: /run/secrets/db_password
+      DB_PASSWORD_FILE: /run/secrets/app_db_password
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).
@@ -60,7 +63,7 @@ services:
       # logged while the champion remains unaffected.
       DISTANCE_SHADOW_PROVIDER: osrm
       OSRM_BASE_URL: http://osrm:5000
-    secrets: [db_password, jwt_secret]
+    secrets: [app_db_password, jwt_secret]
     depends_on:
       postgres:
         condition: service_healthy
@@ -103,11 +106,14 @@ services:
     command: python -m apps.worker.relay
     environment:
       ENVIRONMENT: docker
-      DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
-      DB_PASSWORD_FILE: /run/secrets/db_password
+      # sdo_app + the explicit tenant_bypass GUC (core/tenancy.py): the
+      # relay publishes EVERY tenant's outbox, so it sees across tenants
+      # through the same flag the RLS policies accept (#36).
+      DATABASE_URL: postgresql+psycopg://sdo_app:sdo_app@postgres:5432/smart_delivery_ops
+      DB_PASSWORD_FILE: /run/secrets/app_db_password
       KAFKA_BOOTSTRAP_SERVERS: kafka:19092
       KAFKA_DRIVERS_TOPIC: drivers.events
-    secrets: [db_password]
+    secrets: [app_db_password]
     depends_on:
       postgres:
         condition: service_healthy
@@ -437,6 +443,8 @@ secrets:
   # paths instead). Docker mounts them read-only at /run/secrets/<name>.
   db_password:
     file: ./secrets/db_password.txt
+  app_db_password:
+    file: ./secrets/app_db_password.txt
   jwt_secret:
     file: ./secrets/jwt_secret.txt
   airflow_conn:

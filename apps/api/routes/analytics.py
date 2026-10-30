@@ -4,10 +4,11 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Response
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from apps.api.deps import get_db
-from apps.api.schemas.analytics import AnalyticsSummary
+from apps.api.schemas.analytics import AnalyticsSummary, TenantBreakdown
+from core.tenancy import reset_request_tenant, set_request_tenant
 from domain.models import (
     Driver,
     DriverEvent,
@@ -17,6 +18,7 @@ from domain.models import (
     OrderStatus,
     RelayDeadLetter,
     Restaurant,
+    Tenant,
 )
 from domain.services import eta_model_service
 
@@ -80,6 +82,36 @@ def summary(db: Session = Depends(get_db)) -> AnalyticsSummary:
     return _summary(db)
 
 
+@router.get("/by-tenant", response_model=list[TenantBreakdown])
+def by_tenant(db: Session = Depends(get_db)) -> list[TenantBreakdown]:
+    """The same operational summary, one slice per tenant (#36).
+
+    This is the operator view the Phase 4 dashboard's tenant filter will
+    consume. RLS-respecting by construction: the tenants table itself is
+    not a tenant-scoped row, and each slice is computed in its OWN session
+    whose transaction pins ``app.current_tenant`` to that tenant — the
+    database engine, not a WHERE clause, decides what each slice sees."""
+    tenants = db.scalars(select(Tenant).order_by(Tenant.id)).all()
+    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+    breakdown: list[TenantBreakdown] = []
+    for tenant in tenants:
+        reset = set_request_tenant(tenant.id)
+        try:
+            with factory() as scoped:
+                summary = _summary(scoped)
+        finally:
+            reset_request_tenant(reset)
+        breakdown.append(
+            TenantBreakdown(
+                tenant_id=tenant.id,
+                tenant_slug=tenant.slug,
+                tenant_name=tenant.name,
+                **summary.model_dump(),
+            )
+        )
+    return breakdown
+
+
 @router.get("/metrics")
 def metrics(db: Session = Depends(get_db)) -> Response:
     """Prometheus text exposition of the operational counters."""
@@ -117,19 +149,38 @@ def metrics(db: Session = Depends(get_db)) -> Response:
     return Response(media_type="text/plain; version=0.0.4", content="\n".join(lines) + "\n")
 
 
+def _scoped_sessions(db: Session):
+    """Yield (tenant_id, session) over every tenant, each session in that
+    tenant's RLS scope. The platform view = the UNION of all tenant scopes,
+    computed THROUGH row security rather than around it (#36)."""
+    factory = sessionmaker(bind=db.get_bind(), expire_on_commit=False)
+    tenants = db.scalars(select(Tenant).order_by(Tenant.id)).all()
+    for tenant in tenants:
+        reset = set_request_tenant(tenant.id)
+        try:
+            with factory() as scoped:
+                yield tenant.id, scoped
+        finally:
+            reset_request_tenant(reset)
+
+
 def _outbox_backlog(db: Session) -> int:
-    """Order and driver events not yet on the bus and not quarantined."""
-    order_backlog = db.scalar(
-        select(func.count(OrderEvent.id)).where(
-            OrderEvent.published_at.is_(None), OrderEvent.quarantined_at.is_(None)
+    """Order and driver events not yet on the bus and not quarantined —
+    summed across every tenant's scope (pipeline health is platform-level)."""
+    total = 0
+    for _tenant_id, scoped in _scoped_sessions(db):
+        order_backlog = scoped.scalar(
+            select(func.count(OrderEvent.id)).where(
+                OrderEvent.published_at.is_(None), OrderEvent.quarantined_at.is_(None)
+            )
         )
-    )
-    driver_backlog = db.scalar(
-        select(func.count(DriverEvent.id)).where(
-            DriverEvent.published_at.is_(None), DriverEvent.quarantined_at.is_(None)
+        driver_backlog = scoped.scalar(
+            select(func.count(DriverEvent.id)).where(
+                DriverEvent.published_at.is_(None), DriverEvent.quarantined_at.is_(None)
+            )
         )
-    )
-    return (order_backlog or 0) + (driver_backlog or 0)
+        total += (order_backlog or 0) + (driver_backlog or 0)
+    return total
 
 
 def _outbox_quarantined(db: Session) -> int:
@@ -139,14 +190,17 @@ def _outbox_quarantined(db: Session) -> int:
 
 
 def _last_relay_age(db: Session) -> float:
-    order_last = db.scalar(select(func.max(OrderEvent.published_at)))
-    driver_last = db.scalar(select(func.max(DriverEvent.published_at)))
-    published_times = [
-        timestamp.replace(tzinfo=UTC) if timestamp.tzinfo is None else timestamp.astimezone(UTC)
-        for timestamp in (order_last, driver_last)
-        if timestamp is not None
-    ]
-    last = max(published_times) if published_times else None
+    last_per_tenant: list = []
+    for _tenant_id, scoped in _scoped_sessions(db):
+        for ts in (
+            scoped.scalar(select(func.max(OrderEvent.published_at))),
+            scoped.scalar(select(func.max(DriverEvent.published_at))),
+        ):
+            if ts is not None:
+                last_per_tenant.append(
+                    ts.replace(tzinfo=UTC) if ts.tzinfo is None else ts.astimezone(UTC)
+                )
+    last = max(last_per_tenant) if last_per_tenant else None
     if last is None:
         return -1.0
     return round((datetime.now(UTC) - last).total_seconds(), 1)

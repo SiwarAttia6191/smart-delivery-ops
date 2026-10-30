@@ -22,7 +22,9 @@ from apps.api.routes import (
     pricing,
     restaurants,
     routes,
+    tenants,
 )
+from apps.api.tenancy_middleware import TenantScopeMiddleware
 from core.config import get_settings
 from core.database import run_migrations
 from core.exceptions import DomainError
@@ -66,6 +68,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    # Tenant scoping (#36): pin the JWT's tid claim for the request so
+    # writes resolve their owner and Postgres RLS filters reads/writes.
+    app.add_middleware(TenantScopeMiddleware)
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
@@ -84,6 +89,7 @@ def create_app() -> FastAPI:
         pricing.router,
         analytics.router,
         routes.router,
+        tenants.router,
         city_config.router,
     ):
         app.include_router(router)

@@ -25,7 +25,7 @@ router = APIRouter(prefix="/drivers", tags=["drivers"])
 )
 def create_driver(payload: DriverCreate, db: Session = Depends(get_db)) -> Driver:
     driver = Driver(
-        tenant_id=tenant_service.default_id(db),
+        tenant_id=tenant_service.context_tenant_id(db),
         name=payload.name,
         vehicle=payload.vehicle,
         latitude=payload.latitude,
