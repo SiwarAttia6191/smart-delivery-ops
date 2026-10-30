@@ -81,6 +81,9 @@ class Settings(BaseSettings):
     eta_model_source: str = ""
     eta_model_name: str = "eta_model"
     eta_model_stage: str = "Production"
+    # Hot reload (m-series, #76): how often the serving path may re-check
+    # the registry's promoted version and swap the model without a restart.
+    eta_model_reload_ttl_seconds: int = 60
     mlflow_tracking_uri: str = "http://localhost:5100"
 
     # ── ETA heuristic (Phase 1; replaced by ML model in Phase 3)
@@ -106,6 +109,10 @@ class Settings(BaseSettings):
     # the worker sweep closes their supply interval so dead drivers stop
     # counting in the supply mart.
     driver_location_update_threshold_m: float = 500.0
+    # m5 (#76): sub-threshold drift that baseline resets (availability
+    # churn) keep masking still trips a location_update past this
+    # cumulative distance from the driver's last real location_update.
+    driver_drift_emission_threshold_m: float = 2000.0
     driver_stale_after_minutes: int = 120
 
     # ── Event pipeline (Phase 2) ───────────────────────────────

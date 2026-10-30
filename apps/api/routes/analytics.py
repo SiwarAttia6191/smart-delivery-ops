@@ -18,6 +18,7 @@ from domain.models import (
     OrderStatus,
     RelayDeadLetter,
     Restaurant,
+    RouteCache,
     Tenant,
 )
 from domain.services import eta_model_service
@@ -145,6 +146,12 @@ def metrics(db: Session = Depends(get_db)) -> Response:
         "# HELP sdo_eta_model_serving 1 when the registered ETA model is serving, 0 when the heuristic fallback answers",
         "# TYPE sdo_eta_model_serving gauge",
         f"sdo_eta_model_serving {1 if eta_model_service.is_serving() else 0}",
+        # ── m7 (#76): route_cache grows with distinct quoted pairs — bounded
+        # in practice, unbounded in principle. The gauge makes the size
+        # visible; the prune policy lives in docs/runbook.md.
+        "# HELP sdo_route_cache_rows Cached route geometries (prune policy: docs/runbook.md)",
+        "# TYPE sdo_route_cache_rows gauge",
+        f"sdo_route_cache_rows {_route_cache_rows(db)}",
     ]
     return Response(media_type="text/plain; version=0.0.4", content="\n".join(lines) + "\n")
 
@@ -162,6 +169,10 @@ def _scoped_sessions(db: Session):
                 yield tenant.id, scoped
         finally:
             reset_request_tenant(reset)
+
+
+def _route_cache_rows(db: Session) -> int:
+    return db.scalar(select(func.count()).select_from(RouteCache)) or 0
 
 
 def _outbox_backlog(db: Session) -> int:

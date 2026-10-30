@@ -79,16 +79,51 @@ def _last_evented_position(session: Session, driver_id: int) -> tuple[float, flo
     return float(lat), float(lon)
 
 
+def _last_location_update_position(session: Session, driver_id: int) -> tuple[float, float] | None:
+    """The driver's most recent LOCATION_UPDATE coordinates — deliberately
+    NOT availability events. Availability transitions carry positions too,
+    but they also RESET the hysteresis baseline if they count (m5, #76): a
+    driver churning availability while drifting sub-threshold distances
+    would otherwise never emit a location_update, no matter how far they
+    end up from their last real one."""
+    row = session.execute(
+        sa.select(DriverEvent.payload)
+        .where(DriverEvent.driver_id == driver_id, DriverEvent.event_type == "location_update")
+        .order_by(DriverEvent.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    if not row:
+        return None
+    lat, lon = row.get("latitude"), row.get("longitude")
+    if lat is None or lon is None:
+        return None
+    return float(lat), float(lon)
+
+
 def record_location_update(session: Session, driver: Driver) -> bool:
     """Emit a location_update event when the driver moved beyond the
     hysteresis threshold (#60) - event volume scales with movement, not with
-    heartbeat frequency. Returns True when an event was emitted."""
+    heartbeat frequency. Returns True when an event was emitted.
+
+    Two tripwires (m5, #76): the movement threshold is measured from the
+    last event of ANY location-bearing type (cheap, resets on availability
+    transitions), AND a secondary cumulative-drift threshold measured from
+    the last real location_update — so sub-threshold drift that baseline
+    resets keep masking still trips at DRIVER_DRIFT_EMISSION_THRESHOLD_M."""
     last = _last_evented_position(session, driver.id)
+    last_update = _last_location_update_position(session, driver.id)
     settings = get_settings()
     if last is not None:
         moved_m = haversine_km(last[0], last[1], driver.latitude, driver.longitude) * 1000.0
         if moved_m <= settings.driver_location_update_threshold_m:
-            return False
+            if last_update is None:
+                return False
+            drifted_m = (
+                haversine_km(last_update[0], last_update[1], driver.latitude, driver.longitude)
+                * 1000.0
+            )
+            if drifted_m <= settings.driver_drift_emission_threshold_m:
+                return False
     session.add(
         DriverEvent(
             tenant_id=driver.tenant_id,

@@ -46,7 +46,8 @@ _REQUIRED_FIELDS = {"event_id", "event_type", "schema_version", "payload"}
 
 _PG_DDL = """
 CREATE TABLE IF NOT EXISTS {table} (
-    event_id BIGINT PRIMARY KEY,
+    incarnation VARCHAR(64) NOT NULL DEFAULT 'legacy',
+    event_id BIGINT,
     {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(30) NOT NULL,
     schema_version INTEGER NOT NULL,
@@ -54,35 +55,41 @@ CREATE TABLE IF NOT EXISTS {table} (
     source_created_at TIMESTAMPTZ,
     ingested_at TIMESTAMPTZ NOT NULL,
     kafka_partition SMALLINT,
-    kafka_offset BIGINT
+    kafka_offset BIGINT,
+    PRIMARY KEY (incarnation, event_id)
 )
 """
 
 _PG_DDL_DEAD = """
 CREATE TABLE IF NOT EXISTS {table} (
-    event_id BIGINT PRIMARY KEY,
+    incarnation VARCHAR(64) NOT NULL DEFAULT 'legacy',
+    event_id BIGINT,
     {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(64),
     payload TEXT,
     error TEXT NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL
+    created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (incarnation, event_id)
 )
 """
 
 _SQLITE_DDL_DEAD = """
 CREATE TABLE IF NOT EXISTS {table} (
-    event_id INTEGER PRIMARY KEY,
+    incarnation VARCHAR(64) NOT NULL DEFAULT 'legacy',
+    event_id INTEGER,
     {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(64),
     payload TEXT,
     error TEXT NOT NULL,
-    created_at TIMESTAMP NOT NULL
+    created_at TIMESTAMP NOT NULL,
+    PRIMARY KEY (incarnation, event_id)
 )
 """
 
 _SQLITE_DDL = """
 CREATE TABLE IF NOT EXISTS {table} (
-    event_id INTEGER PRIMARY KEY,
+    incarnation VARCHAR(64) NOT NULL DEFAULT 'legacy',
+    event_id INTEGER,
     {entity_column} {entity_type} NOT NULL,
     event_type VARCHAR(30) NOT NULL,
     schema_version INTEGER NOT NULL,
@@ -90,7 +97,8 @@ CREATE TABLE IF NOT EXISTS {table} (
     source_created_at VARCHAR(64),
     ingested_at TIMESTAMP NOT NULL,
     kafka_partition INTEGER,
-    kafka_offset BIGINT
+    kafka_offset BIGINT,
+    PRIMARY KEY (incarnation, event_id)
 )
 """
 
@@ -123,7 +131,18 @@ def _parse_message(value: bytes | str | None, entity_id_field: str) -> dict[str,
             str(raw)[:120],
         )
         return None
+    # Incarnation token (m4, #76): deployments post-#76 stamp every wire
+    # message; anything without one is a legacy event and dedupes under
+    # the 'legacy' incarnation exactly as before.
+    incarnation = raw.get("incarnation", "legacy")
+    if not isinstance(incarnation, str) or not incarnation or len(incarnation) > 64:
+        logger.warning(
+            "dropping malformed event (incarnation must be a 1-64 char string): %r",
+            str(raw)[:120],
+        )
+        return None
     record = {
+        "incarnation": incarnation,
         "event_id": raw["event_id"],
         "event_type": raw["event_type"],
         "schema_version": int(raw["schema_version"]),
@@ -233,10 +252,12 @@ class RawEventStore:
         conn.execute(
             text(
                 f"INSERT INTO {self._dead_letter_table()} "
-                f"(event_id, {self._entity_column}, event_type, payload, error, created_at) "
-                f"VALUES (:event_id, :{self._entity_column}, :event_type, :payload, :error, :created_at)"
+                f"(incarnation, event_id, {self._entity_column}, event_type, payload, error, created_at) "
+                "VALUES (:incarnation, :event_id, "
+                f":{self._entity_column}, :event_type, :payload, :error, :created_at)"
             ),
             {
+                "incarnation": record.get("incarnation", "legacy"),
                 "event_id": record["event_id"],
                 self._entity_column: record[self._entity_column],
                 "event_type": (record.get("event_type") or "unknown")[:64],
@@ -284,12 +305,13 @@ class RawEventStore:
                 # silently swallow NOT NULL/CHECK violations too.)
                 stmt = text(
                     f"INSERT INTO {self._qualified()} "
-                    f"(event_id, {self._entity_column}, event_type, schema_version, payload, "
+                    f"(incarnation, event_id, {self._entity_column}, event_type, schema_version, payload, "
                     "source_created_at, ingested_at, kafka_partition, kafka_offset) "
-                    f"VALUES (:event_id, :{self._entity_column}, :event_type, :schema_version, "
+                    "VALUES (:incarnation, :event_id, "
+                    f":{self._entity_column}, :event_type, :schema_version, "
                     ":payload, :source_created_at, :ingested_at, "
                     ":kafka_partition, :kafka_offset) "
-                    "ON CONFLICT (event_id) DO NOTHING"
+                    "ON CONFLICT (incarnation, event_id) DO NOTHING"
                 )
                 try:
                     # SAVEPOINT: Postgres aborts the WHOLE transaction on a

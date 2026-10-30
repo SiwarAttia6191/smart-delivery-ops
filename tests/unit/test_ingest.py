@@ -34,10 +34,13 @@ def make_driver_store() -> RawDriverEventStore:
     return RawDriverEventStore("sqlite://", schema=None, engine=engine)
 
 
-def wire_record(event_id: int = 1, event_type: str = "created") -> bytes:
+def wire_record(
+    event_id: int = 1, event_type: str = "created", incarnation: str | None = None
+) -> bytes:
     return json.dumps(
         {
             "schema_version": 1,
+            **({"incarnation": incarnation} if incarnation else {}),
             "event_id": event_id,
             "order_id": f"ORD-{event_id}",
             "event_type": event_type,
@@ -47,10 +50,13 @@ def wire_record(event_id: int = 1, event_type: str = "created") -> bytes:
     ).encode("utf-8")
 
 
-def driver_wire_record(event_id: int = 1, driver_id: int = 17) -> bytes:
+def driver_wire_record(
+    event_id: int = 1, driver_id: int = 17, incarnation: str | None = None
+) -> bytes:
     return json.dumps(
         {
             "schema_version": 1,
+            **({"incarnation": incarnation} if incarnation else {}),
             "event_id": event_id,
             "driver_id": driver_id,
             "event_type": "availability",
@@ -138,6 +144,33 @@ class TestRawEventStore:
         assert first is not None and replay is not None
         assert store.store([first]) == (1, 0)
         assert store.store([replay]) == (0, 0)  # replay is a no-op
+
+    def test_same_event_id_different_incarnation_both_land(self):
+        """m4 (#76): the raw layer dedupes on (incarnation, event_id) — a
+        rebuilt ops database (fresh sequences, colliding id ranges) must
+        NOT have its events silently dropped as 'replays'."""
+        store = make_store()
+        store.ensure()
+        legacy = parse_message(wire_record(event_id=1))
+        rebuilt = parse_message(wire_record(event_id=1, incarnation="a" * 32))
+        assert legacy is not None and rebuilt is not None
+        assert store.store([legacy]) == (1, 0)
+        assert store.store([rebuilt]) == (1, 0)  # NOT deduped away
+        with store._engine.connect() as conn:
+            rows = conn.execute(
+                text("SELECT incarnation, event_id FROM order_events ORDER BY incarnation")
+            ).all()
+        assert rows == [("a" * 32, 1), ("legacy", 1)]
+
+    def test_missing_incarnation_defaults_to_legacy(self):
+        record = parse_message(wire_record(event_id=1))
+        assert record is not None
+        assert record["incarnation"] == "legacy"
+
+    def test_malformed_incarnation_rejected(self):
+        broken = json.loads(wire_record(event_id=1))
+        broken["incarnation"] = "x" * 100
+        assert parse_message(json.dumps(broken).encode()) is None
 
     def test_batch_store_with_partial_duplicates(self):
         store = make_store()

@@ -3,19 +3,22 @@ version: 2
 models:
   - name: stg_order_events
     description: Typed, flattened view over the raw event log. The only JSON
-      unwrapping in the project happens here.
+      unwrapping in the project happens here. event_id is unique per
+      incarnation (the composite uniqueness is asserted by the singular
+      tests, since two ops incarnations may legitimately reuse id ranges).
     columns:
       - name: event_id
-        tests: [unique, not_null]
+        tests: [not_null]
       - name: order_id
         tests: [not_null]
       - name: event_type
         tests: [not_null]
   - name: stg_driver_events
     description: Typed, flattened view over raw driver availability events.
+      event_id is unique per incarnation (see stg_order_events).
     columns:
       - name: event_id
-        tests: [unique, not_null]
+        tests: [not_null]
       - name: driver_id
         tests: [not_null]
       - name: event_type
