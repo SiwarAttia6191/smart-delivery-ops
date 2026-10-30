@@ -45,6 +45,7 @@ from domain.models import DriverEvent, DriverRelayDeadLetter
 from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
+from domain.services import deployment_service
 from domain.services.driver_event_service import sweep_stale_drivers
 
 logger = logging.getLogger("worker.relay")
@@ -137,11 +138,25 @@ class KafkaEventPublisher:
         return failed
 
 
+# Incarnation token (m4, #76): stamped onto every outgoing wire message;
+# the raw layer dedupes on (incarnation, event_id), so a rebuilt ops
+# database (fresh id sequences) can never collide with an older
+# incarnation's rows. Set at boot from deployment_state; tests and
+# legacy consumers see the 'legacy' default.
+_INCARNATION = "legacy"
+
+
+def set_incarnation(token: str) -> None:
+    global _INCARNATION
+    _INCARNATION = token or "legacy"
+
+
 def event_record(event: OrderEvent) -> dict:
     """Wire format for the orders.events topic. Bump SCHEMA_VERSION on any
     breaking change so downstream consumers can branch on it."""
     return {
         "schema_version": SCHEMA_VERSION,
+        "incarnation": _INCARNATION,
         "event_id": event.id,
         "order_id": event.order_id,
         "event_type": event.event_type,
@@ -154,6 +169,7 @@ def driver_event_record(event: DriverEvent) -> dict:
     """Wire format for the drivers.events topic."""
     return {
         "schema_version": SCHEMA_VERSION,
+        "incarnation": _INCARNATION,
         "event_id": event.id,
         "driver_id": event.driver_id,
         "event_type": event.event_type,
@@ -321,6 +337,11 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
     # pool_pre_ping: recycle stale pooled connections after a Postgres restart
     # instead of crashing the worker with an OperationalError.
     engine = create_engine(s.database_url, pool_pre_ping=True)
+    # Resolve the deployment's incarnation token once (m4, #76) — it rides
+    # on every wire message the relay produces from here on.
+    with sessionmaker(bind=engine)() as boot_session:
+        set_incarnation(deployment_service.incarnation_for(boot_session))
+        boot_session.commit()
     # The relay publishes EVERY tenant's outbox (#36): mark the explicit
     # cross-tenant GUC — forced RLS would otherwise hide all but the
     # default tenant's events from this engine's sessions.

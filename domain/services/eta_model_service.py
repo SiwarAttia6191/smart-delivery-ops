@@ -16,6 +16,7 @@ the tz database (zoneinfo), never a fixed offset: DST-safe by construction.
 """
 
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,58 @@ logger = logging.getLogger(__name__)
 _model: Any | None = None
 _loaded: bool = False
 _load_error: str | None = None
+_loaded_version: str | None = None  # registry version currently serving
+_last_version_check: float | None = None  # monotonic timestamp of the last TTL-gated check
 
 
 def is_serving() -> bool:
     return _loaded
+
+
+def _registry_version() -> str | None:
+    """The promoted registry version's id, or None on ANY failure — the
+    check is best-effort by design: an unreachable registry keeps the
+    currently loaded model answering instead of breaking it."""
+    try:
+        import mlflow
+        from mlflow.tracking import MlflowClient
+
+        settings = get_settings()
+        mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
+        versions = MlflowClient().get_latest_versions(
+            settings.eta_model_name, stages=[settings.eta_model_stage]
+        )
+        return versions[0].version if versions else None
+    except Exception:  # noqa: BLE001 - fail-open: the loaded model keeps serving
+        return None
+
+
+def refresh_if_stale() -> None:
+    """Hot reload (m-series, #76): swap in a newly promoted Production
+    version WITHOUT an API restart. TTL-gated (eta_model_reload_ttl_seconds)
+    so the check costs one lightweight registry call per TTL window at most,
+    and only on the serving path. Never raises; a failed reload keeps the
+    previous model (or the heuristic) answering."""
+    global _last_version_check
+    settings = get_settings()
+    if settings.eta_model_source != "registry":
+        return
+    now = time.monotonic()
+    if (
+        _last_version_check is not None
+        and now - _last_version_check < settings.eta_model_reload_ttl_seconds
+    ):
+        return
+    _last_version_check = now
+    version = _registry_version()
+    if version is None or version == _loaded_version:
+        return
+    logger.info(
+        "ETA model registry version changed (%s -> %s); reloading without restart",
+        _loaded_version,
+        version,
+    )
+    load_from_registry()
 
 
 def load_from_registry() -> None:
@@ -68,6 +117,7 @@ def load_from_registry() -> None:
             booster_file = artifact_dir / "model.txt"  # older native name
         _model = lgb.Booster(model_file=str(booster_file))
         _loaded = True
+        _loaded_version = versions[0].version
         logger.info(
             "ETA model loaded from registry: %s (version %s)",
             source,
@@ -80,8 +130,9 @@ def load_from_registry() -> None:
 
 def reset_state() -> None:
     """Test hook: clear the loaded model between tests."""
-    global _model, _loaded, _load_error
+    global _model, _loaded, _load_error, _loaded_version, _last_version_check
     _model, _loaded, _load_error = None, False, None
+    _loaded_version, _last_version_check = None, None
 
 
 def build_features(
@@ -114,7 +165,10 @@ def estimate_eta_minutes(
     dropoff_lon: float,
     now: datetime | None = None,
 ) -> int | None:
-    """Model-backed ETA; None means 'fall back to the heuristic'."""
+    """Model-backed ETA; None means 'fall back to the heuristic'. The
+    TTL-gated registry check runs first so a promotion serves within the
+    TTL window instead of waiting for a restart."""
+    refresh_if_stale()
     if not _loaded or _model is None:
         return None
     now = now or datetime.now(UTC)

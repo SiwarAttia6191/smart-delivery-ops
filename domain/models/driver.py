@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, Float, ForeignKey, String
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.models.base import Base
@@ -22,7 +22,9 @@ class Driver(Base):
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
-    created_at: Mapped[datetime] = mapped_column(default=_utcnow)
+    # tz-aware like every other timestamp (m5 sweep correctness relied on
+    # server UTC with the naive column — migration 004 converts the live data)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"<Driver {self.id} {self.name!r} available={self.is_available}>"

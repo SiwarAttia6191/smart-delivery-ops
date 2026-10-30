@@ -1,5 +1,6 @@
 services:
   migrate:
+    mem_limit: 512m
     # One-shot schema bootstrap (Phase 5, #28): applies the Alembic chain
     # to the ops database. api and worker wait for it — the old
     # create_all-at-startup could never ALTER an existing table, which is
@@ -23,6 +24,7 @@ services:
     restart: "no"
 
   api:
+    mem_limit: 640m
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.api
@@ -72,6 +74,7 @@ services:
     restart: unless-stopped
 
   postgres:
+    mem_limit: 1g
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: smartops
@@ -98,6 +101,7 @@ services:
     restart: unless-stopped
 
   worker:
+    mem_limit: 384m
     # Same image as the API — only the entrypoint differs. Relays the
     # order_events outbox onto the Kafka bus (see apps/worker/relay.py).
     build:
@@ -126,6 +130,7 @@ services:
     restart: unless-stopped
 
   ingest:
+    mem_limit: 512m
     # Same image as the API — warehouse leg of the pipeline: subscribes to
     # orders.events and lands events into the raw layer of the separate
     # warehouse database (see apps/worker/ingest.py). Offsets commit only
@@ -183,6 +188,7 @@ services:
         osrm-customize /data/$$EXTRACT-latest.osrm
 
   osrm:
+    mem_limit: 1g
     # Road-network routing service (the benchmark challenger). Needs the
     # prepared data from osrm-prepare; serves on host port 5000 (env-tunable
     # for a side-by-side second region). No healthcheck - the image ships no
@@ -197,6 +203,7 @@ services:
       - ${OSRM_DATA_DIR:-./data/osrm}:/data
 
   dbt:
+    mem_limit: 512m
     # Transformation layer: staging + marts over the warehouse raw layer.
     # On-demand only (not part of `up -d`): docker compose run --rm dbt build
     # Official dbt image — local Python is 3.14, dbt needs <= 3.12.
@@ -280,6 +287,7 @@ services:
         condition: service_healthy
 
   airflow-webserver:
+    mem_limit: 640m
     # Airflow UI on host 8081 (8080 is a common conflict): trigger runs, watch
     # task logs, inspect the dbt task graph.
     build:
@@ -297,6 +305,7 @@ services:
     restart: unless-stopped
 
   airflow-scheduler:
+    mem_limit: 1g
     # Runs the warehouse_daily_build DAG on schedule (03:00 daily) and
     # executes tasks locally via LocalExecutor.
     build:
@@ -312,6 +321,7 @@ services:
     restart: unless-stopped
 
   mlflow:
+    mem_limit: 640m
     # MLflow tracking server (Phase 3, issue #41): experiment runs for the
     # forecasting/ETA benchmark harness, backed by a self-provisioned
     # `mlflow` database on the shared Postgres instance. Artifacts land in
@@ -370,6 +380,7 @@ services:
         condition: service_healthy
 
   kafka-init:
+    mem_limit: 128m
     # One-shot topic provisioning. Production disables auto-create (typos
     # would silently produce to dead topics, partition counts drift
     # uncontrolled) and declares topics explicitly — we do the same even in
@@ -389,6 +400,7 @@ services:
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:19092 --create --if-not-exists --topic drivers.events --partitions 3 --replication-factor 1
 
   kafka:
+    mem_limit: 768m
     # Official Apache Kafka image, KRaft mode (no ZooKeeper) — a single node
     # acting as both broker and controller, which is all a dev/demo stack needs.
     # Two listeners: containers reach it as kafka:19092, host tools (kcat,
