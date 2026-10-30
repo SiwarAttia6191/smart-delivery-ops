@@ -35,6 +35,11 @@ def _tenant_names() -> dict[int, str]:
 
 
 @st.cache_data(ttl=60)
+def _tenant_daily() -> pd.DataFrame:
+    return queries.tenant_daily(queries.warehouse_engine())
+
+
+@st.cache_data(ttl=60)
 def _zones() -> pd.DataFrame:
     return queries.demand_supply_by_zone(queries.warehouse_engine())
 
@@ -84,9 +89,33 @@ with st.sidebar:
     tenant_id = tenant_options[tenant_choice]
 
 # ── KPI cards (with previous-window deltas) ──────────────────────────────
-window = scoped
+# The tenant filter is REAL: a selected tenant scopes every card and the
+# volume/revenue charts to mart_tenant_daily; "All tenants" reads the
+# deployment-wide daily summary.
 prev_start = cutoff - pd.Timedelta(days=span)
-previous = daily[(dates >= prev_start) & (dates < cutoff)]
+prev_slice = (dates >= prev_start) & (dates < cutoff)
+if tenant_id is None:
+    window = scoped
+    previous = daily[prev_slice]
+    volume = window[["order_date", "orders_created", "orders_delivered", "revenue"]].rename(
+        columns={"orders_created": "Created", "orders_delivered": "Delivered"}
+    )
+else:
+    t_all = _tenant_daily()
+    t_dates = pd.to_datetime(t_all["business_date"])
+    window = t_all[(t_all["tenant_id"] == tenant_id) & (t_dates >= cutoff)].rename(
+        columns={
+            "business_date": "order_date",
+            "orders": "orders_created",
+            "delivered": "orders_delivered",
+        }
+    )
+    previous = t_all[
+        (t_all["tenant_id"] == tenant_id) & (t_dates >= prev_start) & (t_dates < cutoff)
+    ].rename(columns={"orders": "orders_created", "delivered": "orders_delivered"})
+    volume = window[["order_date", "orders_created", "orders_delivered", "revenue"]].rename(
+        columns={"orders_created": "Created", "orders_delivered": "Delivered"}
+    )
 
 
 def _kpi(label, current: float, prev: float, fmt="{:,.0f}", lower_is_better=False):
@@ -124,9 +153,7 @@ st.divider()
 left, right = st.columns([3, 2])
 with left:
     st.subheader("Daily volume")
-    vol = window.set_index(pd.to_datetime(window["order_date"]))[
-        ["orders_created", "orders_delivered"]
-    ]
+    vol = volume.set_index(pd.to_datetime(volume["order_date"]))[["Created", "Delivered"]]
     st.area_chart(vol)
 with right:
     st.subheader("Daily revenue")
@@ -141,9 +168,17 @@ with zcol:
     if tenant_id is not None:
         st.caption("zone view is deployment-wide (marts grain on zones)")
     if not zones.empty:
-        top = zones.head(12)
+        top = zones.head(12).copy()
         top["zone"] = top["zone_lat"].astype(str) + ", " + top["zone_lon"].astype(str)
-        st.bar_chart(top.set_index("zone")[["orders", "avg_available_drivers"]])
+        # two separately-scaled charts: an 8-driver fleet next to thousands
+        # of orders would render the supply bars invisible on a shared axis
+        zc1, zc2 = st.columns(2)
+        with zc1:
+            st.caption("Orders")
+            st.bar_chart(top.set_index("zone")[["orders"]])
+        with zc2:
+            st.caption("Avg online drivers")
+            st.bar_chart(top.set_index("zone")[["avg_available_drivers"]])
     else:
         st.info("No zone data yet.")
 with ucol:
@@ -176,10 +211,14 @@ else:
 if not t_scope.empty:
     tcol1, tcol2 = st.columns([2, 3])
     with tcol1:
-        per_tenant = t_scope.groupby(
-            t_scope["tenant_id"].map(lambda t: names.get(int(t), f"tenant {t}")), as_index=False
-        )["orders"].sum()
-        st.bar_chart(per_tenant.set_index(per_tenant.columns[0])["orders"])
+        per_tenant = (
+            t_scope.assign(
+                tenant=t_scope["tenant_id"].map(lambda t: names.get(int(t), f"tenant {t}"))
+            )
+            .groupby("tenant", as_index=False)["orders"]
+            .sum()
+        )
+        st.bar_chart(per_tenant.set_index("tenant")["orders"])
     with tcol2:
         st.dataframe(
             t_scope.rename(columns={"tenant_id": "tenant"})[

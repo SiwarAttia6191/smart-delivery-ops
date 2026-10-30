@@ -52,7 +52,15 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from core.config import get_settings  # noqa: E402
 from core.database import engine  # noqa: E402
 from domain.city_config import CityConfig, ensure_business_timezone, load_city_config  # noqa: E402
-from domain.models import Customer, Driver, Order, OrderEvent, OrderStatus, Restaurant  # noqa: E402
+from domain.models import (  # noqa: E402
+    Customer,
+    Driver,
+    DriverEvent,
+    Order,
+    OrderEvent,
+    OrderStatus,
+    Restaurant,
+)
 from domain.services import eta_service, pricing_service  # noqa: E402
 
 # Local business hours derive in the configured BUSINESS_TIMEZONE (#78)
@@ -263,6 +271,47 @@ def build_order(
     )
 
 
+def backfill_driver_supply(
+    session, rng: random.Random, drivers, noise: dict, start_local: datetime, end_local: datetime
+) -> int:
+    """Availability history for the supply marts (#27 review, #86's outage
+    scope made real on the supply side): each driver comes online at the
+    window start from their seeded position, the FLEET goes offline during
+    every outage window (zero-driver hours, matching the demand-side
+    suppression) and back online after, and the final state is ONLINE so
+    the interval carries to now exactly like live drivers would. Payloads
+    mirror driver_event_service.record_availability + the tenant envelope.
+    """
+    emitted = 0
+    for driver in drivers:
+        transitions = [(start_local, True)]
+        for outage_start, outage_end in noise["outages"]:
+            if outage_start <= start_local or outage_end >= end_local:
+                continue
+            transitions.append((outage_start, False))
+            transitions.append((outage_end, True))
+        transitions.sort(key=lambda t: t[0])
+        for at_local, to_available in transitions:
+            session.add(
+                DriverEvent(
+                    tenant_id=driver.tenant_id,
+                    driver_id=driver.id,
+                    event_type="availability",
+                    payload={
+                        "tenant_id": driver.tenant_id,
+                        "from_available": None,
+                        "to_available": to_available,
+                        "latitude": driver.latitude,
+                        "longitude": driver.longitude,
+                    },
+                    created_at=local_to_utc(at_local),
+                )
+            )
+            emitted += 1
+    session.commit()
+    return emitted
+
+
 def backfill(days: int, seed: int, config: CityConfig) -> None:
     # The environment zone is what dbt grains and ML features derive in;
     # writing a city's history under a different zone would mis-grain it.
@@ -340,9 +389,12 @@ def backfill(days: int, seed: int, config: CityConfig) -> None:
                 print(f"  {day + 1}/{days} days, {total_orders} orders")
         session.commit()
 
+        driver_events = backfill_driver_supply(session, rng, drivers, noise, start_local, now_local)
+
         print(
             f"Backfilled {total_orders} delivered orders over {days} days "
-            f"({start_local:%Y-%m-%d} → {day_local:%Y-%m-%d} local), seed={seed}."
+            f"({start_local:%Y-%m-%d} → {day_local:%Y-%m-%d} local), seed={seed}, "
+            f"plus {driver_events} driver availability transitions."
         )
         print(
             "Next: the running relay/ingest drain them (watch `docker compose logs "
