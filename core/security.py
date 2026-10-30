@@ -34,7 +34,9 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_access_token(username: str, role: str) -> str:
+def create_access_token(
+    username: str, role: str, tenant_id: int | None = None, tenant_slug: str | None = None
+) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
     claims: dict[str, Any] = {
@@ -44,6 +46,13 @@ def create_access_token(username: str, role: str) -> str:
         "exp": now + timedelta(minutes=settings.auth_token_expire_minutes),
         "jti": uuid.uuid4().hex,  # unique token id — revocation lists can key on this later
     }
+    # Tenant binding (#36): the machine-readable id drives RLS scoping (the
+    # middleware pins app.current_tenant to it); the slug rides along so the
+    # token is legible on jwt.io without a lookup.
+    if tenant_id is not None:
+        claims["tid"] = tenant_id
+    if tenant_slug is not None:
+        claims["tenant"] = tenant_slug
     return jwt.encode(claims, settings.auth_jwt_secret, algorithm="HS256")
 
 

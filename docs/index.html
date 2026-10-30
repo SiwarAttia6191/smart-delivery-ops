@@ -513,7 +513,7 @@ footer {
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">18</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">23</div><div class="l">REST endpoints</div></div>
         <div class="stat"><div class="v">89%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
@@ -844,7 +844,7 @@ flowchart LR
     <details class="faq">
       <summary>Is this production-ready?</summary>
       <p>Direct answer: the core platform, the data plane and the ML loop are; the honest distance to a real-life system is published in
-      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/roadmap.md">docs/roadmap.md</a> — JWT auth and versioned migrations are live, per-tenant isolation and load testing are the named next steps. Every claim links to code or a benchmark.</p>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/roadmap.md">docs/roadmap.md</a> — JWT auth, versioned migrations, and per-tenant isolation enforced by Postgres Row-Level Security are live; load testing and deeper data are the named next steps. Every claim links to code or a benchmark.</p>
     </details>
     <details class="faq">
       <summary>How accurate is the ETA?</summary>
@@ -863,8 +863,8 @@ flowchart LR
     </details>
     <details class="faq">
       <summary>Is it multi-tenant?</summary>
-      <p>The foundation is shipped: a <code>tenants</code> table and <code>tenant_id</code> on every business table, applied to the live database by a versioned migration, with the tenant riding inside the event envelope to the warehouse. The isolation layer — JWT tenant claims replacing the default-tenant resolver, row filtering — is
-      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/issues/36">issue #36</a>, next in the queue.</p>
+      <p>Yes — isolated by the database engine, not by remembering WHERE clauses. The JWT carries the issuing user's tenant binding; every request pins it into Postgres row-level-security policies (forced on all six business tables, migration 003), so a second tenant's reads and writes physically cannot touch the first tenant's rows — demonstrated live with a second tenant onboarded through <code>POST /tenants</code>. Each tenant can also run its own fee/surge configuration (<code>PUT /pricing/config</code>), and the warehouse's raw layer keeps the tenant inside the event envelope. The trade-offs and graduation path (schema-per-tenant, database-per-tenant) are written up in
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/decisions/0001-multi-tenancy.md">docs/decisions/0001-multi-tenancy.md</a>.</p>
     </details>
     <details class="faq">
       <summary>What happens when the ML model is wrong or down?</summary>

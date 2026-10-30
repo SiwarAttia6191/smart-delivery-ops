@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db
 from core.security import create_access_token, verify_password
-from domain.models import User
+from domain.models import Tenant, User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -34,7 +34,15 @@ def issue_token(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    # The tenant claim comes FROM the user's binding (#36) — a token can
+    # never claim a tenant its user doesn't belong to.
+    tenant = db.get(Tenant, user.tenant_id)
     return {
-        "access_token": create_access_token(user.username, user.role),
+        "access_token": create_access_token(
+            user.username,
+            user.role,
+            tenant_id=user.tenant_id,
+            tenant_slug=tenant.slug if tenant else None,
+        ),
         "token_type": "bearer",
     }

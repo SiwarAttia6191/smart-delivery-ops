@@ -37,6 +37,7 @@ from datetime import UTC, datetime
 from typing import Any, Protocol, cast
 
 from sqlalchemy import create_engine, select, text
+from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings, get_settings
@@ -298,7 +299,18 @@ def migrate_legacy_deployment(engine) -> None:
             "ALTER TABLE order_events ADD COLUMN IF NOT EXISTS published_at timestamptz",
             "ALTER TABLE order_events ADD COLUMN IF NOT EXISTS quarantined_at timestamptz",
         ):
-            conn.execute(text(ddl))
+            try:
+                conn.execute(text(ddl))
+            except ProgrammingError as exc:
+                # The runtime role (sdo_app, #36) is deliberately not the
+                # schema owner: ALTER TABLE needs ownership even as an
+                # IF NOT EXISTS no-op. Since #84 the Alembic chain owns
+                # these columns anyway — the shim only matters for
+                # pre-Alembic databases, which connect as the admin role.
+                if "must be owner" in str(exc):
+                    logging.info("legacy shim skipped: schema owned by the Alembic chain")
+                    return
+                raise
 
 
 def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-running loop
@@ -309,6 +321,12 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
     # pool_pre_ping: recycle stale pooled connections after a Postgres restart
     # instead of crashing the worker with an OperationalError.
     engine = create_engine(s.database_url, pool_pre_ping=True)
+    # The relay publishes EVERY tenant's outbox (#36): mark the explicit
+    # cross-tenant GUC — forced RLS would otherwise hide all but the
+    # default tenant's events from this engine's sessions.
+    import core.tenancy
+
+    core.tenancy.mark_tenant_bypass(engine)
     # The schema is owned by the Alembic chain (#28): compose starts this
     # service only after the one-shot `migrate` service reached head, which
     # removes the old startup race (create_all could not cover ALTERs

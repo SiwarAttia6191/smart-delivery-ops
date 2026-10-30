@@ -35,6 +35,20 @@ def test_token_roundtrip_carries_identity_claims() -> None:
     assert claims["exp"] > claims["iat"]
 
 
+def test_token_carries_tenant_binding_claims() -> None:
+    claims = decode_access_token(
+        create_access_token("alina", "ops", tenant_id=7, tenant_slug="acme")
+    )
+    assert claims["tid"] == 7
+    assert claims["tenant"] == "acme"
+
+
+def test_token_without_tenant_omits_the_claims() -> None:
+    claims = decode_access_token(create_access_token("alina", "ops"))
+    assert "tid" not in claims
+    assert "tenant" not in claims
+
+
 def test_decode_rejects_tampered_token() -> None:
     token = create_access_token("alina", "ops")
     header, payload, signature = token.split(".")

@@ -94,11 +94,16 @@ def create_order(
     if demand_ratio is None:
         demand_ratio = demand_service.derive_demand_ratio(session, dropoff_lat, dropoff_lon)
     quote: Quote = pricing_service.quote_delivery(
-        restaurant.latitude, restaurant.longitude, dropoff_lat, dropoff_lon, demand_ratio
+        restaurant.latitude,
+        restaurant.longitude,
+        dropoff_lat,
+        dropoff_lon,
+        demand_ratio,
+        settings=tenant_service.effective_settings(session),
     )
 
     order = Order(
-        tenant_id=tenant_service.default_id(session),
+        tenant_id=tenant_service.context_tenant_id(session),
         customer=customer,
         restaurant=restaurant,
         status=OrderStatus.pending,

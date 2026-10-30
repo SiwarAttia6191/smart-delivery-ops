@@ -21,7 +21,7 @@ router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 )
 def create_restaurant(payload: RestaurantCreate, db: Session = Depends(get_db)) -> Restaurant:
     restaurant = Restaurant(
-        tenant_id=tenant_service.default_id(db),
+        tenant_id=tenant_service.context_tenant_id(db),
         name=payload.name,
         latitude=payload.latitude,
         longitude=payload.longitude,

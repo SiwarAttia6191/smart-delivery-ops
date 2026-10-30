@@ -293,6 +293,13 @@ class TempModelArtifact:
 
 def max_event_id() -> int:
     engine = create_engine(os.environ["DATABASE_URL"])
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+    import core.tenancy  # noqa: E402
+
+    core.tenancy.mark_tenant_bypass(engine)  # order_events are RLS-scoped (#36)
     with engine.connect() as conn:
         return conn.execute(text("SELECT COALESCE(MAX(id), 0) FROM order_events")).scalar_one()
 

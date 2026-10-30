@@ -26,7 +26,8 @@ analytics in one system.
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability |
 | ⏱️ **ETA estimation** | Served by the MLflow-registered LightGBM model (beat the heuristic 5.2 vs 17.8 min MAE on realized deliveries); calibrated heuristic as automatic fallback |
-| 📊 **Operational analytics** | KPI summary (status mix, revenue, average delivery time) + Prometheus metrics endpoint |
+| 📊 **Operational analytics** | KPI summary (status mix, revenue, average delivery time) + Prometheus metrics endpoint + per-tenant breakdown (`/analytics/by-tenant`) |
+| 🏢 **Multi-tenancy** | JWTs carry the issuing user's tenant binding; Postgres **Row-Level Security** (forced on all six business tables) isolates tenants at the database engine — reads, writes, and even foreign-key references; per-tenant pricing overrides (`PUT /pricing/config`); the tenant rides inside the event envelope to the warehouse ([decision record](docs/decisions/0001-multi-tenancy.md)) |
 | 📚 **OpenAPI / Swagger** | Typed Pydantic contracts, interactive docs at `/docs` and `/redoc` out of the box |
 
 ## 🧱 Tech stack
@@ -180,7 +181,8 @@ The default database is **PostgreSQL 16**, running as a Docker container
 |---|---|
 | Host | `localhost:5434` (5432 in-container; host port avoids conflicts with a local PG install) |
 | Database | `smart_delivery_ops` |
-| User / password | `smartops` / `smartops` |
+| User / password | `smartops` / `smartops` (admin — migrations and ad-hoc work) |
+| Runtime role | `sdo_app` (same password in dev) — what the api/worker containers connect as: a least-privilege, non-superuser role the RLS policies apply to (#36). A superuser bypasses row security by definition. |
 | Connection string | `postgresql+psycopg://smartops:smartops@localhost:5434/smart_delivery_ops` |
 
 ### Schema ownership: Alembic migrations (#28)

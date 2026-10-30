@@ -21,7 +21,7 @@ router = APIRouter(prefix="/customers", tags=["customers"])
 )
 def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)) -> Customer:
     customer = Customer(
-        tenant_id=tenant_service.default_id(db),
+        tenant_id=tenant_service.context_tenant_id(db),
         name=payload.name,
         phone=payload.phone,
         latitude=payload.latitude,

@@ -10,6 +10,7 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+import core.tenancy  # noqa: F401  (#36: installs the RLS GUC listeners)
 from core.config import get_settings
 
 settings = get_settings()

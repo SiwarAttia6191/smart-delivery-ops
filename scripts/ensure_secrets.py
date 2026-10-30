@@ -6,7 +6,11 @@ plaintext env values in compose config. Local development generates dev
 defaults here; production replaces the files with vault-injected ones —
 no code change.
 
-    secrets/db_password.txt    the shared Postgres password (dev: smartops)
+    secrets/db_password.txt    the Postgres admin password (dev: smartops)
+    secrets/app_db_password.txt the runtime app role's password (#36: the
+                               api/worker connect as sdo_app, a
+                               least-privilege role RLS applies to — the
+                               bootstrap superuser would bypass it)
     secrets/jwt_secret.txt     the API's JWT signing secret (random per deploy)
     secrets/airflow_conn.txt   full SQLAlchemy URL for Airflow's metadata DB
 
@@ -51,6 +55,9 @@ def main() -> None:
 
     print(f"secrets dir: {SECRETS_DIR.resolve()}")
     _write(SECRETS_DIR / "db_password.txt", args.db_password, args.force)
+    # The runtime app role shares the dev password by default (dev only);
+    # production sets a distinct least-privilege credential in the vault.
+    _write(SECRETS_DIR / "app_db_password.txt", args.db_password, args.force)
     _write(SECRETS_DIR / "jwt_secret.txt", pysecrets.token_urlsafe(48), args.force)
     db_password = (SECRETS_DIR / "db_password.txt").read_text(encoding="utf-8").strip()
     # NO trailing newline: Airflow's _CMD consumer does not strip it, and a

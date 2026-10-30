@@ -10,7 +10,8 @@ onboards.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import JSON, DateTime, String
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.models.base import Base
@@ -27,6 +28,12 @@ class Tenant(Base):
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
     city: Mapped[str | None] = mapped_column(String(64))  # city-manifest name (#78)
+    # Per-tenant pricing overrides (#36): {setting_name: value} merged over
+    # the global Settings (keys whitelisted in tenant_service.OVERRIDABLE).
+    # NULL = run on the deployment defaults.
+    pricing_overrides: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

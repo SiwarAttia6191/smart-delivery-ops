@@ -23,7 +23,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 
 from core.database import engine  # noqa: E402
 from core.security import ROLES, hash_password  # noqa: E402
-from domain.models import User  # noqa: E402
+from domain.models import Tenant, User  # noqa: E402
 
 DEMO_USERS = [
     ("admin", "admin", "admin"),
@@ -32,18 +32,31 @@ DEMO_USERS = [
 ]
 
 
-def create_user(session, username: str, password: str, role: str) -> None:
+def create_user(
+    session, username: str, password: str, role: str, tenant_slug: str = "default"
+) -> None:
     if role not in ROLES:
         raise SystemExit(f"unknown role '{role}' - valid: {', '.join(ROLES)}")
+    tenant = session.query(Tenant).filter_by(slug=tenant_slug).one_or_none()
+    if tenant is None:
+        raise SystemExit(f"unknown tenant slug '{tenant_slug}' (create it first: POST /tenants)")
     existing = session.scalar(select(User).where(User.username == username))
     if existing is not None:
         # idempotent re-runs update the password/role instead of duplicating
         existing.password_hash = hash_password(password)
         existing.role = role
-        print(f"updated existing user '{username}' (role={role})")
+        existing.tenant_id = tenant.id
+        print(f"updated existing user '{username}' (role={role}, tenant={tenant_slug})")
         return
-    session.add(User(username=username, password_hash=hash_password(password), role=role))
-    print(f"created user '{username}' (role={role})")
+    session.add(
+        User(
+            username=username,
+            password_hash=hash_password(password),
+            role=role,
+            tenant_id=tenant.id,
+        )
+    )
+    print(f"created user '{username}' (role={role}, tenant={tenant_slug})")
 
 
 def main() -> None:
@@ -53,6 +66,7 @@ def main() -> None:
     parser.add_argument("--role", default="ops", choices=ROLES)
     parser.add_argument("--password", help="omit to be prompted (or pipe via --stdin)")
     parser.add_argument("--stdin", action="store_true", help="read the password from stdin")
+    parser.add_argument("--tenant", default="default", help="tenant slug to bind the user to (#36)")
     args = parser.parse_args()
 
     # Schema comes from the Alembic chain (#28) — start the stack first.
@@ -72,7 +86,7 @@ def main() -> None:
                 password = getpass.getpass(f"password for {args.username}: ")
             if not password:
                 raise SystemExit("empty password")
-            create_user(session, args.username, password, args.role)
+            create_user(session, args.username, password, args.role, args.tenant)
         session.commit()
     finally:
         session.close()

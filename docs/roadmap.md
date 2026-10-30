@@ -83,7 +83,7 @@ production delivery platform, the gaps are:
 | real-life system | this repo today | the gap, and what closes it |
 |---|---|---|
 | Millions of orders, years of history | ~1,500 orders / 28 days, backfilled through the real pipeline | models learn from thin data (the benchmark reports say so themselves — "a young deployment"). Only traffic fixes the volume; a longer, noisier backfill + open delivery datasets can widen the window meanwhile. |
-| Auth + multi-tenant SaaS | ✅ **foundation live** — JWT auth wall (#28) + the tenancy dimension (#35): a `tenants` table, `tenant_id` on all six business tables (backfilled by migration 002 through the real chain), and the event envelope carrying the tenant to the warehouse; one deployment = one city (#78) | #36 — the isolation layer: JWT tenant claims replacing the default-tenant resolver, row filtering, per-tenant warehouses. |
+| Auth + multi-tenant SaaS | ✅ **closed** — JWT auth wall (#28) whose tokens carry the issuing user's tenant binding; the request pins it into Postgres **Row-Level Security** policies forced on all six business tables (migration 003), so isolation is enforced by the database engine; runtime services connect as a least-privilege role (a superuser would bypass row security by definition); per-tenant pricing overrides + `/analytics/by-tenant`; tenant rides in the event envelope to the warehouse | per-tenant warehouses/schemas stay a documented graduation path (docs/decisions/0001-multi-tenancy.md) — the shared-schema+RLS model is the right starting point at this scale. |
 | Versioned migrations, secrets vault | ✅ **closed** — Alembic owns the ops schema (compose `migrate` one-shot, parity-tested, CI-applied); credentials travel as Docker secret files (`/run/secrets/...`), absent from compose config and `docker inspect` env | production swaps in vault-injected files at the same paths — zero code change. |
 | Scheduled ML retraining | ✅ **closed** — `ml_forecast_serving` (@hourly) refreshes the forecast table the surge loop reads; `ml_retrain_benchmark` (04:15 UTC daily, after the warehouse build) re-runs both benchmarks, promotion stays champion-gated | the operational half of M1 is scheduled: the ML loop now decays honestly on a clock instead of waiting for a manual `make ml-benchmark`. |
 | Load-tested, HA, on-call | single Kafka broker, single node, log-only alerts | #76 backlog (route-cache pruning, supply overcount while worker down…) + k6 load numbers + Grafana alert rules. HA/multi-broker is a deployment-topology concern — documented, not simulated. |
@@ -93,10 +93,10 @@ production delivery platform, the gaps are:
 1. ~~**Scheduled retraining**~~ ✅ **done** — Airflow now runs the ML loop
    (hourly serving, daily benchmark/promotion); Airflow and the registry
    existed, the DAG just wires them together.
-2. ~~**Auth + tenancy foundation**~~ — ✅ **shipped**: the auth wall (#83)
-   and the tenancy dimension (#35 — tenants table, backfilled tenant_id,
-   event envelope, via real migration 002). Remaining: the isolation
-   layer (#36) — JWT tenant claims, row filtering, per-tenant warehouses.
+2. ~~**Auth + tenancy foundation**~~ ✅ **done** — the auth wall (#83),
+   the tenancy dimension (#35, migration 002), and the isolation layer
+   (#36): JWT tenant claims + forced Postgres RLS + per-tenant pricing,
+   proven live with a second onboarded tenant.
 3. ~~**Alembic + secrets**~~ ✅ **done** — the migration chain owns the
    ops schema (and unblocked tenancy); credentials are Docker secret
    files now, with vault injection as the documented production path.
