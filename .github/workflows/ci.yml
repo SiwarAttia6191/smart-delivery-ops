@@ -28,6 +28,8 @@ jobs:
         run: ruff check .
       - name: Ruff (format)
         run: ruff format --check .
+      - name: Landing page inline JS parses
+        run: python scripts/check_inline_js.py
 
   typecheck:
     runs-on: ubuntu-latest

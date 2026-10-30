@@ -454,6 +454,27 @@ footer {
   .reveal, .swoosh { opacity: 1; transform: none; }
   html { scroll-behavior: auto; }
 }
+/* ── compare / strip / faq (quick wins #29-31) ──────────────────── */
+.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+.compare-col { border: 1px solid rgba(124,108,255,.25); border-radius: 14px; padding: 1.2rem 1.3rem; background: rgba(124,108,255,.05); }
+.compare-col.platform { border-color: rgba(56,225,255,.4); background: rgba(56,225,255,.06); }
+.compare-col h3 { margin: 0 0 .9rem; font-size: 1rem; }
+.compare-row { display: flex; gap: .6rem; padding: .55rem 0; border-top: 1px dashed rgba(255,255,255,.12); font-size: .92rem; }
+.compare-row:first-of-type { border-top: 0; }
+.compare-row .tick { color: #38e1ff; }
+.compare-col.old .compare-row .tick { color: #ff6b81; }
+.compare-row a { color: #38e1ff; text-decoration: none; }
+.compare-row a:hover { text-decoration: underline; }
+.strip { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: center; margin-top: 1.4rem; }
+.strip-item { border: 1px solid rgba(56,225,255,.35); color: #c9f6ff; border-radius: 999px; padding: .38rem .85rem; font-size: .85rem; }
+.strip-item.planned { border-style: dashed; border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.45); }
+details.faq { border: 1px solid rgba(124,108,255,.25); border-radius: 12px; padding: .85rem 1.1rem; margin-bottom: .7rem; background: rgba(124,108,255,.04); }
+details.faq summary { cursor: pointer; font-weight: 600; }
+details.faq[open] summary { color: #38e1ff; }
+details.faq p { margin: .7rem 0 0; font-size: .93rem; color: rgba(255,255,255,.82); }
+details.faq code { font-size: .85em; }
+@media (max-width: 860px) { .compare-grid { grid-template-columns: 1fr; } }
+
 </style>
 </head>
 <body>
@@ -1153,11 +1174,16 @@ if (THREE) {
 
 <script type="module">
 /* ── section reveal on scroll ────────────────────────────────────── */
-const io = new IntersectionObserver(
-  (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add("in")),
-  { threshold: 0.12 }
-);
-document.querySelectorAll(".swoosh").forEach((el) => io.observe(el));
+/* Scroll-position based (deliberately not IntersectionObserver: some
+   embedded/webview browsers never deliver IO callbacks, which would leave
+   every section stuck at opacity 0 — a scroll listener fires everywhere). */
+const revealSwooshes = () =>
+  document.querySelectorAll(".swoosh:not(.in)").forEach((el) => {
+    if (el.getBoundingClientRect().top < innerHeight * 0.92) el.classList.add("in");
+  });
+addEventListener("scroll", revealSwooshes, { passive: true });
+addEventListener("resize", revealSwooshes, { passive: true });
+revealSwooshes();
 
 /* ── demand-by-hour chart (sample data) ──────────────────────────── */
 const HOURS = [
@@ -1303,26 +1329,6 @@ $("btn-reset").addEventListener("click", () => {
 
 buttons();
 
-/* ── compare / strip / faq (quick wins #29-31) ──────────────────── */
-.compare-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
-.compare-col { border: 1px solid rgba(124,108,255,.25); border-radius: 14px; padding: 1.2rem 1.3rem; background: rgba(124,108,255,.05); }
-.compare-col.platform { border-color: rgba(56,225,255,.4); background: rgba(56,225,255,.06); }
-.compare-col h3 { margin: 0 0 .9rem; font-size: 1rem; }
-.compare-row { display: flex; gap: .6rem; padding: .55rem 0; border-top: 1px dashed rgba(255,255,255,.12); font-size: .92rem; }
-.compare-row:first-of-type { border-top: 0; }
-.compare-row .tick { color: #38e1ff; }
-.compare-col.old .compare-row .tick { color: #ff6b81; }
-.compare-row a { color: #38e1ff; text-decoration: none; }
-.compare-row a:hover { text-decoration: underline; }
-.strip { display: flex; flex-wrap: wrap; gap: .55rem; justify-content: center; margin-top: 1.4rem; }
-.strip-item { border: 1px solid rgba(56,225,255,.35); color: #c9f6ff; border-radius: 999px; padding: .38rem .85rem; font-size: .85rem; }
-.strip-item.planned { border-style: dashed; border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.45); }
-details.faq { border: 1px solid rgba(124,108,255,.25); border-radius: 12px; padding: .85rem 1.1rem; margin-bottom: .7rem; background: rgba(124,108,255,.04); }
-details.faq summary { cursor: pointer; font-weight: 600; }
-details.faq[open] summary { color: #38e1ff; }
-details.faq p { margin: .7rem 0 0; font-size: .93rem; color: rgba(255,255,255,.82); }
-details.faq code { font-size: .85em; }
-@media (max-width: 860px) { .compare-grid { grid-template-columns: 1fr; } }
 
 /* ── mermaid architecture diagram ────────────────────────────────── */
 const routeStatus = document.getElementById("route-map-status");
