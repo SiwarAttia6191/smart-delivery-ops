@@ -100,7 +100,9 @@ models:
 
   - name: mart_tenant_daily
     description: "Per-tenant daily funnel: the dashboard tenant filter reads
-      this. Additive - deployment-wide mart grains are unchanged."
+      this. Additive - deployment-wide mart grains are unchanged. Carries
+      the same KPI semantics as the daily summary so a selected tenant
+      scopes every card."
     columns:
       - name: tenant_id
         tests: [not_null]

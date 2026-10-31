@@ -55,7 +55,8 @@ def tenant_daily(wh: Engine) -> pd.DataFrame:
     return _read(
         wh,
         """
-        select tenant_id, business_date, orders, delivered, revenue, fulfillment_pct
+        select tenant_id, business_date, orders, delivered, revenue, fulfillment_pct,
+               avg_delivery_minutes, avg_surge_multiplier
         from analytics.mart_tenant_daily
         order by business_date
         """,
@@ -136,6 +137,12 @@ def forecast_vs_actual(
     ).dt.tz_convert(business_timezone)
     forecasts["business_hour"] = forecasts["local_hour"].dt.hour
     forecasts["business_date"] = forecasts["local_hour"].dt.date.astype(str)
+    # the two sides store zone coordinates in different types (float8 vs
+    # numeric) — the merge keys must match exactly or every actual comes
+    # back NaN and the chart silently shows one line
+    for frame in (forecasts, actuals):
+        frame["zone_lat"] = frame["zone_lat"].astype(float)
+        frame["zone_lon"] = frame["zone_lon"].astype(float)
     actuals["business_date"] = actuals["business_date"].astype(str)
     merged = forecasts.merge(
         actuals, on=["zone_lat", "zone_lon", "business_date", "business_hour"], how="left"
