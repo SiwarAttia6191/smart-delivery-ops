@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Smart Delivery Ops — for delivery operators</title>
+<meta name="description" content="Delivery operations as a service: order lifecycle, driver dispatch, dynamic pricing, demand forecasting and an AI copilot — in one platform, in three tiers." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cff'/%3E%3Cstop offset='1' stop-color='%2338e1ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='url(%23g)'/%3E%3C/svg%3E" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+
+<style>
+/* ── product-page sections (shared brand lives in styles.css) ─────── */
+.steps {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 1.2rem; margin-top: 2.4rem; counter-reset: step;
+}
+.step {
+  background: var(--card); border: 1px solid var(--line); border-radius: 18px;
+  padding: 1.5rem 1.4rem; position: relative; overflow: hidden;
+}
+.step::before {
+  counter-increment: step; content: "0" counter(step);
+  font-family: "Space Grotesk", sans-serif; font-size: 2.6rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  display: block; margin-bottom: 0.6rem; opacity: 0.9;
+}
+.step h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.06rem; margin-bottom: 0.5rem; }
+.step p { color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
+
+.tiers {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.4rem; margin-top: 2.6rem; align-items: stretch;
+}
+.tier {
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+  padding: 2rem 1.8rem; display: flex; flex-direction: column; gap: 1.1rem;
+  position: relative; transition: transform 0.3s ease, border-color 0.3s ease;
+}
+.tier:hover { transform: translateY(-6px); border-color: rgba(124, 108, 255, 0.45); }
+.tier.premium {
+  border-color: rgba(124, 108, 255, 0.65);
+  background: linear-gradient(180deg, rgba(124, 108, 255, 0.12), rgba(56, 225, 255, 0.05)), var(--card);
+  box-shadow: 0 24px 70px -30px rgba(124, 108, 255, 0.55);
+}
+.tier-flag {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  color: #050711; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 0.35rem 0.9rem; border-radius: 999px; white-space: nowrap;
+}
+.tier h3 { font-family: "Space Grotesk", sans-serif; font-size: 1.25rem; }
+.tier .tier-for { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+.tier ul { list-style: none; display: flex; flex-direction: column; gap: 0.55rem; flex: 1; }
+.tier li {
+  color: var(--text); font-size: 0.93rem; padding-left: 1.5rem; position: relative; line-height: 1.45;
+}
+.tier li::before {
+  content: ""; position: absolute; left: 0; top: 0.42em; width: 0.85rem; height: 0.85rem;
+  background: linear-gradient(135deg, var(--accent-a), var(--accent-b));
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8.5 6 12.5 14 3.5' stroke='black' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8.5 6 12.5 14 3.5' stroke='black' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.tier-evidence {
+  color: var(--muted); font-size: 0.82rem; text-decoration: none;
+  border-top: 1px solid var(--line); padding-top: 0.9rem;
+}
+.tier-evidence:hover { color: var(--accent-b); }
+
+.trust {
+  display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 2.2rem;
+}
+.trust span {
+  border: 1px solid var(--line); border-radius: 999px; padding: 0.5rem 1.1rem;
+  color: var(--muted); font-size: 0.85rem;
+}
+
+.contact-card {
+  max-width: 760px; margin: 0 auto; text-align: center;
+  background: linear-gradient(180deg, rgba(124, 108, 255, 0.14), rgba(56, 225, 255, 0.05)), var(--card);
+  border: 1px solid rgba(124, 108, 255, 0.4); border-radius: 26px; padding: 3.2rem 2.4rem;
+}
+.contact-card h2 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.6rem, 3.6vw, 2.3rem); margin-bottom: 0.9rem; }
+.contact-card p { color: var(--muted); max-width: 34rem; margin: 0 auto 1.8rem; line-height: 1.6; }
+.contact-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+
+<div class="orbs" aria-hidden="true">
+  <div class="orb orb-a"></div>
+  <div class="orb orb-b"></div>
+</div>
+
+<header class="nav" id="nav">
+  <div class="nav-inner">
+    <a class="logo" href="index.html" aria-label="Smart Delivery Ops — engineering portfolio">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <defs>
+          <linearGradient id="lg" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#7c6cff"/><stop offset="1" stop-color="#38e1ff"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 2 30 16 16 30 2 16Z" fill="url(#lg)"/>
+        <path d="M16 9 23 16 16 23 9 16Z" fill="#05060e"/>
+      </svg>
+      <span>Smart Delivery Ops</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-links">
+        <li><a href="#platform">How it works</a></li>
+        <li><a href="#tiers">Tiers</a></li>
+        <li><a href="index.html">Engineering</a></li>
+      </ul>
+    </nav>
+    <a class="btn btn-primary nav-cta" href="#contact">Get a demo</a>
+  </div>
+</header>
+
+<section class="hero" id="top">
+  <div class="hero-inner">
+    <div class="copy">
+      <div class="badge reveal"><span class="dot"></span>Delivery operations, run for you</div>
+
+      <h1 class="reveal">Your delivery operation,<br/><span class="grad">without the spreadsheets</span>.</h1>
+
+      <p class="sub reveal">
+        Smart Delivery Ops runs the whole ride for a delivery operator: orders, driver
+        dispatch, dynamic pricing, demand forecasts — and an AI copilot that answers
+        your ops questions in plain language. You run the business; the platform runs
+        the operation.
+      </p>
+
+      <div class="cta-row reveal">
+        <a class="btn btn-primary" href="#contact">Book an intro call</a>
+        <a class="btn btn-ghost" href="index.html"><span class="play" aria-hidden="true"></span>See the engineering behind it</a>
+      </div>
+
+      <div class="stats reveal">
+        <div class="stat"><div class="v">3</div><div class="l">tiers, upgrade in place</div></div>
+        <div class="stat"><div class="v">2×</div><div class="l">better ETAs vs. guesswork</div></div>
+        <div class="stat"><div class="v">24/7</div><div class="l">monitored event pipeline</div></div>
+      </div>
+    </div>
+  </div>
+
+  <a class="scroll-cue" href="#platform" aria-label="Scroll to how it works">
+    <span>Explore</span>
+    <span class="line"></span>
+  </a>
+</section>
+
+<!-- ── HOW IT WORKS ─────────────────────────────────────────────── -->
+<section class="section" id="platform">
+  <div class="swoosh">
+    <span class="eyebrow">How it works</span>
+    <h2>Four moving parts, one system of record</h2>
+    <p class="lead">
+      Every order, driver move and price quote is an event in the platform's pipeline —
+      which is why the dashboards, the forecasts and the copilot all agree with each other.
+    </p>
+    <div class="steps">
+      <div class="step">
+        <h3>Take &amp; track orders</h3>
+        <p>One API for the full lifecycle — pending, assigned, in transit, delivered — with an auditable history per order and per-customer records.</p>
+      </div>
+      <div class="step">
+        <h3>Dispatch the nearest driver</h3>
+        <p>Real road distances, vehicle filters and live availability heartbeats. Drivers free up automatically on delivery; stale ones are swept offline.</p>
+      </div>
+      <div class="step">
+        <h3>Price &amp; promise</h3>
+        <p>Distance-based fees with demand-surge tiers, and arrival promises served by a trained ETA model — with a transparent fallback so quoting never stops.</p>
+      </div>
+      <div class="step">
+        <h3>Learn &amp; watch</h3>
+        <p>Hourly demand forecasts per zone, drift-checked models, a live ops dashboard, and an AI copilot that answers questions and narrates incidents.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── TIERS (#126) ─────────────────────────────────────────────── -->
+<section class="section" id="tiers">
+  <div class="swoosh">
+    <span class="eyebrow">Tiers</span>
+    <h2>Start with the operation. Add the intelligence. Add the copilot.</h2>
+    <p class="lead">
+      Every tier below is shipped and running — nothing here is a promise on a roadmap.
+      Each card links to the working evidence.
+    </p>
+    <div class="tiers">
+      <div class="tier">
+        <h3>Tier 1 — Core operations</h3>
+        <p class="tier-for">For the operator who needs one dependable system instead of five tools.</p>
+        <ul>
+          <li>Full order lifecycle API with auditable event history</li>
+          <li>Geographic nearest-driver dispatch with live availability</li>
+          <li>Dynamic pricing with surge tiers and itemized quotes</li>
+          <li>Event pipeline feeding a governed warehouse</li>
+          <li>Live operations dashboard</li>
+        </ul>
+        <a class="tier-evidence" href="index.html#features">See it working →</a>
+      </div>
+
+      <div class="tier">
+        <h3>Tier 2 — Intelligence</h3>
+        <p class="tier-for">For the operator who wants the platform to see the next hour coming.</p>
+        <ul>
+          <li>Hourly demand forecasts, per zone, retrained on schedule</li>
+          <li>Model-backed ETAs with transparent heuristic fallback</li>
+          <li>Drift watch: models that flag their own aging</li>
+          <li>Prometheus + Grafana monitoring with alert rules</li>
+          <li>Per-tenant isolation (database-enforced, not promise-enforced)</li>
+        </ul>
+        <a class="tier-evidence" href="index.html#analytics">See the numbers →</a>
+      </div>
+
+      <div class="tier premium">
+        <span class="tier-flag">Most complete</span>
+        <h3>Tier 3 — AI copilot</h3>
+        <p class="tier-for">For the operator who wants answers in a sentence, not in a dashboard.</p>
+        <ul>
+          <li>The Ops Copilot: ask "how did we do today?" in plain language — it queries your data, scoped to your tenant</li>
+          <li>Incident narrator: when something breaks, the alert arrives already explaining itself</li>
+          <li>Knowledge search over your runbooks and decisions</li>
+          <li>Guardrails, budgets and an evaluated harness behind every answer</li>
+        </ul>
+        <a class="tier-evidence" href="index.html#architecture">See how it's built →</a>
+      </div>
+    </div>
+
+    <div class="trust">
+      <span>Multi-tenant by database, not by convention</span>
+      <span>JWT-authenticated, role-scoped API</span>
+      <span>Full audit trail on every state change</span>
+      <span>Typed, tested (90%+ coverage), dependency-audited</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── CONTACT ──────────────────────────────────────────────────── -->
+<section class="section" id="contact">
+  <div class="swoosh">
+    <span class="eyebrow">Next step</span>
+    <div class="contact-card">
+      <h2>Tell us about your delivery operation.</h2>
+      <p>
+        Fifteen minutes is enough to map your current workflow onto the tiers above and
+        quote the pilot. Bring your messiest process — that's the one the copilot helps
+        with first.
+      </p>
+      <div class="contact-row">
+        <a class="btn btn-primary" href="mailto:siwar.attia6191@gmail.com?subject=Smart%20Delivery%20Ops%20—%20pilot%20inquiry">Book an intro call</a>
+        <a class="btn btn-ghost" href="index.html">Explore the engineering</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="foot-inner">
+    <div class="foot-col foot-brand">
+      <a class="logo" href="index.html">
+        <svg viewBox="0 0 32 32" aria-hidden="true">
+          <defs>
+            <linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#7c6cff"/><stop offset="1" stop-color="#38e1ff"/>
+            </linearGradient>
+          </defs>
+          <path d="M16 2 30 16 16 30 2 16Z" fill="url(#lg2)"/>
+          <path d="M16 9 23 16 16 23 9 16Z" fill="#05060e"/>
+        </svg>
+        <span>Smart Delivery Ops</span>
+      </a>
+      <p>Delivery operations as a service — orders, dispatch, pricing, forecasting and an AI copilot, in three tiers.</p>
+    </div>
+    <div class="foot-col">
+      <h5>Product</h5>
+      <a href="#platform">How it works</a>
+      <a href="#tiers">Tiers &amp; pricing</a>
+      <a href="#contact">Contact</a>
+    </div>
+    <div class="foot-col">
+      <h5>Engineering</h5>
+      <a href="index.html">Portfolio &amp; walkthrough</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops" target="_blank" rel="noopener">GitHub repository</a>
+      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
+    </div>
+  </div>
+  <div class="foot-base">
+    <span>© 2026 Smart Delivery Ops · Delivery operations, run for you</span>
+    <span>PostgreSQL · Kafka · FastAPI · Airflow · MLflow · LangGraph</span>
+  </div>
+</footer>
+
+<script type="module">
+/* Shared brand behaviors (same design language as the portfolio page):
+   the scrolled-nav toggle and the position-checked reveal loop. The
+   reveal is deliberately rAF + timer based, not IntersectionObserver —
+   some embedded browsers never deliver IO callbacks, which would leave
+   sections stuck at opacity 0. Both loops stop themselves once every
+   section is revealed. */
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
+
+const revealSwooshes = () =>
+  document.querySelectorAll(".swoosh:not(.in)").forEach((el) => {
+    if (el.getBoundingClientRect().top < innerHeight * 0.92) el.classList.add("in");
+  });
+addEventListener("scroll", revealSwooshes, { passive: true });
+addEventListener("resize", revealSwooshes, { passive: true });
+revealSwooshes();
+const revealLoop = () => {
+  revealSwooshes();
+  if (document.querySelector(".swoosh:not(.in)")) requestAnimationFrame(revealLoop);
+  else clearInterval(revealTimer);
+};
+requestAnimationFrame(revealLoop);
+const revealTimer = setInterval(revealLoop, 400);
+</script>
+</body>
+</html>
