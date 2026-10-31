@@ -115,6 +115,10 @@ class Settings(BaseSettings):
     driver_drift_emission_threshold_m: float = 2000.0
     driver_stale_after_minutes: int = 120
 
+    # Ops Copilot (#120 Phase A): the provider is pluggable — "scripted"
+    # (deterministic, CI-safe) now; the live provider lands in Phase B.
+    copilot_provider: str = "scripted"
+
     # Connection pool sizing (#103 load findings): SQLAlchemy's default
     # (5 + 10 overflow) queues 50 concurrent writers into ~15 connections.
     db_pool_size: int = 10
