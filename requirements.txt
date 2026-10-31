@@ -19,7 +19,7 @@ confluent-kafka>=2.7
 # from the MLflow registry at startup; heuristic fallback on any failure
 mlflow-skinny>=2.19
 lightgbm>=4.5
-pandas>=2.2
+pandas>=3.1.0
 
 # ── Auth (Phase 5, #28): JWTs on mutating endpoints; bcrypt password
 # hashes; python-multipart parses the OAuth2 password form (Swagger
