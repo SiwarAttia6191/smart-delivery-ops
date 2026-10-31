@@ -15,6 +15,7 @@ from apps.api.routes import (
     analytics,
     auth,
     city_config,
+    copilot,
     customers,
     drivers,
     health,
@@ -97,6 +98,7 @@ def create_app() -> FastAPI:
         analytics.router,
         routes.router,
         tenants.router,
+        copilot.router,
         city_config.router,
     ):
         app.include_router(router)
