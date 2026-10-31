@@ -17,6 +17,7 @@ from apps.api.deps import current_claims, get_db
 from apps.copilot import guardrails
 from apps.copilot.graph import run_copilot
 from apps.copilot.providers.base import ProviderReply, ToolCall
+from apps.copilot.providers.openai_client import OpenAIProvider
 from apps.copilot.providers.scripted import ScriptedProvider
 from apps.copilot.tools import build_registry
 from core.config import get_settings
@@ -55,6 +56,13 @@ def _build_provider():
                     "lands in Phase B.)"
                 ),
             ]
+        )
+    if settings.copilot_provider == "openai":
+        # The live model (#121 Phase B). A missing/placeholder key raises
+        # here — loud at request time beats silently serving the script.
+        return OpenAIProvider(
+            api_key=settings.openai_api_key or "",
+            model=settings.copilot_model,
         )
     raise ValueError(f"unknown copilot provider '{settings.copilot_provider}'")
 

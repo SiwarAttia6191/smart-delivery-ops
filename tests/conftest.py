@@ -17,6 +17,11 @@ from pathlib import Path  # noqa: E402
 _TEST_DB = Path(".test_local.db")
 _TEST_DB.unlink(missing_ok=True)
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
+# The deployment's .env leaks into any process launched from the repo
+# root (Settings reads env_file=".env"), pytest included. A live-model
+# override there must not flip the suite onto the real provider — pin
+# the scripted provider the same way the database is pinned above.
+os.environ["COPILOT_PROVIDER"] = "scripted"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
