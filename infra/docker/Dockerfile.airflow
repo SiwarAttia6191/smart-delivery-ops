@@ -16,6 +16,9 @@ USER airflow
 # so artifacts stay compatible (mlflow 2.19 also needs sqlalchemy <2.1);
 # +psycopg2 URLs serve the harness's create_engine here.
 # prophet wheels bundle the compiled CmdStan model, so no compiler needed.
+# The copilot eval (#123) shares the graph + provider factory, so its
+# import closure (langgraph, openai, fastapi routes, pydantic-settings)
+# rides in the same venv — versions mirror requirements.txt.
 RUN python -m venv /home/airflow/ml-venv \
     && /home/airflow/ml-venv/bin/pip install --no-cache-dir \
     "mlflow==2.19.*" \
@@ -24,7 +27,12 @@ RUN python -m venv /home/airflow/ml-venv \
     "pandas>=2.2" \
     "sqlalchemy>=2.0,<2.1" \
     "psycopg2-binary>=2.9" \
-    httpx
+    httpx \
+    "langgraph>=0.4" \
+    "langchain-core>=0.3" \
+    "openai>=1.40" \
+    "fastapi>=0.159.1" \
+    "pydantic-settings>=2.16.1"
 
 # dbt lives in its own virtualenv: dbt-core and apache-airflow have history
 # of conflicting transitive pins, and an isolated venv sidesteps the problem

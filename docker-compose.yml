@@ -291,7 +291,7 @@ services:
       MLFLOW_TRACKING_URI: http://mlflow:5100
       CITY: ${CITY:-tunis}
       OSRM_BASE_URL: http://osrm:5000
-    secrets: &airflow-secrets [db_password, airflow_conn]
+    secrets: &airflow-secrets [db_password, airflow_conn, openai_api_key]
     volumes: &airflow-volumes
       - ./dags:/opt/airflow/dags
       - ./data/transform:/opt/transform
@@ -302,6 +302,12 @@ services:
       # artifact volume needed here.
       - ./ml:/home/airflow/mlrun/ml
       - ./data/benchmarks:/home/airflow/mlrun/data/benchmarks
+      # Copilot eval (#123): the graph's import closure (apps, core,
+      # domain) and the golden eval set, read-only beside the ./ml mount.
+      - ./apps:/home/airflow/mlrun/apps:ro
+      - ./core:/home/airflow/mlrun/core:ro
+      - ./domain:/home/airflow/mlrun/domain:ro
+      - ./data/evals:/home/airflow/mlrun/data/evals:ro
       - ./.git:/opt/git:ro
       # LocalExecutor writes task logs into the SCHEDULER's filesystem; the
       # webserver needs the same volume or every "View log" in the UI fails.

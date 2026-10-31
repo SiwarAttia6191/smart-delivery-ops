@@ -15,11 +15,8 @@ from sqlalchemy.orm import Session
 from apps.api.deps import current_claims, get_db
 from apps.copilot import guardrails
 from apps.copilot.graph import run_copilot
-from apps.copilot.providers.base import ProviderReply, ToolCall
-from apps.copilot.providers.openai_client import OpenAIProvider
-from apps.copilot.providers.scripted import ScriptedProvider
+from apps.copilot.providers.factory import build_provider_chain
 from apps.copilot.tools import build_registry
-from core.config import get_settings
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 
@@ -41,38 +38,9 @@ class ChatResponse(BaseModel):
 
 
 def _build_providers() -> list[Any]:
-    """The fallback chain (#121): flagship model first, then the mini
-    model when configured differently, each an OpenAIProvider on the same
-    key; the scripted provider serves alone. Which rung answered comes
-    back in `provider` (`openai:<model>`), failures in `degraded_reason`."""
-    settings = get_settings()
-    if settings.copilot_provider == "scripted":
-        return [
-            ScriptedProvider(
-                [
-                    # The default script: one governed lookup, then the honest
-                    # narration. Phase B replaces this with the live provider
-                    # behind the same interface.
-                    ProviderReply(tool_calls=[ToolCall(name="analytics_summary", args={})]),
-                    ProviderReply(
-                        content="Here are the platform's current operational KPIs from "
-                        "the summary tool — orders, status mix, revenue, delivery "
-                        "minutes and driver availability, exactly as the governed "
-                        "API computes them. (Scripted provider — the live model "
-                        "lands in Phase B.)"
-                    ),
-                ]
-            )
-        ]
-    if settings.copilot_provider == "openai":
-        # The live chain (#121). A missing/placeholder key raises here —
-        # loud at request time beats silently serving the script.
-        key = settings.openai_api_key or ""
-        chain: list[Any] = [OpenAIProvider(api_key=key, model=settings.copilot_model)]
-        if settings.copilot_model_mini != settings.copilot_model:
-            chain.append(OpenAIProvider(api_key=key, model=settings.copilot_model_mini))
-        return chain
-    raise ValueError(f"unknown copilot provider '{settings.copilot_provider}'")
+    """Delegate to the shared factory (#123): the chat endpoint and the
+    scheduled eval run must never drift on provider construction."""
+    return build_provider_chain()
 
 
 @router.post("/chat", response_model=ChatResponse)
