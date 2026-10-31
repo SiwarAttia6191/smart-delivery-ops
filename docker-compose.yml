@@ -217,6 +217,9 @@ services:
       DBT_HOST: postgres
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
       DBT_PORT: "5432"
+      # #54: the caller's DBT_SCHEMA flows through (make maps the branch to
+      # analytics/analytics_draft); the safe default is the draft schema.
+      DBT_SCHEMA: ${DBT_SCHEMA:-analytics_draft}
     secrets: [db_password]
     # export the credential from the mounted secret, then hand the command
     # through (make dbt runs `build` and `source freshness` alike)
