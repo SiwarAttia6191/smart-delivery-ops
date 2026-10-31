@@ -45,9 +45,16 @@ audit:           ## dependency vulnerability audit (production requirements)
 smoke:           ## end-to-end smoke test against a running API (make api first)
 	.venv/Scripts/python scripts/smoke_test.py
 
-dbt:             ## build + test the warehouse marts, then check source freshness
-	docker compose run --rm dbt build
-	docker compose run --rm dbt source freshness
+# #54: the checked-out branch picks the dbt output schema - main builds
+# the production `analytics` marts, every other branch lands in
+# `analytics_draft` (branches share the draft schema by design).
+DBT_BRANCH ?= $(shell git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)
+DBT_SCHEMA ?= $(if $(filter main,$(DBT_BRANCH)),analytics,analytics_draft)
+
+dbt:             ## build + test the warehouse marts (schema follows the branch: main->analytics, else draft)
+	@echo "dbt output schema: $(DBT_SCHEMA) (branch $(DBT_BRANCH))"
+	DBT_SCHEMA=$(DBT_SCHEMA) docker compose run --rm dbt build
+	DBT_SCHEMA=$(DBT_SCHEMA) docker compose run --rm dbt source freshness
 
 airflow-trigger: ## trigger the warehouse DAG immediately (UI: http://localhost:8081)
 	docker compose exec airflow-scheduler airflow dags trigger warehouse_daily_build

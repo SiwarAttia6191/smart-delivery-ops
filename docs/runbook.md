@@ -80,3 +80,26 @@ airflow-scheduler 1g, osrm 1g, api 640m, mlflow/airflow-web 640m, ingest
 meant to fit in ~7 GB. If a service is OOM-killed, check the limit
 against actual usage before raising it; the limits exist to fail loudly
 rather than starve the host.
+
+## dbt output schemas: production vs draft (#54)
+
+Builds from `main` write the production marts into `analytics` (and
+`staging`); builds from any other branch land in `analytics_draft` /
+`staging_draft`. The rule is enforced in two places: profiles.yml defaults
+`DBT_SCHEMA` to `analytics_draft` (an un-configured build can never touch
+production), and `make dbt` maps the checked-out branch (main → analytics,
+anything else → draft). The daily Airflow DAG pins `DBT_SCHEMA=analytics`
+explicitly — it IS the production build.
+
+- **Which schema did a build use?** `make dbt` prints it; from hand-rolled
+  compose runs, the env you passed decides: `DBT_SCHEMA=analytics docker
+  compose run --rm dbt build`.
+- **Clear the draft without touching production:**
+  `DROP SCHEMA analytics_draft CASCADE; DROP SCHEMA staging_draft CASCADE;`
+  — production objects live in different schemas and are unreachable by
+  these drops.
+- **Feature branches share one draft schema** by design: a draft build
+  replaces the previous branch's draft. That's the point — the guarantee
+  is that non-main builds never modify `analytics`.
+- The dashboards, ML feature feed and benchmarks read `analytics` only;
+  a draft build is invisible to everything that matters.

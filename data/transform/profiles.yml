@@ -11,5 +11,9 @@ warehouse:
       user: "{{ env_var('DBT_USER', 'smartops') }}"
       password: "{{ env_var('DBT_PASSWORD', 'smartops') }}"
       dbname: "{{ env_var('DBT_DBNAME', 'smart_delivery_warehouse') }}"
-      schema: "analytics"
+      # Output schema selection (#54): the DEFAULT is the draft schema so
+      # an un-configured build can never touch the production marts. Builds
+      # from main opt into `analytics` explicitly (Makefile branch mapping,
+      # the daily DAG, or DBT_SCHEMA=analytics by hand).
+      schema: "{{ env_var('DBT_SCHEMA', 'analytics_draft') }}"
       threads: 4
