@@ -17,7 +17,15 @@ settings = get_settings()
 
 _connect_args = {"check_same_thread": False} if settings.database_url.startswith("sqlite") else {}
 
-engine = create_engine(settings.database_url, connect_args=_connect_args, pool_pre_ping=True)
+engine = create_engine(
+    settings.database_url,
+    connect_args=_connect_args,
+    pool_pre_ping=True,
+    # Load-test finding (#103): the default pool (5+10) was the write-path
+    # bottleneck at 50 concurrent writers - requests queued on checkout.
+    pool_size=settings.db_pool_size,
+    max_overflow=settings.db_max_overflow,
+)
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
 

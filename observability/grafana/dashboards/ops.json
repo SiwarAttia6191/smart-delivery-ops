@@ -1,0 +1,122 @@
+{
+ "uid": "smart-delivery-ops",
+ "title": "Smart Delivery Ops",
+ "tags": [
+  "smart-delivery-ops"
+ ],
+ "timezone": "utc",
+ "schemaVersion": 39,
+ "refresh": "30s",
+ "time": {
+  "from": "now-3h",
+  "to": "now"
+ },
+ "panels": [
+  {
+   "id": 1,
+   "type": "stat",
+   "title": "Orders total",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 0,
+    "y": 0
+   },
+   "targets": [
+    {
+     "expr": "sdo_orders_total",
+     "refId": "A"
+    }
+   ],
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   }
+  },
+  {
+   "id": 2,
+   "type": "stat",
+   "title": "ETA model serving",
+   "gridPos": {
+    "h": 4,
+    "w": 6,
+    "x": 6,
+    "y": 0
+   },
+   "targets": [
+    {
+     "expr": "sdo_eta_model_serving",
+     "refId": "A"
+    }
+   ],
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   }
+  },
+  {
+   "id": 3,
+   "type": "timeseries",
+   "title": "Outbox backlog (events pending)",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 0
+   },
+   "targets": [
+    {
+     "expr": "sdo_outbox_unpublished",
+     "refId": "A"
+    }
+   ],
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   }
+  },
+  {
+   "id": 4,
+   "type": "timeseries",
+   "title": "Orders by status",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 0,
+    "y": 4
+   },
+   "targets": [
+    {
+     "expr": "sdo_orders_total",
+     "refId": "A",
+     "legendFormat": "{{status}}"
+    }
+   ],
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   }
+  },
+  {
+   "id": 5,
+   "type": "timeseries",
+   "title": "Seconds since last relay",
+   "gridPos": {
+    "h": 8,
+    "w": 12,
+    "x": 12,
+    "y": 8
+   },
+   "targets": [
+    {
+     "expr": "sdo_outbox_last_relay_age_seconds",
+     "refId": "A"
+    }
+   ],
+   "datasource": {
+    "type": "prometheus",
+    "uid": "prom"
+   }
+  }
+ ]
+}

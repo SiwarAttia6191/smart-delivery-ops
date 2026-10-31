@@ -42,21 +42,17 @@ def _summary(db: Session) -> AnalyticsSummary:
 
     avg_fee = db.scalar(select(func.avg(Order.delivery_fee)))
 
-    delivered_orders = db.scalars(
-        select(Order).where(
+    # Average delivery minutes as a SQL aggregate (#103 load finding): the
+    # old version hydrated EVERY delivered order into Python to average two
+    # timestamps - seconds of pure Python per call at 11k+ orders, and the
+    # whole API queued behind it under concurrent load. The database does
+    # this in milliseconds (same math the daily summary mart uses).
+    avg_minutes = db.scalar(
+        select(func.avg(func.extract("epoch", Order.delivered_at - Order.created_at) / 60.0)).where(
             Order.status == OrderStatus.delivered,
             Order.delivered_at.is_not(None),
         )
-    ).all()
-    if delivered_orders:
-        minutes = [
-            (o.delivered_at - o.created_at).total_seconds() / 60
-            for o in delivered_orders
-            if o.delivered_at is not None
-        ]
-        avg_minutes = sum(minutes) / len(minutes) if minutes else None
-    else:
-        avg_minutes = None
+    )
 
     drivers_available = db.scalar(select(func.count(Driver.id)).where(Driver.is_available)) or 0
     drivers_total = db.scalar(select(func.count(Driver.id))) or 0

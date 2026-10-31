@@ -1,0 +1,7 @@
+apiVersion: 1
+providers:
+  - name: smart-delivery-ops
+    folder: Smart Delivery Ops
+    type: file
+    options:
+      path: /var/lib/grafana/dashboards

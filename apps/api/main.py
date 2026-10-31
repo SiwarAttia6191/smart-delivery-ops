@@ -45,6 +45,13 @@ ETA/pricing land in Phases 2–3 (see docs/roadmap.md).
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    # Load-test finding (#103): sync endpoints run in anyio's threadpool,
+    # whose default capacity is 40 tokens - the 300-VU spike queued 260
+    # requests forever behind it. 100 tokens matches the connection pool's
+    # capacity so threads wait on the pool, not on a smaller proxy limit.
+    from anyio import to_thread
+
+    to_thread.current_default_thread_limiter().total_tokens = 100
     # The ops schema is owned by the Alembic chain (#28): apply pending
     # migrations at boot. In compose the `migrate` service has already
     # brought the DB to head before this runs — idempotent no-op here.
