@@ -14,5 +14,8 @@ docs
 !docs/
 docs/*
 !docs/route.geojson
+!docs/runbook.md
+!docs/decisions
+!docs/decisions/*.md
 tests
 .github
