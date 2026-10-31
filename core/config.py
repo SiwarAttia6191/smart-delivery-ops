@@ -115,10 +115,16 @@ class Settings(BaseSettings):
     driver_drift_emission_threshold_m: float = 2000.0
     driver_stale_after_minutes: int = 120
 
-    # Ops Copilot (#120 Phase A): the provider is pluggable — "scripted"
-    # (deterministic, CI-safe) now; the live provider lands in Phase B.
+    # Ops Copilot (#120 Phase A / #121 Phase B): the provider is pluggable
+    # — "scripted" (deterministic, CI-safe) or "openai". The live chain is
+    # flagship model → mini model → canned degraded answer; a missing or
+    # credit-less key degrades the whole chain, loudly in degraded_reason.
     copilot_provider: str = "scripted"
     copilot_model: str = "gpt-4o-mini"
+    copilot_model_mini: str = "gpt-4o-mini"
+    # Per-chat token ceiling (#121): the live provider reports usage per
+    # turn; the graph stops and answers gracefully once the sum crosses it.
+    copilot_max_tokens_per_chat: int = 40000
     # The Phase B live provider's key: a Docker secret absorbed like the
     # auth secrets (validator below swaps it into the config). The
     # placeholder "xxx" wires the path end to end before a real key lands.
