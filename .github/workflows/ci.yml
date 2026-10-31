@@ -96,7 +96,7 @@ jobs:
     timeout-minutes: 8
     services:
       postgres:
-        image: postgres:16-alpine
+        image: pgvector/pgvector:pg16  # #120: the copilot's RAG needs the vector extension
         env:
           POSTGRES_USER: smartops
           POSTGRES_PASSWORD: smartops

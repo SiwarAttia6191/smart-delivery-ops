@@ -59,6 +59,12 @@ def _analytics_by_tenant(db: Session) -> list[Any]:  # pydantic slices; the exec
     return analytics_routes.by_tenant(db)
 
 
+def _search_docs(db: Session, query: str) -> list[dict[str, Any]]:
+    from apps.copilot.retriever import search_docs
+
+    return search_docs(db, query)
+
+
 def _forecast_next_24h(db: Session) -> list[dict]:
     from domain.models import DemandForecast
 
@@ -99,6 +105,13 @@ def build_registry() -> dict[str, ToolSpec]:
             description="The ML demand forecasts for the next hours, per zone.",
             parameters={},
             func=_forecast_next_24h,
+        ),
+        ToolSpec(
+            name="search_docs",
+            description="Search the platform's operational knowledge (runbook, "
+            "incident summaries, decisions) — use for HOW questions, not for numbers.",
+            parameters={"query": {"type": "str"}},
+            func=_search_docs,
         ),
     ]
     return {s.name: s for s in specs}

@@ -7,6 +7,7 @@ from domain.models.deployment_state import INCARNATION_KEY, LEGACY_INCARNATION, 
 from domain.models.driver import Driver
 from domain.models.driver_event import DriverEvent
 from domain.models.driver_relay_dead_letter import DriverRelayDeadLetter
+from domain.models.knowledge_chunk import KnowledgeChunk
 from domain.models.order import Order, OrderStatus
 from domain.models.order_event import OrderEvent
 from domain.models.relay_dead_letter import RelayDeadLetter
@@ -26,6 +27,7 @@ __all__ = [
     "Driver",
     "DriverEvent",
     "DriverRelayDeadLetter",
+    "KnowledgeChunk",
     "Order",
     "OrderEvent",
     "OrderStatus",
