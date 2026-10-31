@@ -1,0 +1,20 @@
+{
+  "source_run_id": "fcfae05113ce4e9e985336fcd679c3c1",
+  "derived_from": "eta_lightgbm run on the 180-day window (git 8a6eb0c-era harness), the run that verified #71's artifacts",
+  "metrics": {
+    "mae_overall": 4.773,
+    "drift_input_distance_mean": 8.015,
+    "drift_input_distance_std": 5.848,
+    "drift_input_hour_mean": 15.144,
+    "residual_mean": 0.017,
+    "residual_std": 5.707
+  },
+  "tolerances": {
+    "_doc": "absolute deltas; a fresh daily run breaching ANY of these fails the drift_watch task, whose on_failure_callback fires the alert webhook",
+    "mae_overall": 1.5,
+    "residual_mean": 1.0,
+    "residual_std": 2.0,
+    "drift_input_distance_mean": 1.0,
+    "drift_input_hour_mean": 2.0
+  }
+}
