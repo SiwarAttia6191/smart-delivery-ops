@@ -196,6 +196,12 @@ def main() -> None:
             )
             if run["metrics"]:
                 mlflow.log_metrics(run["metrics"])
+                # Per-run evaluation artifacts (#71): forecast-vs-actual,
+                # residuals and the per-hour-of-day error table land next to
+                # the metrics — the shape of the error, not just its average.
+                from ml_artifacts import log_demand_artifacts
+
+                log_demand_artifacts(run["name"], actual, run["predicted"], test.index)
             if run["error"]:
                 mlflow.set_tag("error", run["error"][:300])
             mlflow.set_tag("git_sha", snapshot["git_sha"])
