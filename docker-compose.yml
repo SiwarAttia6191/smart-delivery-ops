@@ -513,6 +513,13 @@ services:
     mem_limit: 256m
     image: grafana/grafana-oss:11.5.2
     profiles: ["tools"]
+    environment:
+      # The comment above promised anonymous viewing - deliver it (#103
+      # follow-up): viewers land straight on the dashboard, admin/admin to edit.
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
     volumes:
       - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro

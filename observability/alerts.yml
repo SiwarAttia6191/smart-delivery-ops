@@ -14,7 +14,9 @@ groups:
           summary: "The relay is not draining the outbox ({{ $value }} events pending for 5m)"
 
       - alert: RelayStale
-        expr: sdo_outbox_last_relay_age_seconds > 1800
+        # traffic-aware: an old relay age with an EMPTY outbox is a quiet
+        # night, not an outage - page only when work is pending AND stale
+        expr: sdo_outbox_last_relay_age_seconds > 1800 AND sdo_outbox_unpublished > 0
         for: 5m
         labels:
           severity: warning
