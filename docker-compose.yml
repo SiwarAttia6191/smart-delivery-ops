@@ -58,6 +58,8 @@ services:
       # completes the path end to end — a real key + copilot_provider=openai
       # is the whole switch. The scripted provider keeps serving meanwhile.
       OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
+      # MLflow Tracing for the copilot (#120): one run per conversation.
+      SDO_TRACING: "1"
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).
