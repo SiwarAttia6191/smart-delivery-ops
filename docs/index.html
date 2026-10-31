@@ -43,6 +43,7 @@
         <li><a href="#demo">Live demo</a></li>
         <li><a href="#route">Route map</a></li>
         <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#copilot">AI copilot</a></li>
         <li><a href="#analytics">Analytics</a></li>
         <li><a href="product.html">Pricing</a></li>
       </ul>
@@ -72,7 +73,7 @@
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">23</div><div class="l">REST endpoints</div></div>
+        <div class="stat"><div class="v">29</div><div class="l">typed route handlers</div></div>
         <div class="stat"><div class="v">89%</div><div class="l">test coverage</div></div>
         <div class="stat"><div class="v">MIT</div><div class="l">open-source license</div></div>
       </div>
@@ -121,9 +122,14 @@
         <p>KPI summaries — status mix, revenue, average delivery time, fleet availability — plus a Prometheus metrics endpoint for alerting.</p>
       </div>
       <div class="card">
+        <div class="ico">🤖</div>
+        <h3>AI copilot</h3>
+        <p>Ask "how did we do today?" in plain language — a LangGraph agent queries the governed API with your tenant's credentials, searches the runbook when it's a how question, and narrates incidents when alerts fire.</p>
+      </div>
+      <div class="card">
         <div class="ico">🛡️</div>
         <h3>Production discipline</h3>
-        <p>Fully typed (mypy), 92% coverage enforced in CI, dependency CVE audits, Docker packaging, and a protected main branch with required checks.</p>
+        <p>Fully typed (mypy), an 85% coverage floor enforced in CI on three Python versions, dependency CVE audits, Docker packaging, and a protected main branch with required checks.</p>
       </div>
     </div>
   </div>
@@ -329,14 +335,53 @@ flowchart LR
   DBT --> FC[Forecast job · MLflow]
   FC --> DF[(demand_forecasts)]
   DF -. demand_ratio .-> PRC
+  API --> CP[Ops Copilot · LangGraph]
+  CP --> KB[(pgvector runbook knowledge)]
+  CP --> MLF[MLflow traces + evals]
       </pre>
     </div>
     <div class="phases">
       <div class="phase done"><div class="n">Phase 1</div><h4>Core platform</h4><p>Orders, dispatch, pricing, ETA, analytics — live, typed, tested.</p></div>
       <div class="phase done"><div class="n">Phase 2</div><h4>Data engineering</h4><p>Kafka event pipeline, dbt warehouse marts, Airflow orchestration, quality gates — shipped.</p></div>
       <div class="phase done"><div class="n">Phase 3</div><h4>AI / ML</h4><p>Geo benchmarking, forecast-driven pricing, ML ETA from the registry, multi-region region pack — serving on a schedule.</p></div>
-      <div class="phase"><div class="n">Phase 4</div><h4>Dashboard</h4><p>Operational KPIs, demand vs supply, drill-downs for the ops team.</p></div>
-      <div class="phase"><div class="n">Phase 5</div><h4>Production</h4><p>JWT auth wall on every write, scheduled retraining, CI data-plane gate — hardening continues.</p></div>
+      <div class="phase done"><div class="n">Phase 4</div><h4>Dashboard</h4><p>Operational KPIs, demand vs supply, per-tenant filter, drill-downs — live on Streamlit.</p></div>
+      <div class="phase done"><div class="n">Phase 5</div><h4>Production</h4><p>JWT wall, Alembic migrations, Docker secrets, RLS multi-tenancy, load-tested and monitored (Prometheus/Grafana/Alertmanager).</p></div>
+      <div class="phase done"><div class="n">Phase 6</div><h4>AI copilot</h4><p>LangGraph agent over the governed API, pgvector RAG, incident narrator, golden-set evals in CI — all four phases shipped.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- ── AI COPILOT (#120-#124) ─────────────────────────────────── -->
+<section class="section" id="copilot">
+  <div class="swoosh">
+    <span class="eyebrow">AI layer</span>
+    <h2>The copilot that reads your data — and explains your incidents</h2>
+    <p class="lead">
+      One agent over the governed API, wrapped in the reliability layers an
+      LLM needs in production: guardrails, budgets, a measured fallback chain,
+      full tracing, and an eval set that fails the build on regression.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <div class="ico">🧠</div>
+        <h3>The agent</h3>
+        <p>A LangGraph supervisor whose read-only tools execute on the request's own session — Postgres RLS scopes every answer to the caller's tenant. pgvector RAG serves the how questions from the runbook and decision records.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🛟</div>
+        <h3>The safety net</h3>
+        <p>Injection screening and question caps answer 422 before any model call; tool-call and token budgets end the loop gracefully; the fallback chain (flagship → mini → canned) reports which rung served and why — degraded_reason in the payload, not the logs.</p>
+      </div>
+      <div class="card">
+        <div class="ico">📈</div>
+        <h3>The evidence</h3>
+        <p>One MLflow run per conversation (provider, rung, cost, full message log); a versioned golden eval set runs in CI — wrong tool, broken shape, budget that stops stopping all fail the build — and a scheduled Airflow eval scores the live provider daily.</p>
+      </div>
+      <div class="card">
+        <div class="ico">🚨</div>
+        <h3>The narrator</h3>
+        <p>When a pipeline task fails, the alert arrives already explaining itself: what broke, the current outbox backlog and relay age, the benchmark run it correlates with, the first checks. Fails open per source — the alert never waits for prose.</p>
+      </div>
     </div>
   </div>
 </section>
@@ -471,7 +516,7 @@ flowchart LR
   </div>
   <div class="foot-base">
     <span>© 2026 Smart Delivery Ops · MIT License</span>
-    <span>PostgreSQL · FastAPI · SQLAlchemy 2.0 · mypy · 92% coverage</span>
+    <span>PostgreSQL · FastAPI · Kafka · LangGraph · MLflow · mypy · 85% CI floor</span>
   </div>
 </footer>
 

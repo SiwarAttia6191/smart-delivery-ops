@@ -7,6 +7,14 @@ global:
 rule_files:
   - /etc/prometheus/alerts.yml
 
+# Alert delivery (#117): the evaluated rules ship to the Alertmanager
+# sidecar, whose routing (observability/alertmanager.yml) delivers them —
+# inhibition rules dedupe RelayStale/OutboxBacklog into one page.
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
 scrape_configs:
   - job_name: smart-delivery-api
     metrics_path: /analytics/metrics
