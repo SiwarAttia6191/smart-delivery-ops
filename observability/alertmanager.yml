@@ -1,0 +1,30 @@
+# Alertmanager routing (#117): the three Prometheus rules (outbox backlog,
+# relay stale, ETA fallback) graduate from "visible in the Prometheus UI"
+# to DELIVERED notifications.
+#
+# The default destination is the alert-echo sidecar — a sink that logs
+# every delivered payload (docker compose logs alert-echo) so the paging
+# flow is provable out of the box. To page for real, point webhook URL at
+# your Slack incoming-webhook, an email bridge, or PagerDuty's Events API
+# — one line, then `docker compose up -d alertmanager`. See
+# docs/runbook.md, "When something pages".
+route:
+  receiver: ops-webhook
+  group_by: ["alertname"]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 4h
+
+inhibit_rules:
+  # the relay being stale IS the outbox filling: page once with the cause,
+  # suppress the duplicate symptom page
+  - source_matchers:
+      - alertname = RelayStale
+    target_matchers:
+      - alertname = OutboxBacklog
+
+receivers:
+  - name: ops-webhook
+    webhook_configs:
+      - url: http://alert-echo:9094/alert
+        send_resolved: true
