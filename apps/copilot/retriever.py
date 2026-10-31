@@ -78,8 +78,8 @@ def search_docs(db: Session, query: str, limit: int = 3) -> list[dict[str, Any]]
             db.execute(
                 text(
                     "SELECT source, chunk_index, content, "
-                    "1 - (embedding <=> :q::vector) AS score "
-                    "FROM knowledge_chunks ORDER BY embedding <=> :q::vector LIMIT :limit"
+                    "1 - (embedding <=> CAST(:q AS vector)) AS score "
+                    "FROM knowledge_chunks ORDER BY embedding <=> CAST(:q AS vector) LIMIT :limit"
                 ),
                 {"q": query_embedding, "limit": limit},
             )
