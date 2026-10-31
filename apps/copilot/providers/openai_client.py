@@ -1,12 +1,11 @@
-"""The live provider (#120 Phase B): the real LLM behind the same
+"""The live provider (#121 Phase B): the real LLM behind the same
 interface the scripted provider proved in CI.
 
-Wired end to end with the placeholder key ("xxx" — see
-secrets/openai_api_key.txt): any call fails auth, the graph's fallback
-chain answers degraded with the tool data, and the switch is exactly
-`copilot_provider=openai` + a real key. Uses an OpenAI-COMPATIBLE chat
-completion with tool calling; the message shape adapts to/from the
-provider protocol here, keeping the graph vendor-agnostic.
+The switch is exactly `copilot_provider=openai` + a real key. Uses an
+OpenAI-COMPATIBLE chat completion with tool calling; the message shape
+adapts to/from the provider protocol here, keeping the graph vendor-
+agnostic. Token usage from the vendor response is carried on every
+reply so the graph can enforce the per-chat token budget and trace it.
 """
 
 import json
@@ -19,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIProvider:
-    name = "openai"
-
     def __init__(
         self, api_key: str, model: str = "gpt-4o-mini", base_url: str | None = None
     ) -> None:
@@ -32,6 +29,8 @@ class OpenAIProvider:
             )
         self._client = OpenAI(api_key=api_key, base_url=base_url)
         self.model = model
+        # per-model name: the fallback chain reports WHICH rung served
+        self.name = f"openai:{model}"
 
     def chat(self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]) -> ProviderReply:
         response = self._client.chat.completions.create(
@@ -46,7 +45,15 @@ class OpenAIProvider:
             for tc in (message.tool_calls or [])
             if hasattr(tc, "function")
         ]
-        return ProviderReply(content=message.content, tool_calls=tool_calls)
+        usage = None
+        reported = getattr(response, "usage", None)
+        if reported is not None:
+            usage = {
+                "prompt_tokens": reported.prompt_tokens,
+                "completion_tokens": reported.completion_tokens,
+                "total_tokens": reported.total_tokens,
+            }
+        return ProviderReply(content=message.content, tool_calls=tool_calls, usage=usage)
 
     @staticmethod
     def _to_sdk_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:

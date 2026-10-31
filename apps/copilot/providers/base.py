@@ -20,10 +20,17 @@ class ToolCall:
 
 @dataclass
 class ProviderReply:
-    """One turn of the provider: either it wants tools, or it answers."""
+    """One turn of the provider: either it wants tools, or it answers.
+
+    `usage` carries the provider's token accounting for the turn
+    (prompt_tokens / completion_tokens / total_tokens) when the vendor
+    reports it — the deterministic providers leave it None rather than
+    invent numbers. The graph accumulates it against the per-chat
+    token budget."""
 
     content: str | None = None
     tool_calls: list[ToolCall] = field(default_factory=list)
+    usage: dict[str, int] | None = None
 
     @property
     def wants_tools(self) -> bool:
@@ -33,6 +40,7 @@ class ProviderReply:
         return {
             "content": self.content,
             "tool_calls": [tc.model_dump() for tc in self.tool_calls],
+            "usage": self.usage,
         }
 
 

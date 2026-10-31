@@ -35,6 +35,8 @@ def trace_run(question: str, result: dict[str, Any]) -> None:
                     "prompt_version": result.get("prompt_version"),
                     "tool_calls_used": result.get("tool_calls_used", 0),
                     "degraded": result.get("degraded", False),
+                    "degraded_reason": (result.get("degraded_reason") or "")[:200],
+                    "usage_total_tokens": result.get("usage_total") or 0,
                     "question": question[:300],
                 }
             )
