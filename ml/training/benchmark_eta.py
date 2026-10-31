@@ -209,8 +209,17 @@ def main() -> None:
         ("lightgbm", lambda: lightgbm_minutes(train, holdout)),
     ]:
         try:
-            metrics, errors = score(actual, predictor(), holdout["distance_km"])
-            runs.append({"name": name, "metrics": metrics, "errors": errors, "error": None})
+            predicted = predictor()
+            metrics, errors = score(actual, predicted, holdout["distance_km"])
+            runs.append(
+                {
+                    "name": name,
+                    "metrics": metrics,
+                    "errors": errors,
+                    "predicted": predicted,
+                    "error": None,
+                }
+            )
         except Exception as exc:  # noqa: BLE001 - a failed challenger is a report row
             runs.append({"name": name, "metrics": {}, "errors": None, "error": str(exc)})
 
@@ -228,6 +237,12 @@ def main() -> None:
             mlflow.log_params({"model": run["name"], **snapshot})
             if run["metrics"]:
                 mlflow.log_metrics(run["metrics"])
+                # Per-run evaluation artifacts (#71): the plots and the
+                # per-distance-bucket table land next to the metrics, so the
+                # run page shows the SHAPE of the error, not just its average.
+                from ml_artifacts import log_eta_artifacts
+
+                log_eta_artifacts(run["name"], actual, run["predicted"], holdout["distance_km"])
             if run["error"]:
                 mlflow.set_tag("error", run["error"][:300])
             mlflow.set_tag("git_sha", snapshot["git_sha"])
