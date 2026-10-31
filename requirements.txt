@@ -18,7 +18,7 @@ confluent-kafka>=2.7
 # ── ETA model serving (Phase 3, #69): loads models:/eta_model/Production
 # from the MLflow registry at startup; heuristic fallback on any failure
 mlflow-skinny>=2.19
-lightgbm>=4.5
+lightgbm>=4.7.0
 pandas>=2.2
 
 # ── Auth (Phase 5, #28): JWTs on mutating endpoints; bcrypt password
