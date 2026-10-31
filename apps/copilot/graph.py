@@ -21,6 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from apps.copilot.guardrails import MAX_TOOL_CALLS
 from apps.copilot.providers.base import Provider
 from apps.copilot.tools import ToolSpec, execute_tool, tool_schemas
+from apps.copilot.tracing import trace_run
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +140,7 @@ def run_copilot(
             "degraded": True,
             "prompt_version": PROMPT_VERSION,
         }
-    return {
+    result = {
         "answer": final.get("answer"),
         "tool_calls_used": final.get("tool_calls_used", 0),
         "provider": provider.name,
@@ -147,3 +148,5 @@ def run_copilot(
         "prompt_version": PROMPT_VERSION,
         "messages": final.get("messages", []),
     }
+    trace_run(question, result)
+    return result
