@@ -25,9 +25,7 @@ def check_page(page: Path, tmp: str) -> tuple[int, int]:
     html = page.read_text(encoding="utf-8")
     modules = re.findall(r'<script type="module">(.*?)</script>', html, re.S)
     if not modules:
-        raise SystemExit(
-            f"no inline module scripts found in {page} — did the page change shape?"
-        )
+        raise SystemExit(f"no inline module scripts found in {page} — did the page change shape?")
 
     failures = 0
     for i, code in enumerate(modules):
