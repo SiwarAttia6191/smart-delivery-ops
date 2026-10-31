@@ -58,6 +58,10 @@ def main() -> None:
     # The runtime app role shares the dev password by default (dev only);
     # production sets a distinct least-privilege credential in the vault.
     _write(SECRETS_DIR / "app_db_password.txt", args.db_password, args.force)
+    # The copilot's LLM key (#120 Phase B): "xxx" is the documented
+    # placeholder — a real key makes the live provider answer, while the
+    # scripted provider keeps serving until then.
+    _write(SECRETS_DIR / "openai_api_key.txt", "xxx", args.force)
     _write(SECRETS_DIR / "jwt_secret.txt", pysecrets.token_urlsafe(48), args.force)
     db_password = (SECRETS_DIR / "db_password.txt").read_text(encoding="utf-8").strip()
     # NO trailing newline: Airflow's _CMD consumer does not strip it, and a

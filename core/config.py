@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     # Ops Copilot (#120 Phase A): the provider is pluggable — "scripted"
     # (deterministic, CI-safe) now; the live provider lands in Phase B.
     copilot_provider: str = "scripted"
+    copilot_model: str = "gpt-4o-mini"
+    # The Phase B live provider's key: a Docker secret absorbed like the
+    # auth secrets (validator below swaps it into the config). The
+    # placeholder "xxx" wires the path end to end before a real key lands.
+    openai_api_key_file: str | None = None
+    openai_api_key: str | None = None
 
     # Connection pool sizing (#103 load findings): SQLAlchemy's default
     # (5 + 10 overflow) queues 50 concurrent writers into ~15 connections.
@@ -153,6 +159,8 @@ class Settings(BaseSettings):
             self.warehouse_database_url = _url_with_password(self.warehouse_database_url, password)
         if self.jwt_secret_file:
             self.auth_jwt_secret = Path(self.jwt_secret_file).read_text(encoding="utf-8").strip()
+        if self.openai_api_key_file:
+            self.openai_api_key = Path(self.openai_api_key_file).read_text(encoding="utf-8").strip()
         return self
 
 

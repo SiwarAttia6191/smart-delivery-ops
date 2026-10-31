@@ -54,6 +54,10 @@ services:
       # stays as the host-dev fallback only.
       JWT_SECRET_FILE: /run/secrets/jwt_secret
       DB_PASSWORD_FILE: /run/secrets/app_db_password
+      # Ops Copilot Phase B wiring (#120): the placeholder key ("xxx")
+      # completes the path end to end — a real key + copilot_provider=openai
+      # is the whole switch. The scripted provider keeps serving meanwhile.
+      OPENAI_API_KEY_FILE: /run/secrets/openai_api_key
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the
       # heuristic fallback (sdo_eta_model_serving 0).
@@ -70,7 +74,7 @@ services:
       # logged while the champion remains unaffected.
       DISTANCE_SHADOW_PROVIDER: osrm
       OSRM_BASE_URL: http://osrm:5000
-    secrets: [app_db_password, jwt_secret]
+    secrets: [app_db_password, jwt_secret, openai_api_key]
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,7 +88,9 @@ services:
     # pools, and the airflow/mlflow instances share this server - the
     # default 100 connections became the outage during the spike.
     command: ["postgres", "-c", "max_connections=300"]
-    image: postgres:16-alpine
+    # pgvector build (#120 RAG): the official image has no vector
+    # extension - this one is postgres 16 + pgvector, same volume.
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_USER: smartops
       # The credential travels as a Docker SECRET (secrets/db_password.txt,
@@ -544,6 +550,8 @@ secrets:
     file: ./secrets/db_password.txt
   app_db_password:
     file: ./secrets/app_db_password.txt
+  openai_api_key:
+    file: ./secrets/openai_api_key.txt
   jwt_secret:
     file: ./secrets/jwt_secret.txt
   airflow_conn:
