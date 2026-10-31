@@ -103,3 +103,40 @@ explicitly — it IS the production build.
   is that non-main builds never modify `analytics`.
 - The dashboards, ML feature feed and benchmarks read `analytics` only;
   a draft build is invisible to everything that matters.
+## When something pages: the alert flow (#117)
+
+```
+Airflow task failure ──> alert_on_failure (dags/ml_alerts.py) ──> webhook
+Prometheus rule breach ──> Alertmanager (:9093) ──> route receiver
+```
+
+Both paths deliver to the destination configured for each:
+
+- **Airflow failures**: `AIRFLOW_ALERT_WEBHOOK` (compose env; empty =
+  log-only, the failure still lands in the Airflow task log).
+- **Prometheus rules** (outbox backlog, relay stale, ETA fallback):
+  Alertmanager delivers to the receiver in `observability/alertmanager.yml`.
+  The committed default is the **alert-echo** sidecar — every delivered
+  alert appears in `docker compose logs alert-echo` as `ALERT DELIVERED`,
+  which proves the whole chain with zero setup. To page for real, replace
+  the webhook URL with your Slack incoming-webhook, an email bridge, or
+  PagerDuty's Events API endpoint and `docker compose up -d alertmanager`.
+
+Inhibition: a `RelayStale` breach suppresses the `OutboxBacklog` page —
+the relay being stale IS the outbox filling, so you get one page with
+the cause, not two pages with the symptom.
+
+Proving the flow (no incident required): push a test alert straight into
+Alertmanager and watch it deliver —
+
+```
+curl -XPOST http://localhost:9093/api/v2/alerts -H 'Content-Type: application/json' \
+  -d '[{"labels":{"alertname":"TestPage","severity":"page"},"annotations":{"summary":"paging drill"}}]'
+docker compose logs alert-echo   # ALERT DELIVERED status=firing ...
+```
+
+Since Phase C (#122), every Airflow alert also carries a narrated summary
+(what broke, the current metrics, first checks) — see
+`apps/copilot/narrator.py`; `SDO_NARRATOR=0` disables it. The narrator
+serves the Airflow path; Prometheus-side alerts page through Alertmanager
+(the Alertmanager webhook can post to the same bridge in a future round).
