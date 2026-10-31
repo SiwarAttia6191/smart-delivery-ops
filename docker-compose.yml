@@ -24,10 +24,18 @@ services:
     restart: "no"
 
   api:
-    mem_limit: 640m
+    # 3 uvicorn workers (#116): the load suite's measured ceiling was the
+    # SINGLE process (~29% timeouts at 300 concurrent readers). Each worker
+    # is a separate process with its OWN pool: 3 x (30+20) = 150 potential
+    # connections, inside postgres's max_connections=300 with the other
+    # services' budgets. Slim machines can set UVICORN_WORKERS=1.
+    mem_limit: 1g
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.api
+    command: >
+      uvicorn apps.api.main:app --host 0.0.0.0 --port 8000
+      --workers ${UVICORN_WORKERS:-3}
     ports:
       # Host ports are env-tunable so a second side-by-side deployment (e.g.
       # deploy/cities/paris.env, #78 region pack) can shift them.
@@ -546,6 +554,36 @@ services:
     depends_on:
       prometheus:
         condition: service_started
+
+  alertmanager:
+    # Alert delivery (#117): the three Prometheus rules graduate from
+    # "visible in the Prometheus UI" to delivered notifications. Routing
+    # lives in observability/alertmanager.yml — the default destination is
+    # the alert-echo sink below; swap the webhook URL for Slack/email/
+    # PagerDuty to page for real (docs/runbook.md, "When something pages").
+    mem_limit: 128m
+    image: prom/alertmanager:v0.28.1
+    profiles: ["tools"]
+    volumes:
+      - ./observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "${ALERTMANAGER_HOST_PORT:-9093}:9093"
+    depends_on:
+      alert-echo:
+        condition: service_started
+
+  alert-echo:
+    # The visible default destination: every delivered alert lands in this
+    # container's log (docker compose logs alert-echo) — proof of the whole
+    # Prometheus -> Alertmanager -> webhook chain without any operator setup.
+    mem_limit: 64m
+    image: python:3.12-slim
+    profiles: ["tools"]
+    command: python /scripts/alert_echo.py
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./observability/alert_echo.py:/scripts/alert_echo.py:ro
 
 volumes:
   promdata:
