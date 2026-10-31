@@ -128,4 +128,14 @@ with DAG(
         "deliveries; a challenger that beats the champion is promoted to "
         "the eta_model Production stage by the script itself.",
     )
-    _demand_benchmark >> _eta_benchmark
+    # Drift watch (#102): the baselines the lightgbm run logs (#41) get a
+    # WATCHER - a breach fails this task and the alert webhook fires. The
+    # last honest gap of the #41/#76 arc.
+    _drift_watch = _ml_task(
+        "drift_watch",
+        "ml/training/drift_watch.py",
+        "Compares the latest eta_lightgbm run's drift metrics against the "
+        "committed baselines (data/benchmarks/drift_baselines.json); a "
+        "breach fails this task and fires the alert webhook.",
+    )
+    _demand_benchmark >> _eta_benchmark >> _drift_watch
