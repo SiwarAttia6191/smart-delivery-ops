@@ -24,7 +24,7 @@ pandas>=2.2
 # ── Auth (Phase 5, #28): JWTs on mutating endpoints; bcrypt password
 # hashes; python-multipart parses the OAuth2 password form (Swagger
 # Authorize flow)
-pyjwt>=2.10
+pyjwt>=2.15.1
 bcrypt>=4.2
 python-multipart>=0.0.20
 
