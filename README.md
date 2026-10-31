@@ -17,6 +17,8 @@ analytics in one system.
 
 ---
 
+**Landing page:** https://siwarattia6191.github.io/smart-delivery-ops/ (GitHub Pages, served from `docs/`)
+
 ## ✨ Features
 
 | Domain | What it does |
