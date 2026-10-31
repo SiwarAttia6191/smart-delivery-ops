@@ -1,0 +1,30 @@
+# Prometheus alert rules (#103, the on-call half): fire on the same
+# conditions the runbook's monitoring note describes. Graduation path:
+# an Alertmanager sidecar routes these to email/Slack - the rules are
+# already in the standard format.
+groups:
+  - name: ops-health
+    rules:
+      - alert: OutboxBacklogGrowing
+        expr: sdo_outbox_unpublished > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "The relay is not draining the outbox ({{ $value }} events pending for 5m)"
+
+      - alert: RelayStale
+        expr: sdo_outbox_last_relay_age_seconds > 1800
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No successful ORDER relay for {{ $value | printf \"%.0f\" }}s (worker down?)"
+
+      - alert: EtaModelFallback
+        expr: sdo_eta_model_serving == 0
+        for: 10m
+        labels:
+          severity: info
+        annotations:
+          summary: "The ETA model is not serving - the heuristic fallback is answering"

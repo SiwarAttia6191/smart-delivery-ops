@@ -115,6 +115,11 @@ class Settings(BaseSettings):
     driver_drift_emission_threshold_m: float = 2000.0
     driver_stale_after_minutes: int = 120
 
+    # Connection pool sizing (#103 load findings): SQLAlchemy's default
+    # (5 + 10 overflow) queues 50 concurrent writers into ~15 connections.
+    db_pool_size: int = 10
+    db_max_overflow: int = 20
+
     # ── Event pipeline (Phase 2) ───────────────────────────────
     # Host default points at the compose host mapping (localhost:9094);
     # containers override it with kafka:19092.
