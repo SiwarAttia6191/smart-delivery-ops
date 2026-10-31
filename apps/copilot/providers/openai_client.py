@@ -19,7 +19,12 @@ logger = logging.getLogger(__name__)
 
 class OpenAIProvider:
     def __init__(
-        self, api_key: str, model: str = "gpt-4o-mini", base_url: str | None = None
+        self,
+        api_key: str,
+        model: str = "gpt-4o-mini",
+        base_url: str | None = None,
+        timeout_seconds: float | None = None,
+        max_retries: int | None = None,
     ) -> None:
         from openai import OpenAI
 
@@ -27,7 +32,15 @@ class OpenAIProvider:
             raise ValueError(
                 "the OpenAI key is the placeholder — set a real key to enable this provider"
             )
-        self._client = OpenAI(api_key=api_key, base_url=base_url)
+        # timeout/max_retries: the chat path uses the SDK defaults; the
+        # incident narrator (alert path) passes tight bounds because the
+        # alert is already firing and must not wait on a chatty API.
+        client_kwargs: dict[str, Any] = {"api_key": api_key, "base_url": base_url}
+        if timeout_seconds is not None:
+            client_kwargs["timeout"] = timeout_seconds
+        if max_retries is not None:
+            client_kwargs["max_retries"] = max_retries
+        self._client = OpenAI(**client_kwargs)
         self.model = model
         # per-model name: the fallback chain reports WHICH rung served
         self.name = f"openai:{model}"
