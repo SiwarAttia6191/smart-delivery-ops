@@ -1,10 +1,26 @@
+# Explicit Dependabot config (#104): the implicit weekly updates become
+# declared. Groups keep minor/patch bumps as single PRs so the noise stays
+# reviewable; major bumps stay separate (they deserve their own look).
 version: 2
 updates:
   - package-ecosystem: pip
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: /
     schedule:
       interval: weekly
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
