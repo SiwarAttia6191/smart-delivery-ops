@@ -26,6 +26,12 @@ migrate:         ## apply the Alembic chain to the ops DB (schema owner, #28)
 seed:            ## seed the database with demo data (needs migrations first: make migrate)
 	.venv/Scripts/python scripts/seed_demo_data.py
 
+docs-ingest:      ## (re)ingest the platform docs into the copilot's knowledge store
+	.venv/Scripts/python scripts/ingest_docs.py
+
+vault-ingest:     ## sync an Obsidian vault into the copilot's knowledge store (VAULT=path, default ~/Documents/SmartDeliveryVault)
+	.venv/Scripts/python scripts/ingest_obsidian.py --vault "$(VAULT)"
+
 api:             ## run the API locally with reload (Swagger at http://127.0.0.1:$(API_PORT)/docs)
 	.venv/Scripts/python -m uvicorn apps.api.main:app --reload --port $(API_PORT)
 

@@ -27,6 +27,7 @@ In Docker (vault mounted):
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -43,10 +44,15 @@ SKIP_DIRS = {".obsidian", ".trash", ".git"}
 SOURCE_PREFIX = "obsidian"
 
 
-def ingest(vault: Path, reset: bool = False) -> int:
+def ingest(vault: Path, reset: bool = False, session: Any = None) -> int:
+    """Sync a vault into the knowledge store. `session` is injectable (the
+    tests pass their fixture's session); the CLI opens its own on the
+    configured engine."""
     if not vault.exists():
         raise SystemExit(f"vault not found: {vault} — create it in Obsidian or pass --vault")
-    session = sessionmaker(bind=engine)()
+    own_session = session is None
+    if own_session:
+        session = sessionmaker(bind=engine)()
     try:
         if reset:
             from domain.models import KnowledgeChunk
@@ -64,8 +70,30 @@ def ingest(vault: Path, reset: bool = False) -> int:
             for path in vault.rglob("*.md")
             if not any(part in SKIP_DIRS for part in path.parts)
         )
+
+        # Sync, not append (the production gap the first cut had): notes
+        # DELETED from the vault must not haunt the store, and CHANGED
+        # notes must replace their stale chunks. Tombstone everything the
+        # vault no longer has; per note, replace when any chunk differs.
+        stored_sources = set(
+            session.execute(
+                text("SELECT DISTINCT source FROM knowledge_chunks WHERE source LIKE :pattern"),
+                {"pattern": f"{SOURCE_PREFIX}:%"},
+            ).scalars()
+        )
+        current_sources = {f"{SOURCE_PREFIX}:{n.relative_to(vault).as_posix()}" for n in notes}
+        tombstoned = sorted(stored_sources - current_sources)
+        for source in tombstoned:
+            session.execute(
+                text("DELETE FROM knowledge_chunks WHERE source = :source"),
+                {"source": source},
+            )
+        if tombstoned:
+            print(f"  removed {len(tombstoned)} deleted note(s): {', '.join(tombstoned)}")
+
         if not notes:
-            print(f"no markdown notes in {vault} — nothing to ingest")
+            session.commit()
+            print(f"no markdown notes in {vault} — vault synced (tombstones applied)")
             return 0
 
         total = 0
@@ -73,25 +101,34 @@ def ingest(vault: Path, reset: bool = False) -> int:
             rel = note.relative_to(vault).as_posix()
             source = f"{SOURCE_PREFIX}:{rel}"
             chunks = chunk_document(note.read_text(encoding="utf-8"))
-            new_chunks = 0
+            stored = session.execute(
+                text(
+                    "SELECT chunk_index, content FROM knowledge_chunks "
+                    "WHERE source = :source ORDER BY chunk_index"
+                ),
+                {"source": source},
+            ).all()
+            if [(idx, content) for idx, content in stored] == list(enumerate(chunks)):
+                continue  # unchanged note — zero work
+            session.execute(
+                text("DELETE FROM knowledge_chunks WHERE source = :source"),
+                {"source": source},
+            )
             for idx, chunk in enumerate(chunks):
-                exists = session.execute(
-                    text(
-                        "SELECT 1 FROM knowledge_chunks "
-                        "WHERE source = :source AND chunk_index = :idx LIMIT 1"
-                    ),
-                    {"source": source, "idx": idx},
-                ).first()
-                if exists is None:
-                    add_chunk(session, source, idx, chunk, embed(chunk))
-                    new_chunks += 1
-                    total += 1
+                add_chunk(session, source, idx, chunk, embed(chunk))
+                total += 1
+            action = "re-ingested" if stored else "ingested"
             session.commit()
-            print(f"  {rel}: {len(chunks)} chunks ({new_chunks} new)")
-        print(f"ingested {total} new chunks from {len(notes)} notes (vault: {vault})")
+            print(f"  {rel}: {len(chunks)} chunks ({action})")
+        session.commit()
+        print(
+            f"synced {total} chunks across {len(notes)} notes "
+            f"({len(tombstoned)} tombstoned) (vault: {vault})"
+        )
         return total
     finally:
-        session.close()
+        if own_session:
+            session.close()
 
 
 if __name__ == "__main__":
