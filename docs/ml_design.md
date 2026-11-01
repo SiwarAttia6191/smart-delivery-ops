@@ -68,3 +68,11 @@ decisions behind it.
 - **Monitoring:** input-distribution and residual baselines logged per run
   (the drift-monitoring baseline); alerting wires into the Phase 5
   observability stack.
+
+## 4. The AI copilot (SHIPPED — `apps/copilot/`, `dags/copilot_evals.py`)
+
+Beyond the numeric models sits the LLM layer: a LangGraph agent over the
+governed API (pgvector RAG, guardrails, budgets, fallback chain), an incident
+narrator on the alert path, and a golden-set eval harness enforced in CI. Its
+"model operations" story is MLflow-native: one traced run per conversation and
+one scored run per eval batch. Design + backlog: [ai.md](ai.md).

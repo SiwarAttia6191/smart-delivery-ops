@@ -70,3 +70,14 @@ core/                     config (env), engine/session, logging, exceptions
   to consistent HTTP error envelopes by one handler.
 - **Metrics endpoint early.** `/analytics/metrics` already exposes Prometheus
   text format so observability lands with the product, not after it.
+
+## The AI layer (Phase 5)
+
+The copilot is an agent OVER the governed API, not beside it: a LangGraph
+supervisor whose five read-only tools call the platform's own services with the
+request's session — Row-Level Security scopes every answer to the caller's
+tenant by construction. A pgvector store (RAG over the runbook + decision
+records), guardrails, tool/token budgets, a flagship→mini fallback chain with
+`degraded_reason` in the payload, MLflow tracing per conversation, an incident
+narrator on the alert path, and a golden-set eval harness enforced in CI.
+Full map — shipped vs. next — lives in [ai.md](ai.md).

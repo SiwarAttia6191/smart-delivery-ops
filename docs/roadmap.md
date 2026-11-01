@@ -100,10 +100,16 @@ production delivery platform, the gaps are:
 3. ~~**Alembic + secrets**~~ ✅ **done** — the migration chain owns the
    ops schema (and unblocked tenancy); credentials are Docker secret
    files now, with vault injection as the documented production path.
-4. **Load test + observability** (#76) — replace "it works" with measured
-   latencies and alert rules.
-5. **Data depth** — 180-day backfill with more realistic noise, open
-   delivery datasets where licensing allows.
+4. **Load test + observability** (#76, #103, #116, #117) — done: the k6
+   suite (order flow, reads, spike, a committed breaking-point probe —
+   48% timeouts at 300 VUs on one worker, 0% on three), Prometheus +
+   Grafana + Alertmanager with proven alert delivery.
+5. **Data depth** (#86) — done: the 180-day structured backfill through
+   the real pipeline; open datasets rejected on licensing (decision 0002).
+6. **The AI copilot** (#120-#124) — done: LangGraph agent over the
+   governed API (pgvector RAG, guardrails, budgets, fallback chain), the
+   incident narrator, and the golden-set eval harness in CI + scheduled.
+   What could come next: [ai.md](ai.md).
 
 Deliberately out of scope for a solo portfolio project: multi-broker HA,
 on-call rotation, per-region Kubernetes fleets — documented decisions, not
