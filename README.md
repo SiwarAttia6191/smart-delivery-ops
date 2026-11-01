@@ -182,6 +182,11 @@ The local port is configurable: `make api API_PORT=9090` (default **8010**, chos
 
 ## 📊 Dashboard (Phase 4, #27)
 
+The Streamlit dashboard is two pages: the KPI one-pager over the marts, and the
+**Copilot chat** — sign in (demo: ops/ops) and ask about your operation in plain
+language. The response metadata (provider, tool calls, degraded reason) is shown,
+not hidden: when the live model is unfunded, the chat says exactly why.
+
 A one-page **Streamlit** app over the dbt marts — order volume, fulfillment
 rate, revenue, demand-vs-supply by zone, driver utilization, the ML
 forecast vs actual demand, and the per-tenant breakdown the isolation layer

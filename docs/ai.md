@@ -76,6 +76,9 @@ curl -s -X POST localhost:8010/copilot/chat -H "Authorization: Bearer $TOKEN" \
   shipped documentation. Honest caveat: the hash embedder compresses scores,
   so cross-corpus ranking is weak until Phase B's real embeddings land —
   scoping is the fix that works today.
+- **The chat surface**: the dashboard's Copilot page (`:8501` → Copilot) — sign in
+  and chat; the response metadata (provider, tool calls, degraded reason) renders
+  under every answer, so the fallback chain is visible to the operator.
 - **Evals**: `pytest tests/eval/` (CI gate) or
   `python ml/evals/run_copilot_eval.py --min-pass-rate 0.8` (logs one MLflow
   run per batch; the `copilot_evals` DAG schedules it daily, paused by

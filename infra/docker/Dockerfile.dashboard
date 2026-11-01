@@ -1,6 +1,8 @@
 FROM python:3.12-slim
 WORKDIR /dash
-RUN pip install --no-cache-dir streamlit==1.41.1 pandas==2.2.3 "sqlalchemy>=2.0.4" "psycopg[binary]>=3.2"
+# httpx: the Copilot page calls the governed API over HTTP (the marts
+# themselves stay direct-DB reads)
+RUN pip install --no-cache-dir streamlit==1.41.1 pandas==2.2.3 "sqlalchemy>=2.0.4" "psycopg[binary]>=3.2" "httpx>=0.28"
 COPY dashboard/ /dash/
 COPY infra/docker/entrypoint.dashboard.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
