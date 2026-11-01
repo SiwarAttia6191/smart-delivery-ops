@@ -19,9 +19,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from sqlalchemy import text  # noqa: E402
 from sqlalchemy.orm import sessionmaker  # noqa: E402
 
+from apps.copilot.corpus import add_chunk  # noqa: E402
 from apps.copilot.providers.embeddings import embed  # noqa: E402
 from apps.copilot.retriever import chunk_document  # noqa: E402
 from core.database import engine  # noqa: E402
@@ -32,27 +32,6 @@ CORPUS = [
     "docs/runbook.md",
     *sorted(str(p).replace("\\", "/") for p in Path("docs/decisions").glob("*.md")),
 ]
-
-
-def _add_chunk(session, doc_path: str, idx: int, chunk: str, embedding: str) -> None:
-    """One corpus row. On Postgres the column is a real VECTOR(1536) and
-    pgvector registers no implicit cast from text — a bare ORM bind of the
-    literal fails with 'column is of type vector'. The explicit CAST (the
-    same trick the search query's :q::vector uses) sends the literal as
-    text and lets the extension parse it. On SQLite (tests) the TEXT
-    column takes the plain ORM insert."""
-    if session.get_bind().dialect.name == "postgresql":
-        session.execute(
-            text(
-                "INSERT INTO knowledge_chunks (source, chunk_index, content, embedding) "
-                "VALUES (:source, :chunk_index, :content, CAST(:embedding AS vector))"
-            ),
-            {"source": doc_path, "chunk_index": idx, "content": chunk, "embedding": embedding},
-        )
-    else:
-        session.add(
-            KnowledgeChunk(source=doc_path, chunk_index=idx, content=chunk, embedding=embedding)
-        )
 
 
 def ingest(reset: bool = False) -> int:
@@ -77,7 +56,7 @@ def ingest(reset: bool = False) -> int:
                     .one_or_none()
                 )
                 if exists is None:
-                    _add_chunk(session, doc_path, idx, chunk, embed(chunk))
+                    add_chunk(session, doc_path, idx, chunk, embed(chunk))
                     total += 1
             session.commit()
             print(f"  {doc_path}: {len(chunks)} chunks")

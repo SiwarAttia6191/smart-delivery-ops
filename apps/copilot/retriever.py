@@ -62,33 +62,42 @@ def chunk_document(text: str) -> list[str]:
     return [c for c in chunks if c]
 
 
-def search_docs(db: Session, query: str, limit: int = 3) -> list[dict[str, Any]]:
+def search_docs(
+    db: Session, query: str, limit: int = 3, source_prefix: str | None = None
+) -> list[dict[str, Any]]:
     """The retriever: the question's nearest chunks from the knowledge
     corpus, with their sources so the answer can cite them. NOTE: no
     score threshold — the deterministic hash embeddings rank consistently
     but not semantically; real relevance arrives with Phase B's embedding
-    model, and the tool contract is "the nearest chunks"."""
+    model, and the tool contract is "the nearest chunks".
+
+    `source_prefix` scopes the search to a corpus family — "obsidian:"
+    for the operator's own vault notes, "docs:" for the shipped docs —
+    because with the hash embedder the scores compress to a narrow band
+    and cross-corpus ranking is weak; scoping is the honest fix until
+    real embeddings land."""
     from domain.models import KnowledgeChunk
 
     limit = max(1, min(int(limit), 10))
     query_embedding = embed(query)
 
     if db.get_bind().dialect.name == "postgresql":
-        rows = (
-            db.execute(
-                text(
-                    "SELECT source, chunk_index, content, "
-                    "1 - (embedding <=> CAST(:q AS vector)) AS score "
-                    "FROM knowledge_chunks ORDER BY embedding <=> CAST(:q AS vector) LIMIT :limit"
-                ),
-                {"q": query_embedding, "limit": limit},
-            )
-            .mappings()
-            .all()
+        sql = (
+            "SELECT source, chunk_index, content, "
+            "1 - (embedding <=> CAST(:q AS vector)) AS score "
+            "FROM knowledge_chunks"
         )
+        params: dict[str, Any] = {"q": query_embedding, "limit": limit}
+        if source_prefix:
+            sql += " WHERE source LIKE :prefix"
+            params["prefix"] = f"{source_prefix}%"
+        sql += " ORDER BY embedding <=> CAST(:q AS vector) LIMIT :limit"
+        rows = db.execute(text(sql), params).mappings().all()
         hits = [dict(r) for r in rows]
     else:
         chunks = db.query(KnowledgeChunk).all()
+        if source_prefix:
+            chunks = [c for c in chunks if c.source.startswith(source_prefix)]
         query_vec = _parse_vector(query_embedding)
         scored = sorted(
             ((c, _cosine(_parse_vector(c.embedding), query_vec)) for c in chunks),
