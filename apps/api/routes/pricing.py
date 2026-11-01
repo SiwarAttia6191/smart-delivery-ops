@@ -8,7 +8,7 @@ from apps.api.deps import get_db, require_writer
 from apps.api.schemas.pricing import QuoteRequest, QuoteResponse
 from core.exceptions import NotFoundError
 from domain.models import Restaurant, Tenant
-from domain.services import demand_service, pricing_service, tenant_service
+from domain.services import demand_service, pricing_service, promotion_service, tenant_service
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
@@ -43,12 +43,27 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         demand_ratio,
         settings=tenant_service.effective_settings(db),
     )
+    # promotions (#159 item 3): an accepted coupon becomes an auditable
+    # discount line. A quote is a PREVIEW — times_used does not tick here.
+    discount = 0.0
+    applied_code = None
+    if payload.coupon_code:
+        coupon = promotion_service.active_coupon(db, payload.coupon_code)
+        if coupon is None:
+            raise HTTPException(
+                status.HTTP_422_UNPROCESSABLE_ENTITY, detail="coupon code is not valid"
+            )
+        discount = promotion_service.apply_discount(coupon, quote.breakdown.total)
+        applied_code = coupon.code
     return QuoteResponse(
         distance_km=quote.distance_km,
         base_fee=quote.breakdown.base_fee,
         distance_fee=quote.breakdown.distance_fee,
         surge_multiplier=quote.breakdown.surge_multiplier,
         total=quote.breakdown.total,
+        discount=discount,
+        coupon_code=applied_code,
+        final_total=round(quote.breakdown.total - discount, 2) if applied_code else None,
     )
 
 
