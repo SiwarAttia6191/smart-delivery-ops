@@ -49,3 +49,6 @@ data/transform/.user.yml
 
 # OSRM map data (downloaded + prepared, ~100MB)
 data/osrm/
+
+# Local-only business notes (planning/competitive research) — never committed
+local/
