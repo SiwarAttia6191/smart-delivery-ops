@@ -30,7 +30,7 @@ python-multipart>=0.0.20
 
 # ── Ops Copilot (#120 Phase A): LangGraph orchestration + LangSmith wiring ──
 langgraph>=0.4
-langchain-core>=0.3
+langchain-core>=1.7.1
 openai>=1.40
 # langsmith>=0.2        # tracing sink (Phase B enablement: LANGSMITH_TRACING=true)
 
