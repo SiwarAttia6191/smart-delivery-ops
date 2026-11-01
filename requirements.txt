@@ -7,7 +7,7 @@ pydantic-settings>=2.16.1
 psycopg[binary]>=3.3.6
 # Schema ownership (Phase 5, #28): the ops DB is migrated by the Alembic
 # chain (compose `migrate` service / api lifespan), not create_all
-alembic>=1.14
+alembic>=1.20.1
 
 # HTTP client (smoke tests / demo scripts)
 httpx>=0.28.1
