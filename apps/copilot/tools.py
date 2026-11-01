@@ -27,7 +27,9 @@ class ToolSpec:
     func: Callable[..., Any]
 
     def validate(self, args: dict[str, Any]) -> None:
-        missing = [k for k in self.parameters if k not in args]
+        missing = [
+            k for k, spec in self.parameters.items() if not spec.get("optional") and k not in args
+        ]
         if missing:
             raise ValueError(f"missing argument(s) for {self.name}: {missing}")
 
@@ -59,10 +61,10 @@ def _analytics_by_tenant(db: Session) -> list[Any]:  # pydantic slices; the exec
     return analytics_routes.by_tenant(db)
 
 
-def _search_docs(db: Session, query: str) -> list[dict[str, Any]]:
+def _search_docs(db: Session, query: str, source_prefix: str | None = None) -> list[dict[str, Any]]:
     from apps.copilot.retriever import search_docs
 
-    return search_docs(db, query)
+    return search_docs(db, query, source_prefix=source_prefix)
 
 
 def _forecast_next_24h(db: Session) -> list[dict]:
@@ -109,8 +111,12 @@ def build_registry() -> dict[str, ToolSpec]:
         ToolSpec(
             name="search_docs",
             description="Search the platform's operational knowledge (runbook, "
-            "incident summaries, decisions) — use for HOW questions, not for numbers.",
-            parameters={"query": {"type": "str"}},
+            "incident summaries, decisions) and the operator's own notes "
+            "(source_prefix='obsidian:') — use for HOW questions, not for numbers.",
+            parameters={
+                "query": {"type": "str"},
+                "source_prefix": {"type": "str", "optional": True},
+            },
             func=_search_docs,
         ),
     ]
@@ -123,7 +129,11 @@ def tool_schemas(registry: dict[str, ToolSpec]) -> list[dict[str, Any]]:
         {
             "name": s.name,
             "description": s.description,
-            "parameters": {"type": "object", "properties": s.parameters},
+            "parameters": {
+                "type": "object",
+                "properties": s.parameters,
+                "required": [k for k, spec in s.parameters.items() if not spec.get("optional")],
+            },
         }
         for s in registry.values()
     ]

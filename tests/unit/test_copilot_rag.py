@@ -14,6 +14,39 @@ from apps.copilot.tools import build_registry, execute_tool
 REGISTRY = build_registry()
 
 
+class TestSourceScoping:
+    def test_source_prefix_scopes_the_search(self, db):
+        """The Obsidian bridge: vault notes land namespaced obsidian:...;
+        a prefixed search only sees that family (the hash embedder's
+        compressed scores make cross-corpus ranking weak — scoping is
+        the honest fix until real embeddings land)."""
+        from domain.models import KnowledgeChunk
+
+        db.add(
+            KnowledgeChunk(
+                source="docs/runbook.md",
+                chunk_index=0,
+                content="restart the relay worker",
+                embedding=embed("restart the relay worker"),
+            )
+        )
+        db.add(
+            KnowledgeChunk(
+                source="obsidian:My notes.md",
+                chunk_index=0,
+                content="my scaling note: three workers",
+                embedding=embed("my scaling note: three workers"),
+            )
+        )
+        db.commit()
+
+        scoped = search_docs(db, "workers", source_prefix="obsidian:")
+        assert scoped and all(h["source"].startswith("obsidian:") for h in scoped)
+
+        unscoped = search_docs(db, "workers", limit=10)
+        assert {h["source"] for h in unscoped} >= {"docs/runbook.md", "obsidian:My notes.md"}
+
+
 class TestEmbeddings:
     def test_deterministic_and_dimensioned(self):
         a, b = embed("how do I reset the relay?"), embed("how do I reset the relay?")

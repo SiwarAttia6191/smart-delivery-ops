@@ -19,7 +19,7 @@ the LLM-observability deferral record.
 | Phase | What shipped | Code | Evidence |
 |---|---|---|---|
 | A — the agent | LangGraph supervisor, 5-tool read-only registry, guardrails, scripted provider proving the whole loop keyless in CI, `POST /copilot/chat` | `apps/copilot/graph.py`, `apps/copilot/tools.py`, `apps/copilot/guardrails.py`, `apps/api/routes/copilot.py` | 33+ unit tests; injection probes answer 422 |
-| A — RAG | pgvector knowledge store (VECTOR 1536), heading-aware chunker, deterministic hash embedder, `search_docs` as the fifth tool | `apps/copilot/retriever.py`, `scripts/ingest_docs.py`, migration 005 | 16 chunks live from the runbook + decision records; ranked cosine scores verified on real Postgres |
+| A — RAG | pgvector knowledge store (VECTOR 1536), heading-aware chunker, deterministic hash embedder, `search_docs` as the fifth tool — plus the **Obsidian bridge**: personal vault notes join the corpus (`obsidian:` namespaced, `source_prefix` scoping) | `apps/copilot/retriever.py`, `scripts/ingest_docs.py`, `scripts/ingest_obsidian.py`, migration 005 | 16 chunks live from the runbook + decision records; a starter vault ingested and cited by the agent |
 | A — tracing | One MLflow run per conversation: provider, rung, tool-call count, degraded reason, token total, full message log artifact | `apps/copilot/tracing.py` | the `copilot` MLflow experiment |
 | B — live chain | Flagship→mini→canned fallback chain; per-rung reporting (`provider=openai:<model>`); `degraded_reason` names every failure in the payload; tool + token budgets (`copilot_max_tokens_per_chat`) | `apps/copilot/graph.py`, `apps/copilot/providers/` | live-verified with a real 429: the reason lands in the API response |
 | C — narrator | Alert-path narration: the failure alert carries a Slack-ready summary correlated with the platform's metrics + the latest MLflow benchmark run; fails open per source | `apps/copilot/narrator.py`, `dags/ml_alerts.py` | in-container narration with real numbers; 9 offline tests |
@@ -64,6 +64,14 @@ curl -s -X POST localhost:8010/copilot/chat -H "Authorization: Bearer $TOKEN" \
   `COPILOT_MODEL_MINI`).
 - **RAG corpus re-ingest**: `python scripts/ingest_docs.py --reset` (chunks
   `docs/runbook.md` + `docs/decisions/*.md` into pgvector).
+- **Your Obsidian vault as knowledge**: `python scripts/ingest_obsidian.py`
+  ingests a vault (default `~/Documents/SmartDeliveryVault`, `--vault` to point
+  elsewhere) into the same store, namespaced `obsidian:<note path>`. The
+  search_docs tool takes an optional `source_prefix` — "obsidian:" scopes a
+  question to YOUR notes ("what did I note about deploys?"), "docs:" to the
+  shipped documentation. Honest caveat: the hash embedder compresses scores,
+  so cross-corpus ranking is weak until Phase B's real embeddings land —
+  scoping is the fix that works today.
 - **Evals**: `pytest tests/eval/` (CI gate) or
   `python ml/evals/run_copilot_eval.py --min-pass-rate 0.8` (logs one MLflow
   run per batch; the `copilot_evals` DAG schedules it daily, paused by
@@ -92,10 +100,14 @@ Ordered by value-to-effort, each mapped to the layer it strengthens:
 5. **LangSmith evaluation** — the stack decision (#120) named LangSmith
    the industry tool to learn: mirror the golden-set eval there as the
    secondary sink, keeping MLflow as the default (sink by config).
-6. **Advanced RAG (reranking)** — the Naive-in-a-tool tier is documented
+6. **Real embeddings + reranking** — swap the hash embedder for a real
+   embedding model (the interface is ready), which fixes the compressed
+   cross-corpus scores; a cross-encoder reranker over the pgvector top-k
+   is the growth path when the corpus grows past a few hundred chunks.
+7. **Advanced RAG (reranking)** — the Naive-in-a-tool tier is documented
    in LEARNING §38b; a cross-encoder reranker over the pgvector top-k is
    the growth path when the corpus grows past a few hundred chunks.
-7. **Per-tenant knowledge** — `knowledge_chunks` is deliberately
+8. **Per-tenant knowledge** — `knowledge_chunks` is deliberately
    deployment-scoped; tenant-specific runbooks arrive with the first
    multi-tenant customer (a `tenant_id` column + RLS on the corpus).
 
