@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ordering demo — Smart Delivery Ops</title>
+  <meta name="description" content="A minimal customer storefront over the live Smart Delivery Ops API: pick a restaurant, price the delivery fee (coupon codes included), place the order, watch dispatch and the lifecycle happen for real." />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .store-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .store-lead { max-width: 62ch; color: var(--muted, #5b6472); }
+    .api-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 1.5rem 0 2.25rem; }
+    .api-bar input { flex: 1 1 260px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #b33; display: inline-block; }
+    .status-dot.ok { background: #2e9e5b; }
+    .status-hint { font-size: .85rem; color: var(--muted, #5b6472); }
+    .steps { display: grid; gap: 1.25rem; }
+    @media (min-width: 900px) { .steps { grid-template-columns: 1fr 1fr; } }
+    .step h2 { margin-top: 0; font-size: 1.05rem; }
+    .step .hint { font-size: .82rem; color: var(--muted, #5b6472); margin: .35rem 0 .75rem; }
+    .field-grid { display: grid; gap: .75rem; }
+    @media (min-width: 640px) { .field-grid.two { grid-template-columns: 1fr 1fr; } }
+    .banner { display: none; margin: 0 0 1.25rem; padding: .7rem 1rem; border-radius: 10px;
+              background: #fdeceb; color: #8c2f28; border: 1px solid #f3c2be; font-size: .9rem; }
+    .banner.show { display: block; }
+    .banner.info { background: #eef4fd; color: #274b7a; border-color: #c4d8f2; }
+    .bd-table { width: 100%; border-collapse: collapse; margin-top: .9rem; font-size: .92rem; }
+    .bd-table td { padding: .35rem 0; border-bottom: 1px dashed #e3e6ec; }
+    .bd-table td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .bd-table .grand td { border-bottom: none; font-weight: 700; font-size: 1rem; }
+    .bd-table .disc td { color: #1c7c46; }
+    .order-head { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; align-items: baseline; margin-bottom: .5rem; }
+    .status-badge { padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700;
+                    text-transform: uppercase; letter-spacing: .04em; background: #e8ebf0; color: #454d59; }
+    .status-badge[data-status="created"] { background: #eef4fd; color: #274b7a; }
+    .status-badge[data-status="assigned"] { background: #f3ecfd; color: #5b3a99; }
+    .status-badge[data-status="in_transit"] { background: #fdf3e4; color: #8a5a13; }
+    .status-badge[data-status="delivered"] { background: #e7f6ec; color: #1c7c46; }
+    .status-badge[data-status="cancelled"] { background: #fdeceb; color: #8c2f28; }
+    .events { list-style: none; margin: .75rem 0 0; padding: 0; font-size: .86rem; }
+    .events li { padding: .3rem 0; border-bottom: 1px dashed #e3e6ec; display: flex; gap: .75rem; }
+    .events time { color: var(--muted, #5b6472); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+    .who { font-size: .85rem; color: var(--muted, #5b6472); }
+    .store-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
+    .store-foot code, .step code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; }
+    .store-foot a { color: #8ab4ff; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.5rem">
+    <div class="store-main" style="padding-bottom:0">
+      <p class="eyebrow">Live demo · runs on the real stack</p>
+      <h1>The ordering storefront</h1>
+      <p class="store-lead">
+        A minimal customer face over the live API — not a simulation. Every button below is a real
+        HTTP call: the fee you see comes from the pricing engine (surge tiers and coupon codes
+        included), the driver assignment is the geolocation dispatcher, and the timeline is the
+        event log the warehouse consumes.
+      </p>
+      <div class="api-bar">
+        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL" />
+        <span class="status-dot" id="api-dot" role="img" aria-label="API status"></span>
+        <span class="status-hint" id="api-hint">checking…</span>
+      </div>
+      <div class="banner" id="banner"></div>
+    </div>
+  </header>
+
+  <main class="store-main" style="padding-top:0">
+    <div class="steps">
+      <section class="card step" aria-labelledby="h-basket">
+        <h2 id="h-basket">1 · Basket</h2>
+        <p class="hint">Loaded from <code>GET /customers</code> and <code>GET /restaurants</code>.</p>
+        <div class="field-grid">
+          <div class="field">
+            <label for="cust"><span>Customer</span></label>
+            <select id="cust"></select>
+          </div>
+          <div class="field">
+            <label for="rest"><span>Restaurant</span></label>
+            <select id="rest"></select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card step" aria-labelledby="h-quote">
+        <h2 id="h-quote">2 · Price the delivery</h2>
+        <p class="hint"><code>POST /pricing/quote</code> — dropoff prefills from the customer; a coupon
+          code becomes an auditable discount line. Omitting demand lets the API derive it live from
+          the demand forecasts.</p>
+        <div class="field-grid two">
+          <div class="field">
+            <label for="lat"><span>Dropoff latitude</span></label>
+            <input id="lat" type="number" step="0.0001" />
+          </div>
+          <div class="field">
+            <label for="lon"><span>Dropoff longitude</span></label>
+            <input id="lon" type="number" step="0.0001" />
+          </div>
+          <div class="field">
+            <label for="coupon"><span>Coupon code (optional)</span></label>
+            <input id="coupon" type="text" placeholder="e.g. WELCOME10" />
+          </div>
+          <div class="field">
+            <label for="demand"><span>Demand ratio (optional)</span></label>
+            <input id="demand" type="number" step="0.1" min="0" placeholder="derived from forecasts" />
+          </div>
+        </div>
+        <div class="flow-actions">
+          <button class="btn btn-primary btn-sm" id="btn-quote" type="button">Quote the fee</button>
+        </div>
+        <table class="bd-table" id="breakdown" hidden></table>
+      </section>
+
+      <section class="card step" aria-labelledby="h-place">
+        <h2 id="h-place">3 · Sign in &amp; place the order</h2>
+        <p class="hint">Order creation is a write, so it needs a token — the demo trio is
+          <code>ops/ops</code> (or <code>admin/admin</code>); viewers correctly get 403.
+          <code>POST /orders</code> quotes the fee again server-side.</p>
+        <div class="field-grid two">
+          <div class="field">
+            <label for="user"><span>Username</span></label>
+            <input id="user" type="text" value="ops" autocomplete="username" />
+          </div>
+          <div class="field">
+            <label for="pass"><span>Password</span></label>
+            <input id="pass" type="password" value="ops" autocomplete="current-password" />
+          </div>
+        </div>
+        <div class="flow-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-signin" type="button">Sign in</button>
+          <button class="btn btn-primary btn-sm" id="btn-place" type="button">Place order</button>
+          <span class="who" id="who"></span>
+        </div>
+        <p class="hint" id="place-note" hidden></p>
+      </section>
+
+      <section class="card step" aria-labelledby="h-track">
+        <h2 id="h-track">4 · Track the lifecycle</h2>
+        <p class="hint">Polled from <code>GET /orders/{id}</code> every few seconds — the same event
+          log Kafka relays to the warehouse. Operator buttons are writer-only.</p>
+        <div id="track-empty" class="hint">No order yet — place one in step 3.</div>
+        <div id="track" hidden>
+          <div class="order-head">
+            <span class="status-badge" id="order-status">—</span>
+            <span class="who" id="order-meta"></span>
+          </div>
+          <div class="flow-actions">
+            <button class="btn btn-ghost btn-sm" id="btn-assign" type="button">Assign nearest driver</button>
+            <button class="btn btn-ghost btn-sm" id="btn-transit" type="button">Start transit</button>
+            <button class="btn btn-ghost btn-sm" id="btn-deliver" type="button">Mark delivered</button>
+            <button class="btn btn-ghost btn-sm" id="btn-cancel" type="button">Cancel</button>
+          </div>
+          <ul class="events" id="events"></ul>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <p class="store-foot">
+    Needs the stack running locally: <code>docker compose up -d</code>, then
+    <code>python scripts/create_user.py --demo</code>. API reference:
+    <a href="https://siwarattia6191.github.io/smart-delivery-ops/api.html">api.md</a> ·
+    pricing simulator: <a href="index.html">back to the landing page</a>
+  </p>
+
+  <script type="module">
+    const params = new URLSearchParams(location.search);
+    const apiInput = document.getElementById("api-base");
+    apiInput.value = params.get("api") || "http://localhost:8010";
+
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null };
+
+    const $ = (id) => document.getElementById(id);
+    const banner = $("banner");
+    function showBanner(message, info = false) {
+      banner.textContent = message;
+      banner.classList.toggle("info", info);
+      banner.classList.add("show");
+    }
+    function hideBanner() { banner.classList.remove("show"); }
+
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      if (options.json !== undefined) {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(options.json);
+      }
+      const response = await fetch(apiInput.value.replace(/\/$/, "") + path, { ...options, headers });
+      if (!response.ok) {
+        let detail = response.status + " " + response.statusText;
+        try {
+          const body = await response.json();
+          detail = body.detail || body.error?.message || detail;
+        } catch { /* non-JSON error body */ }
+        const error = new Error(detail);
+        error.status = response.status;
+        throw error;
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    async function checkApi() {
+      const dot = $("api-dot");
+      const hint = $("api-hint");
+      try {
+        const health = await fetch(apiInput.value.replace(/\/$/, "") + "/health",
+          { signal: AbortSignal.timeout(3000) }).then((r) => r.json());
+        dot.classList.add("ok");
+        hint.textContent = "api up · v" + health.version + " · database " + health.database;
+        hideBanner();
+        return true;
+      } catch {
+        dot.classList.remove("ok");
+        hint.textContent = "offline";
+        showBanner("The API is unreachable. Start it with `docker compose up -d`, then seed the demo trio with `python scripts/create_user.py --demo`.");
+        return false;
+      }
+    }
+
+    function fillSelect(select, items, label) {
+      select.innerHTML = "";
+      for (const item of items) {
+        const option = document.createElement("option");
+        option.value = String(item.id);
+        option.textContent = "#" + item.id + " · " + item.name;
+        select.appendChild(option);
+      }
+      select.setAttribute("aria-label", label);
+    }
+
+    // the 180-day backfill seeded hundreds of load-test customers; the
+    // picker shows the first slice, lookups still cover everyone
+    const PICKER_LIMIT = 30;
+
+    function prefillDropoff() {
+      const customer = state.customers.find((c) => String(c.id) === $("cust").value);
+      if (customer) {
+        $("lat").value = customer.latitude;
+        $("lon").value = customer.longitude;
+      }
+    }
+
+    async function loadCatalog() {
+      const [customers, restaurants] = await Promise.all([api("/customers"), api("/restaurants")]);
+      state.customers = customers;
+      state.restaurants = restaurants.filter((r) => r.is_active);
+      fillSelect($("cust"), state.customers.slice(0, PICKER_LIMIT), "Customer");
+      fillSelect($("rest"), state.restaurants, "Restaurant");
+      prefillDropoff();
+    }
+
+    function quotePayload() {
+      const payload = {
+        restaurant_id: Number($("rest").value),
+        dropoff_latitude: Number($("lat").value),
+        dropoff_longitude: Number($("lon").value),
+      };
+      if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
+      if ($("demand").value) payload.demand_ratio = Number($("demand").value);
+      return payload;
+    }
+
+    function renderBreakdown(quote) {
+      const table = $("breakdown");
+      const rows = [
+        ["Distance", quote.distance_km.toFixed(2) + " km"],
+        ["Base fee", quote.base_fee.toFixed(2)],
+        ["Distance fee", quote.distance_fee.toFixed(2)],
+        ["Surge multiplier", "×" + quote.surge_multiplier.toFixed(2)],
+        ["Total fee", quote.total.toFixed(2)],
+      ];
+      let html = rows.map(([k, v]) => "<tr><td>" + k + "</td><td>" + v + "</td></tr>").join("");
+      if (quote.coupon_code) {
+        html += '<tr class="disc"><td>Coupon ' + quote.coupon_code + "</td><td>−" +
+          quote.discount.toFixed(2) + "</td></tr>";
+        html += '<tr class="grand"><td>Final total</td><td>' + quote.final_total.toFixed(2) + "</td></tr>";
+      } else {
+        html += '<tr class="grand"><td>Total to pay</td><td>' + quote.total.toFixed(2) + "</td></tr>";
+      }
+      table.innerHTML = html;
+      table.hidden = false;
+    }
+
+    async function quote() {
+      hideBanner();
+      try {
+        renderBreakdown(await api("/pricing/quote", { method: "POST", json: quotePayload() }));
+      } catch (error) {
+        showBanner("Quote failed: " + error.message);
+      }
+    }
+
+    function setWho() {
+      $("who").textContent = state.token ? "signed in as " + state.role : "";
+    }
+
+    async function signin() {
+      hideBanner();
+      const form = new FormData();
+      form.set("username", $("user").value);
+      form.set("password", $("pass").value);
+      try {
+        const body = await api("/auth/token", { method: "POST", body: form });
+        state.token = body.access_token;
+        const claims = JSON.parse(atob(body.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+        state.role = claims.role || "user";
+        setWho();
+      } catch (error) {
+        state.token = null;
+        setWho();
+        showBanner("Sign-in failed: " + error.message);
+      }
+    }
+
+    async function placeOrder() {
+      hideBanner();
+      if (!state.customers.length) { showBanner("Load the catalog first (check the API)."); return; }
+      const payload = {
+        customer_id: Number($("cust").value),
+        restaurant_id: Number($("rest").value),
+        dropoff_latitude: Number($("lat").value),
+        dropoff_longitude: Number($("lon").value),
+      };
+      if ($("demand").value) payload.demand_ratio = Number($("demand").value);
+      try {
+        const order = await api("/orders", { method: "POST", json: payload });
+        showOrder(order);
+        $("place-note").hidden = false;
+        $("place-note").textContent = "Order " + order.id + " placed — fee " + order.delivery_fee.toFixed(2) +
+          " · ETA " + order.eta_minutes + " min. Tracking below.";
+      } catch (error) {
+        if (error.status === 401) showBanner("401 — order creation needs a token. Sign in first (step 3).");
+        else showBanner("Order failed: " + error.message);
+      }
+    }
+
+    function renderEvents(order) {
+      $("events").innerHTML = order.events
+        .map((event) => {
+          const time = new Date(event.created_at).toLocaleTimeString();
+          const note = event.event_type === "created" && event.payload?.quoted_fee !== undefined
+            ? " · fee " + Number(event.payload.quoted_fee).toFixed(2)
+            : "";
+          return "<li><time>" + time + "</time><span><b>" + event.event_type + "</b>" + note + "</span></li>";
+        })
+        .join("");
+    }
+
+    function renderTrack(order) {
+      const badge = $("order-status");
+      badge.dataset.status = order.status;
+      badge.textContent = order.status.replace("_", " ");
+      $("order-meta").textContent = "order " + order.id + " · fee " + order.delivery_fee.toFixed(2) +
+        " · surge ×" + order.surge_multiplier.toFixed(2) + " · ETA " + order.eta_minutes + " min" +
+        (order.driver_id ? " · driver #" + order.driver_id : "") +
+        (order.delivery_minutes != null ? " · delivered in " + order.delivery_minutes + " min" : "");
+      renderEvents(order);
+      const writable = state.role === "ops" || state.role === "admin";
+      $("btn-assign").disabled = !writable || order.status !== "pending";
+      $("btn-transit").disabled = !writable || order.status !== "assigned";
+      $("btn-deliver").disabled = !writable || order.status !== "in_transit";
+      $("btn-cancel").disabled = !writable || !["pending", "assigned", "in_transit"].includes(order.status);
+    }
+
+    function showOrder(order) {
+      state.order = order;
+      $("track-empty").hidden = true;
+      $("track").hidden = false;
+      renderTrack(order);
+      if (state.timer) clearInterval(state.timer);
+      state.timer = setInterval(async () => {
+        try {
+          const fresh = await api("/orders/" + state.order.id);
+          state.order = fresh;
+          renderTrack(fresh);
+        } catch { /* transient poll errors stay silent */ }
+      }, 4000);
+    }
+
+    async function action(path, json) {
+      hideBanner();
+      try {
+        const order = await api("/orders/" + state.order.id + path, { method: "POST", json });
+        state.order = order;
+        renderTrack(order);
+      } catch (error) {
+        if (error.status === 401) showBanner("401 — sign in first (step 3).");
+        else if (error.status === 403) showBanner("403 — role '" + (state.role || "anonymous") + "' may not modify orders. Use ops or admin.");
+        else showBanner("Action failed: " + error.message);
+      }
+    }
+
+    $("btn-quote").addEventListener("click", quote);
+    $("btn-signin").addEventListener("click", signin);
+    $("btn-place").addEventListener("click", placeOrder);
+    $("btn-assign").addEventListener("click", () => action("/assign"));
+    $("btn-transit").addEventListener("click", () => action("/status", { status: "in_transit" }));
+    $("btn-deliver").addEventListener("click", () => action("/status", { status: "delivered" }));
+    $("btn-cancel").addEventListener("click", () => action("/status", { status: "cancelled" }));
+    $("cust").addEventListener("change", prefillDropoff);
+    apiInput.addEventListener("change", () => { checkApi().then((up) => { if (up) loadCatalog().catch(() => {}); }); });
+
+    checkApi().then(async (up) => {
+      if (!up) return;
+      try {
+        await loadCatalog();
+        await quote();
+      } catch (error) {
+        showBanner("Catalog load failed: " + error.message);
+      }
+    });
+  </script>
+</body>
+</html>

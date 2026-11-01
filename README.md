@@ -130,6 +130,12 @@ The fastest way to feel the whole lifecycle is the interactive docs at
 below was executed against the real API with PostgreSQL behind it — the
 captures are genuine responses, not mockups.
 
+Prefer clicking to curling? The **[ordering storefront](docs/ordering-demo.html)**
+(`docs/ordering-demo.html` — serve `docs/` locally or open the file) is a minimal
+customer face over the same API: pick a customer and restaurant, quote the fee
+(coupon codes included), sign in as the demo `ops` user, place the order, then
+assign a driver and watch the lifecycle events arrive in real time.
+
 **0 · Authorize** — mutating endpoints need a JWT (#28): click the green
 **Authorize** button, log in with the demo `ops` / `ops` credentials
 (OAuth2 password flow), and every subsequent "Try it out" rides the token.
