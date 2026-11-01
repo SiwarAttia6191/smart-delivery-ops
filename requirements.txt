@@ -26,7 +26,7 @@ pandas>=3.1
 # Authorize flow)
 pyjwt>=2.15.1
 bcrypt>=5.0.0
-python-multipart>=0.0.20
+python-multipart>=0.0.32
 
 # ── Ops Copilot (#120 Phase A): LangGraph orchestration + LangSmith wiring ──
 langgraph>=0.4
