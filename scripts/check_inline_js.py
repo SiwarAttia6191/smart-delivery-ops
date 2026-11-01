@@ -23,7 +23,7 @@ from pathlib import Path
 
 def check_page(page: Path, tmp: str) -> tuple[int, int]:
     html = page.read_text(encoding="utf-8")
-    modules = re.findall(r'<script type="module">(.*?)</script>', html, re.S)
+    modules = re.findall(r'<script[^>]*type=["\']module["\'][^>]*>(.*?)</script>', html, re.S)
     if not modules:
         raise SystemExit(f"no inline module scripts found in {page} — did the page change shape?")
 
@@ -50,6 +50,8 @@ def main() -> None:
     args = parser.parse_args()
 
     pages = [Path(args.page)] if args.page else sorted(Path("docs").glob("*.html"))
+    if not pages:
+        raise SystemExit("no docs/*.html found — run from the repo root")
     total_failures = 0
     total_modules = 0
     with tempfile.TemporaryDirectory() as tmp:

@@ -4,8 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Smart Delivery Ops — for delivery operators</title>
-<meta name="description" content="Delivery operations as a service: order lifecycle, driver dispatch, dynamic pricing, demand forecasting and an AI copilot — in one platform, in three tiers." />
+<meta name="description" content="Run your delivery operation on one system: orders, driver dispatch, dynamic pricing, demand forecasts — and an AI copilot that answers your questions in plain language. Fixed-scope pilot, honest pricing on the first call." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cff'/%3E%3Cstop offset='1' stop-color='%2338e1ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='url(%23g)'/%3E%3C/svg%3E" />
+
+<meta property="og:title" content="Smart Delivery Ops — run your delivery operation on one system" />
+<meta property="og:description" content="Orders, dispatch, pricing, forecasts and an AI copilot in one place. Fixed-scope pilot, price in writing within 48 hours of the first call." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="images/dashboard.png" />
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,6 +19,22 @@
 
 <style>
 /* ── product-page sections (shared brand lives in styles.css) ─────── */
+.hero-visual { display: none; }
+@media (min-width: 1100px) {
+  .hero-visual {
+    display: block; flex: 0 0 46%;
+  }
+  .hero-visual img {
+    width: 100%; border-radius: 18px;
+    border: 1px solid var(--line);
+    box-shadow: 0 40px 90px -40px rgba(124, 108, 255, 0.55);
+  }
+  .hero-visual figcaption {
+    color: var(--muted); font-size: 0.82rem; margin-top: 0.7rem; text-align: center;
+  }
+  .hero-inner.with-visual { display: flex; align-items: center; gap: 3.5rem; }
+  .hero-inner.with-visual .copy { flex: 1; }
+}
 .steps {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 1.2rem; margin-top: 2.4rem; counter-reset: step;
@@ -65,11 +86,21 @@
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8.5 6 12.5 14 3.5' stroke='black' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 8.5 6 12.5 14 3.5' stroke='black' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-.tier-evidence {
-  color: var(--muted); font-size: 0.82rem; text-decoration: none;
-  border-top: 1px solid var(--line); padding-top: 0.9rem;
+.tier-actions {
+  border-top: 1px solid var(--line); padding-top: 1rem;
+  display: flex; flex-direction: column; gap: 0.6rem;
 }
+.tier-actions .btn { justify-content: center; padding: 0.7rem 1.2rem; font-size: 0.9rem; }
+.tier-evidence { color: var(--muted); font-size: 0.82rem; text-decoration: none; text-align: center; }
 .tier-evidence:hover { color: var(--accent-b); }
+
+.pricing-note {
+  max-width: 720px; margin: 2.4rem auto 0; text-align: center;
+  border: 1px dashed rgba(124, 108, 255, 0.5); border-radius: 18px;
+  padding: 1.6rem 1.8rem;
+}
+.pricing-note h3 { font-family: "Space Grotesk", sans-serif; margin-bottom: 0.6rem; }
+.pricing-note p { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
 
 .trust {
   display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 2.2rem;
@@ -79,13 +110,36 @@
   color: var(--muted); font-size: 0.85rem;
 }
 
+.faq { max-width: 780px; margin: 2.4rem auto 0; display: flex; flex-direction: column; gap: 0.9rem; }
+.faq details {
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  padding: 1.1rem 1.4rem;
+}
+.faq details[open] { border-color: rgba(124, 108, 255, 0.4); }
+.faq summary {
+  cursor: pointer; font-weight: 600; font-size: 0.97rem; list-style: none; position: relative;
+  padding-right: 2rem;
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after {
+  content: "+"; position: absolute; right: 0; top: -0.1em;
+  font-family: "Space Grotesk", sans-serif; font-size: 1.3rem; color: var(--accent-b);
+}
+.faq details[open] summary::after { content: "–"; }
+.faq details p { color: var(--muted); font-size: 0.92rem; line-height: 1.6; margin-top: 0.7rem; }
+
 .contact-card {
   max-width: 760px; margin: 0 auto; text-align: center;
   background: linear-gradient(180deg, rgba(124, 108, 255, 0.14), rgba(56, 225, 255, 0.05)), var(--card);
   border: 1px solid rgba(124, 108, 255, 0.4); border-radius: 26px; padding: 3.2rem 2.4rem;
 }
 .contact-card h2 { font-family: "Space Grotesk", sans-serif; font-size: clamp(1.6rem, 3.6vw, 2.3rem); margin-bottom: 0.9rem; }
-.contact-card p { color: var(--muted); max-width: 34rem; margin: 0 auto 1.8rem; line-height: 1.6; }
+.contact-card p { color: var(--muted); max-width: 36rem; margin: 0 auto 1.8rem; line-height: 1.6; }
+.contact-card .direct {
+  display: block; margin-top: 1.4rem; color: var(--muted); font-size: 0.9rem;
+}
+.contact-card .direct a { color: var(--text); text-decoration: none; }
+.contact-card .direct a:hover { color: var(--accent-b); }
 .contact-row { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
 </style>
 </head>
@@ -114,38 +168,45 @@
       <ul class="nav-links">
         <li><a href="#platform">How it works</a></li>
         <li><a href="#tiers">Tiers</a></li>
+        <li><a href="#faq">Questions</a></li>
         <li><a href="index.html">Engineering</a></li>
       </ul>
     </nav>
-    <a class="btn btn-primary nav-cta" href="#contact">Get a demo</a>
+    <button class="nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <a class="btn btn-primary" href="#contact">Get a demo</a>
   </div>
 </header>
 
 <section class="hero" id="top">
-  <div class="hero-inner">
+  <div class="hero-inner with-visual">
     <div class="copy">
       <div class="badge reveal"><span class="dot"></span>Delivery operations, run for you</div>
 
       <h1 class="reveal">Your delivery operation,<br/><span class="grad">without the spreadsheets</span>.</h1>
 
       <p class="sub reveal">
-        Smart Delivery Ops runs the whole ride for a delivery operator: orders, driver
-        dispatch, dynamic pricing, demand forecasts — and an AI copilot that answers
-        your ops questions in plain language. You run the business; the platform runs
-        the operation.
+        One system for the whole ride: orders, driver dispatch, dynamic pricing and
+        demand forecasts — plus an AI copilot that answers your questions in plain
+        language. You run the business; the platform runs the operation.
       </p>
 
       <div class="cta-row reveal">
-        <a class="btn btn-primary" href="#contact">Book an intro call</a>
-        <a class="btn btn-ghost" href="index.html"><span class="play" aria-hidden="true"></span>See the engineering behind it</a>
+        <a class="btn btn-primary" href="#contact">Email me — I answer within a day</a>
+        <a class="btn btn-ghost" href="index.html#demo"><span class="play" aria-hidden="true"></span>Watch it run a real delivery</a>
       </div>
 
       <div class="stats reveal">
-        <div class="stat"><div class="v">3</div><div class="l">tiers, upgrade in place</div></div>
-        <div class="stat"><div class="v">2×</div><div class="l">better ETAs vs. guesswork</div></div>
-        <div class="stat"><div class="v">24/7</div><div class="l">monitored event pipeline</div></div>
+        <div class="stat"><div class="v">1</div><div class="l">system instead of 5 tools</div></div>
+        <div class="stat"><div class="v">15<span class="grad">min</span></div><div class="l">to see your own order live on it</div></div>
+        <div class="stat"><div class="v">24/7</div><div class="l">watched pipeline, narrated alerts</div></div>
       </div>
     </div>
+    <figure class="hero-visual reveal">
+      <img src="images/dashboard.png" alt="The Smart Delivery Ops dashboard: live KPIs, demand versus supply, and per-zone demand for the coming day" />
+      <figcaption>The operations dashboard every tier includes — your numbers, live.</figcaption>
+    </figure>
   </div>
 
   <a class="scroll-cue" href="#platform" aria-label="Scroll to how it works">
@@ -160,25 +221,25 @@
     <span class="eyebrow">How it works</span>
     <h2>Four moving parts, one system of record</h2>
     <p class="lead">
-      Every order, driver move and price quote is an event in the platform's pipeline —
-      which is why the dashboards, the forecasts and the copilot all agree with each other.
+      Every order and every driver move is recorded once — which is why the
+      dashboard, the prices and the forecasts can never disagree with each other.
     </p>
     <div class="steps">
       <div class="step">
         <h3>Take &amp; track orders</h3>
-        <p>One API for the full lifecycle — pending, assigned, in transit, delivered — with an auditable history per order and per-customer records.</p>
+        <p>One place for the full journey — placed, assigned, on the way, delivered — with a history you can always answer "who changed this, and when" from.</p>
       </div>
       <div class="step">
         <h3>Dispatch the nearest driver</h3>
-        <p>Real road distances, vehicle filters and live availability heartbeats. Drivers free up automatically on delivery; stale ones are swept offline.</p>
+        <p>Real road distances and live availability: you see which drivers are actually free right now, and drivers free up automatically on delivery.</p>
       </div>
       <div class="step">
         <h3>Price &amp; promise</h3>
-        <p>Distance-based fees with demand-surge tiers, and arrival promises served by a trained ETA model — with a transparent fallback so quoting never stops.</p>
+        <p>Fees that follow real distance and real demand — every quote comes with its full breakdown. Arrival promises come from a model trained on real deliveries, with a safe fallback so quoting never stops.</p>
       </div>
       <div class="step">
         <h3>Learn &amp; watch</h3>
-        <p>Hourly demand forecasts per zone, drift-checked models, a live ops dashboard, and an AI copilot that answers questions and narrates incidents.</p>
+        <p>Demand forecasts per zone that retrain when they get stale, a live dashboard, and an AI copilot that answers your questions and explains incidents when something breaks.</p>
       </div>
     </div>
   </div>
@@ -188,57 +249,106 @@
 <section class="section" id="tiers">
   <div class="swoosh">
     <span class="eyebrow">Tiers</span>
-    <h2>Start with the operation. Add the intelligence. Add the copilot.</h2>
+    <h2>Start with the operation. Grow the intelligence. Scale with answers.</h2>
     <p class="lead">
-      Every tier below is shipped and running — nothing here is a promise on a roadmap.
-      Each card links to the working evidence.
+      Everything below is built, running, and inspectable — each card links to the
+      working evidence, not a brochure.
     </p>
     <div class="tiers">
       <div class="tier">
-        <h3>Tier 1 — Core operations</h3>
+        <h3>Tier 1 — Start: run the operation</h3>
         <p class="tier-for">For the operator who needs one dependable system instead of five tools.</p>
         <ul>
-          <li>Full order lifecycle API with auditable event history</li>
-          <li>Geographic nearest-driver dispatch with live availability</li>
-          <li>Dynamic pricing with surge tiers and itemized quotes</li>
-          <li>Event pipeline feeding a governed warehouse</li>
-          <li>Live operations dashboard</li>
+          <li>Orders end to end — placed, assigned, on the way, delivered — with a full history</li>
+          <li>Nearest-driver dispatch with live availability</li>
+          <li>Pricing that follows distance and demand, with itemized quotes</li>
+          <li>A dashboard with today's numbers, always current</li>
         </ul>
-        <a class="tier-evidence" href="index.html#features">See it working →</a>
+        <div class="tier-actions">
+          <a class="btn btn-primary" href="#contact">Start with Tier 1</a>
+          <a class="tier-evidence" href="index.html#features">See it working →</a>
+        </div>
       </div>
 
       <div class="tier">
-        <h3>Tier 2 — Intelligence</h3>
-        <p class="tier-for">For the operator who wants the platform to see the next hour coming.</p>
+        <h3>Tier 2 — Grow: see the next hour coming</h3>
+        <p class="tier-for">For the operator who wants the platform to see the rush before it arrives.</p>
         <ul>
-          <li>Hourly demand forecasts, per zone, retrained on schedule</li>
-          <li>Model-backed ETAs with transparent heuristic fallback</li>
-          <li>Drift watch: models that flag their own aging</li>
-          <li>Prometheus + Grafana monitoring with alert rules</li>
-          <li>Per-tenant isolation (database-enforced, not promise-enforced)</li>
+          <li>Demand forecasts per zone, refreshed on a schedule</li>
+          <li>Arrival promises from a trained model — with a safe fallback</li>
+          <li>Forecasts that check themselves and retrain when they drift</li>
+          <li>Alerts when the pipeline needs attention</li>
+          <li>Your data walled off from every other customer — enforced by the database itself</li>
         </ul>
-        <a class="tier-evidence" href="index.html#analytics">See the numbers →</a>
+        <div class="tier-actions">
+          <a class="btn btn-primary" href="#contact">Grow with Tier 2</a>
+          <a class="tier-evidence" href="index.html#analytics">See the numbers →</a>
+        </div>
       </div>
 
       <div class="tier premium">
         <span class="tier-flag">Most complete</span>
-        <h3>Tier 3 — AI copilot</h3>
-        <p class="tier-for">For the operator who wants answers in a sentence, not in a dashboard.</p>
+        <h3>Tier 3 — Scale: answers in a sentence</h3>
+        <p class="tier-for">For the operator who wants to ask, not dig.</p>
         <ul>
-          <li>The Ops Copilot: ask "how did we do today?" in plain language — it queries your data, scoped to your tenant</li>
-          <li>Incident narrator: when something breaks, the alert arrives already explaining itself</li>
-          <li>Knowledge search over your runbooks and decisions</li>
-          <li>Guardrails, budgets and an evaluated harness behind every answer</li>
+          <li>The AI copilot: ask "how did we do today?" — it checks your data and answers in plain language, scoped to your business only</li>
+          <li>When something breaks, the alert arrives already explaining what happened and what to check first</li>
+          <li>Ask how-to questions about your own operation — it reads your runbook</li>
+          <li>Every copilot answer is tested against real numbers before you see it</li>
         </ul>
-        <a class="tier-evidence" href="index.html#architecture">See how it's built →</a>
+        <div class="tier-actions">
+          <a class="btn btn-primary" href="#contact">Scale with Tier 3</a>
+          <a class="tier-evidence" href="index.html#copilot">See how it's built →</a>
+        </div>
       </div>
     </div>
 
+    <div class="pricing-note">
+      <h3>How pricing works</h3>
+      <p>
+        No mystery subscriptions. We start with a <strong>fixed-scope pilot</strong>:
+        we connect your order intake, set up dispatch and pricing for your zones,
+        and go live with you. You leave the first call with a
+        <strong>fixed pilot price in writing within 48 hours</strong> — no hourly
+        billing, no surprises. After the pilot, it's a monthly subscription sized
+        to your order volume and fleet.
+      </p>
+    </div>
+
     <div class="trust">
-      <span>Multi-tenant by database, not by convention</span>
-      <span>JWT-authenticated, role-scoped API</span>
-      <span>Full audit trail on every state change</span>
-      <span>Typed, tested (85% CI coverage floor), dependency-audited</span>
+      <span>Your data is walled off from every other customer — enforced by the database</span>
+      <span>Every order change is logged: always answer "who changed this, and when"</span>
+      <span>Only you see your numbers — the copilot is scoped to your business</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── BUYER FAQ ────────────────────────────────────────────────── -->
+<section class="section" id="faq">
+  <div class="swoosh">
+    <span class="eyebrow">Questions</span>
+    <h2>The things every operator asks first</h2>
+    <div class="faq">
+      <details>
+        <summary>Where does it run? Do I need servers?</summary>
+        <p>No. It runs on infrastructure I set up and manage for you. You get a web dashboard and an API — nothing to install at your end.</p>
+      </details>
+      <details>
+        <summary>Who owns the data?</summary>
+        <p>You do. Every order, driver record and price change is yours and exportable any day. If we part ways, you walk away with your complete history.</p>
+      </details>
+      <details>
+        <summary>My orders arrive by phone and WhatsApp today. Can it connect?</summary>
+        <p>Yes — that's exactly what the pilot's first week is for. Whatever your intake looks like today (phone, WhatsApp, a spreadsheet), we connect it so the platform becomes your single record from day one.</p>
+      </details>
+      <details>
+        <summary>What happens after the pilot?</summary>
+        <p>You keep the subscription and the system keeps running — or you walk away with your data. The pilot's job is that the decision makes itself.</p>
+      </details>
+      <details>
+        <summary>Who maintains it?</summary>
+        <p>The engineer who built it — the same person on the intro call is the one on call when something needs attention. Every part of the platform is monitored around the clock, and when something breaks, the alert already explains what happened.</p>
+      </details>
     </div>
   </div>
 </section>
@@ -248,16 +358,18 @@
   <div class="swoosh">
     <span class="eyebrow">Next step</span>
     <div class="contact-card">
-      <h2>Tell us about your delivery operation.</h2>
+      <h2>Bring your messiest process.</h2>
       <p>
-        Fifteen minutes is enough to map your current workflow onto the tiers above and
-        quote the pilot. Bring your messiest process — that's the one the copilot helps
-        with first.
+        Email me about your delivery operation — I'll reply within one business day
+        with a time for a 15-minute call. On that call I'll run a real order through
+        the platform, live, and tell you straight whether it fits your operation.
+        You leave with a fixed pilot price in writing within 48 hours.
       </p>
       <div class="contact-row">
-        <a class="btn btn-primary" href="mailto:siwar.attia6191@gmail.com?subject=Smart%20Delivery%20Ops%20—%20pilot%20inquiry">Book an intro call</a>
-        <a class="btn btn-ghost" href="index.html">Explore the engineering</a>
+        <a class="btn btn-primary" href="mailto:siwar.attia6191@gmail.com?subject=Smart%20Delivery%20Ops%20—%20pilot%20inquiry">Email me now</a>
+        <a class="btn btn-ghost" href="index.html#demo">Watch the demo first</a>
       </div>
+      <span class="direct">Prefer plain email? <a href="mailto:siwar.attia6191@gmail.com">siwar.attia6191@gmail.com</a> — one engineer, reachable directly, every message answered.</span>
     </div>
   </div>
 </section>
@@ -283,13 +395,14 @@
       <h5>Product</h5>
       <a href="#platform">How it works</a>
       <a href="#tiers">Tiers &amp; pricing</a>
+      <a href="#faq">Questions</a>
       <a href="#contact">Contact</a>
     </div>
     <div class="foot-col">
       <h5>Engineering</h5>
+      <a href="index.html#demo">Watch the live demo</a>
       <a href="index.html">Portfolio &amp; walkthrough</a>
       <a href="https://github.com/SiwarAttia6191/smart-delivery-ops" target="_blank" rel="noopener">GitHub repository</a>
-      <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/LICENSE" target="_blank" rel="noopener">License (MIT)</a>
     </div>
   </div>
   <div class="foot-base">
@@ -300,13 +413,27 @@
 
 <script type="module">
 /* Shared brand behaviors (same design language as the portfolio page):
-   the scrolled-nav toggle and the position-checked reveal loop. The
-   reveal is deliberately rAF + timer based, not IntersectionObserver —
-   some embedded browsers never deliver IO callbacks, which would leave
-   sections stuck at opacity 0. Both loops stop themselves once every
-   section is revealed. */
+   the scrolled-nav toggle, the mobile disclosure menu, and the
+   position-checked reveal loop. The reveal is deliberately rAF + timer
+   based, not IntersectionObserver — some embedded browsers never deliver
+   IO callbacks, which would leave sections stuck at opacity 0. Both
+   loops stop themselves once every section is revealed. */
 const nav = document.getElementById("nav");
 addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
+
+const burger = document.getElementById("nav-burger");
+if (burger) {
+  burger.addEventListener("click", () => {
+    const open = document.querySelector(".nav-links").classList.toggle("open");
+    burger.setAttribute("aria-expanded", String(open));
+  });
+  document.querySelectorAll(".nav-links a").forEach((a) =>
+    a.addEventListener("click", () => {
+      document.querySelector(".nav-links").classList.remove("open");
+      burger.setAttribute("aria-expanded", "false");
+    })
+  );
+}
 
 const revealSwooshes = () =>
   document.querySelectorAll(".swoosh:not(.in)").forEach((el) => {

@@ -7,6 +7,11 @@
 <meta name="description" content="Open-source, production-inspired delivery operations platform: order lifecycle, geographic dispatch, dynamic pricing, forecasting and analytics." />
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c6cff'/%3E%3Cstop offset='1' stop-color='%2338e1ff'/%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='url(%23g)'/%3E%3C/svg%3E" />
 
+<meta property="og:title" content="Smart Delivery Ops — AI-Powered Delivery Operations Platform" />
+<meta property="og:description" content="Production-inspired delivery platform: order lifecycle, dispatch, dynamic pricing, forecasting — and an AI copilot over the governed API. Every claim links to the code." />
+<meta property="og:type" content="website" />
+<meta property="og:image" content="images/dashboard.png" />
+
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -48,7 +53,10 @@
         <li><a href="product.html">Pricing</a></li>
       </ul>
     </nav>
-    <a class="btn btn-primary nav-cta" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
+    <button class="nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+    <a class="btn btn-primary" href="https://github.com/SiwarAttia6191/smart-delivery-ops">Get started</a>
   </div>
 </header>
 
@@ -97,37 +105,37 @@
     </p>
     <div class="cards">
       <div class="card">
-        <div class="ico">📦</div>
+        <div class="ico" aria-hidden="true">📦</div>
         <h3>Order management</h3>
         <p>Create orders and track the full lifecycle — pending → assigned → in transit → delivered — with an immutable event history per order.</p>
       </div>
       <div class="card">
-        <div class="ico">📍</div>
+        <div class="ico" aria-hidden="true">📍</div>
         <h3>Driver dispatch</h3>
         <p>Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats. Drivers free up automatically on delivery.</p>
       </div>
       <div class="card">
-        <div class="ico">💸</div>
+        <div class="ico" aria-hidden="true">💸</div>
         <h3>Dynamic pricing</h3>
         <p>Distance-based fees with demand-surge tiers and a minimum-fee floor. When the client omits a demand ratio, the engine derives it live from zone-hour demand forecasts. Every quote returns a full, auditable breakdown.</p>
       </div>
       <div class="card">
-        <div class="ico">⏱️</div>
+        <div class="ico" aria-hidden="true">⏱️</div>
         <h3>ETA estimation</h3>
-        <p>ETAs served by the registry-promoted LightGBM model (beats the heuristic 5.2 vs 17.8 min MAE on realized deliveries — a 12 km order now quotes 22 min instead of 54). If the model store is down, the transparent heuristic answers instead.</p>
+        <p>ETAs served by the registry-promoted LightGBM model (beats the heuristic 5.1 vs 17.8 min MAE on realized deliveries — a 12 km order now quotes 22 min instead of 54). If the model store is down, the transparent heuristic answers instead.</p>
       </div>
       <div class="card">
-        <div class="ico">📊</div>
+        <div class="ico" aria-hidden="true">📊</div>
         <h3>Operational analytics</h3>
         <p>KPI summaries — status mix, revenue, average delivery time, fleet availability — plus a Prometheus metrics endpoint for alerting.</p>
       </div>
       <div class="card">
-        <div class="ico">🤖</div>
+        <div class="ico" aria-hidden="true">🤖</div>
         <h3>AI copilot</h3>
         <p>Ask "how did we do today?" in plain language — a LangGraph agent queries the governed API with your tenant's credentials, searches the runbook when it's a how question, and narrates incidents when alerts fire.</p>
       </div>
       <div class="card">
-        <div class="ico">🛡️</div>
+        <div class="ico" aria-hidden="true">🛡️</div>
         <h3>Production discipline</h3>
         <p>Fully typed (mypy), an 85% coverage floor enforced in CI on three Python versions, dependency CVE audits, Docker packaging, and a protected main branch with required checks.</p>
       </div>
@@ -176,45 +184,45 @@
     </p>
     <div class="cards">
       <div class="card">
-        <div class="ico">💸</div>
+        <div class="ico" aria-hidden="true">💸</div>
         <div class="chip-row"><span class="chip live">Live</span></div>
         <h3>Pricing API</h3>
         <p>Delivery fees per quote — base + per-km + surge tiers with a minimum-fee floor — every response a full, auditable breakdown. Parameters market-benchmarked, not guessed.</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/api/routes/pricing.py" target="_blank" rel="noopener">POST /pricing/quote</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/rules/pricing_rules.py" target="_blank" rel="noopener">pricing_rules.py</a></p>
       </div>
       <div class="card">
-        <div class="ico">🔮</div>
+        <div class="ico" aria-hidden="true">🔮</div>
         <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked</span></div>
         <h3>Demand-aware surge</h3>
         <p>The fee already knows what this hour usually looks like: zone-hour demand forecasts feed the surge tiers automatically, so pricing anticipates the lunch rush instead of reacting to it. The forecast refreshes itself hourly on Airflow; gradient boosting benchmarked against a seasonal-naive baseline (MAE 1.16 vs 2.39).</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/ml/pipelines/forecast_demand.py" target="_blank" rel="noopener">forecast_demand.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/benchmarks" target="_blank" rel="noopener">benchmark reports</a></p>
       </div>
       <div class="card">
-        <div class="ico">🛵</div>
+        <div class="ico" aria-hidden="true">🛵</div>
         <div class="chip-row"><span class="chip live">Live</span></div>
         <h3>Dispatch-as-a-Service</h3>
         <p>Nearest-driver matching with vehicle eligibility and live availability. Every assignment and release is an event, so fleet supply is queryable per zone and hour.</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/driver_matching_service.py" target="_blank" rel="noopener">driver_matching_service.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/worker/relay.py" target="_blank" rel="noopener">drivers.events relay</a></p>
       </div>
       <div class="card">
-        <div class="ico">📦</div>
+        <div class="ico" aria-hidden="true">📦</div>
         <div class="chip-row"><span class="chip live">Live</span></div>
         <h3>Event-sourced operations</h3>
         <p>Every order and driver state change flows Kafka → warehouse → dbt marts on an Airflow schedule. Replayable history with quarantine and data-quality gates — not a mutable row you have to trust.</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/apps/worker/relay.py" target="_blank" rel="noopener">outbox relay</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/transform" target="_blank" rel="noopener">dbt project (48 checks)</a></p>
       </div>
       <div class="card">
-        <div class="ico">📊</div>
+        <div class="ico" aria-hidden="true">📊</div>
         <div class="chip-row"><span class="chip live">Live</span></div>
         <h3>Zone &amp; fleet analytics</h3>
-        <p>Demand vs supply per zone-hour, driver utilization, pricing history, daily funnel — the tables an operator actually asks questions of, refreshed daily. Dashboard UI ships in Phase 4.</p>
+        <p>Demand vs supply per zone-hour, driver utilization, pricing history, daily funnel — the tables an operator actually asks questions of, refreshed daily. Dashboard UI live today (Phase 4).</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/tree/main/data/transform/models/marts" target="_blank" rel="noopener">7 warehouse marts</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/dags/warehouse_daily_build.py" target="_blank" rel="noopener">Airflow DAG</a></p>
       </div>
       <div class="card">
-        <div class="ico">⏱️</div>
+        <div class="ico" aria-hidden="true">⏱️</div>
         <div class="chip-row"><span class="chip live">Live</span><span class="chip bench">Benchmarked ground truth</span></div>
         <h3>ETA engine</h3>
-        <p>Every order gets an ETA from the MLflow-registered model (challenger beat the heuristic 5.2 vs 17.8 min MAE on realized deliveries), with the transparent calibrated heuristic as automatic fallback when the model store is unreachable.</p>
+        <p>Every order gets an ETA from the MLflow-registered model (challenger beat the heuristic 5.1 vs 17.8 min MAE on realized deliveries), with the transparent calibrated heuristic as automatic fallback when the model store is unreachable.</p>
         <p class="power"><b>Powered by:</b> <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/domain/services/eta_service.py" target="_blank" rel="noopener">eta_service.py</a> · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/core/config.py" target="_blank" rel="noopener">calibrated in config</a></p>
       </div>
     </div>
@@ -363,22 +371,22 @@ flowchart LR
     </p>
     <div class="cards">
       <div class="card">
-        <div class="ico">🧠</div>
+        <div class="ico" aria-hidden="true">🧠</div>
         <h3>The agent</h3>
         <p>A LangGraph supervisor whose read-only tools execute on the request's own session — Postgres RLS scopes every answer to the caller's tenant. pgvector RAG serves the how questions from the runbook and decision records.</p>
       </div>
       <div class="card">
-        <div class="ico">🛟</div>
+        <div class="ico" aria-hidden="true">🛟</div>
         <h3>The safety net</h3>
         <p>Injection screening and question caps answer 422 before any model call; tool-call and token budgets end the loop gracefully; the fallback chain (flagship → mini → canned) reports which rung served and why — degraded_reason in the payload, not the logs.</p>
       </div>
       <div class="card">
-        <div class="ico">📈</div>
+        <div class="ico" aria-hidden="true">📈</div>
         <h3>The evidence</h3>
         <p>One MLflow run per conversation (provider, rung, cost, full message log); a versioned golden eval set runs in CI — wrong tool, broken shape, budget that stops stopping all fail the build — and a scheduled Airflow eval scores the live provider daily.</p>
       </div>
       <div class="card">
-        <div class="ico">🚨</div>
+        <div class="ico" aria-hidden="true">🚨</div>
         <h3>The narrator</h3>
         <p>When a pipeline task fails, the alert arrives already explaining itself: what broke, the current outbox backlog and relay age, the benchmark run it correlates with, the first checks. Fails open per source — the alert never waits for prose.</p>
       </div>
@@ -409,7 +417,7 @@ flowchart LR
       <span class="strip-item">Docker Compose</span>
       <span class="strip-item">GitHub Actions</span>
       <span class="strip-item planned">Redis cache</span>
-      <span class="strip-item planned">Streamlit dashboard</span>
+      <span class="strip-item">Streamlit dashboard</span>
       <span class="strip-item planned">OpenTelemetry</span>
       <span class="strip-item planned">Kubernetes</span>
     </div>
@@ -423,7 +431,7 @@ flowchart LR
     <h2>The numbers an operator opens every morning</h2>
     <p class="lead">
       The analytics endpoint already serves these live from PostgreSQL; the dashboard
-      experience ships in Phase 4. Figures below are sample data.
+      experience live today (Phase 4). Figures below are sample data.
     </p>
     <div class="kpis">
       <div class="kpi"><div class="v">1,284</div><div class="l">orders this month</div></div>
@@ -748,10 +756,27 @@ if (THREE) {
       if (!reduced) requestAnimationFrame(tick);
     }
     tick();
-
-    const nav = document.getElementById("nav");
-    addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
   }
+}
+
+/* ── nav behaviors (top-level: they run with or without WebGL) ───── */
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 24), { passive: true });
+
+/* Mobile disclosure menu (the UX round: below 920px the links simply
+   vanished — mobile visitors had zero navigation). */
+const burger = document.getElementById("nav-burger");
+if (burger) {
+  burger.addEventListener("click", () => {
+    const open = document.querySelector(".nav-links").classList.toggle("open");
+    burger.setAttribute("aria-expanded", String(open));
+  });
+  document.querySelectorAll(".nav-links a").forEach((a) =>
+    a.addEventListener("click", () => {
+      document.querySelector(".nav-links").classList.remove("open");
+      burger.setAttribute("aria-expanded", "false");
+    })
+  );
 }
 </script>
 
@@ -979,10 +1004,11 @@ try {
    is reachable, the heading follows whatever city it serves; hosted
    statically, the default label stands. */
 try {
-  const configResponse = await fetch("http://localhost:8010/config", {
-    signal: AbortSignal.timeout(2500),
-  });
-  if (configResponse.ok) {
+  const localApi = ["localhost", "127.0.0.1"].includes(location.hostname);
+  const configResponse = localApi
+    ? await fetch("http://localhost:8010/config", { signal: AbortSignal.timeout(2500) })
+    : null;
+  if (configResponse && configResponse.ok) {
     const cityConfig = await configResponse.json();
     const label = cityConfig.label ?? cityConfig.city;
     if (label) document.getElementById("route-city-label").textContent = label;
