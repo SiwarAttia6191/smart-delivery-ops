@@ -90,6 +90,24 @@ UI's dev credentials). Unknown user and wrong password return the same
 | GET | `/analytics/summary` | KPIs: status mix, revenue, avg fee, avg delivery time, fleet state |
 | GET | `/analytics/metrics` | Prometheus text exposition |
 
+## Copilot
+
+`POST /copilot/chat` — the AI agent over the governed API (Phase 5). JWT required
+(any authenticated role); every tool answer is scoped to the caller's tenant by RLS.
+
+```json
+// request
+{ "question": "How many orders were delivered this week?" }
+// response
+{ "answer": "...", "tool_calls_used": 2, "provider": "openai:gpt-4o-mini",
+  "degraded": false, "degraded_reason": null, "prompt_version": "v1", "usage_total": 1820 }
+```
+
+Guardrails reject before any model call (422): instruction-injection patterns,
+empty questions, >2,000 characters. On total provider failure the endpoint still
+answers 200 with `degraded: true` and `degraded_reason` naming each failure.
+Full design: [ai.md](ai.md).
+
 ## Error envelope
 
 Domain errors return a consistent body:
