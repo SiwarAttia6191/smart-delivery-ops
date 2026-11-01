@@ -47,6 +47,42 @@ class TestSourceScoping:
         assert {h["source"] for h in unscoped} >= {"docs/runbook.md", "obsidian:My notes.md"}
 
 
+class TestVaultSync:
+    def test_sync_replaces_changed_and_tombstones_deleted(self, db, tmp_path):
+        """The production semantics: unchanged notes cost nothing, changed
+        notes replace their stale chunks, and notes deleted from the vault
+        are tombstoned out of the store instead of haunting answers."""
+        from sqlalchemy import text
+
+        from scripts.ingest_obsidian import ingest
+
+        vault = tmp_path / "vault"
+        vault.mkdir()
+        (vault / "a.md").write_text("# A\n\nalpha content", encoding="utf-8")
+        (vault / "b.md").write_text("# B\n\nbeta content", encoding="utf-8")
+        assert ingest(vault, session=db) == 2
+        assert ingest(vault, session=db) == 0  # unchanged: zero work
+
+        (vault / "a.md").write_text("# A\n\nalpha CHANGED", encoding="utf-8")
+        (vault / "b.md").unlink()
+        assert ingest(vault, session=db) == 1
+
+        sources = {
+            row
+            for row in db.execute(
+                text("SELECT DISTINCT source FROM knowledge_chunks WHERE source LIKE 'obsidian:%'")
+            ).scalars()
+        }
+        assert sources == {"obsidian:a.md"}
+        contents = [
+            row
+            for row in db.execute(
+                text("SELECT content FROM knowledge_chunks WHERE source = 'obsidian:a.md'")
+            ).scalars()
+        ]
+        assert any("CHANGED" in c for c in contents)
+
+
 class TestEmbeddings:
     def test_deterministic_and_dimensioned(self):
         a, b = embed("how do I reset the relay?"), embed("how do I reset the relay?")

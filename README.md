@@ -34,6 +34,7 @@ in plain language and narrates incidents when something breaks.
 | 🤖 **AI copilot** | `POST /copilot/chat` — a LangGraph supervisor whose read-only tools run on the request's session, so Row-Level Security scopes every answer to the caller's tenant; pgvector RAG over the runbook and decision records; guardrails (injection screening, question caps), tool-call + token budgets, and a flagship→mini fallback chain ([issue #120](https://github.com/SiwarAttia6191/smart-delivery-ops/issues/120)) |
 | 🚨 **Incident narrator** | When a pipeline task fails, the alert arrives already explaining itself — the narrator correlates the failure with the platform's own metrics and the latest MLflow benchmark run, and fails open per source (#122) |
 | 🧪 **Eval harness** | A versioned golden set (question → expected tools → answer shape) runs in CI — a wrong tool call or a broken answer shape fails the build — and a scheduled Airflow eval scores the configured provider into an MLflow experiment (#123) |
+| 📝 **Obsidian bridge** | Your own notes join the copilot's knowledge: `make vault-ingest` syncs an Obsidian vault into the pgvector store (changed notes replaced, deleted notes tombstoned), and `search_docs` scopes questions to your notes vs. the shipped docs |
 | 📚 **OpenAPI / Swagger** | Typed Pydantic contracts, interactive docs at `/docs` and `/redoc` out of the box |
 
 ## 🧱 Tech stack
@@ -561,6 +562,8 @@ The **incident narrator** rides the alert path: when a pipeline task fails, the
 alert carries a narrated summary (what broke, the current metrics, the first
 checks) — deterministic template when the model is unavailable, live model when
 funded, failing open per evidence source either way.
+
+Your **Obsidian vault** joins the same store (`make vault-ingest`) — the copilot cites your own notes beside the runbook.
 
 Phase issues: [#120](https://github.com/SiwarAttia6191/smart-delivery-ops/issues/120)
 (core + RAG + tracing) · [#121](https://github.com/SiwarAttia6191/smart-delivery-ops/issues/121)
