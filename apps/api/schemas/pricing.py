@@ -10,6 +10,7 @@ class QuoteRequest(BaseModel):
     dropoff_latitude: float = Field(..., ge=-90, le=90)
     dropoff_longitude: float = Field(..., ge=-180, le=180)
     demand_ratio: float | None = Field(None, ge=0)  # None = derive from the forecast table
+    coupon_code: str | None = Field(None, max_length=60)  # promotions (#159 item 3)
 
     @model_validator(mode="after")
     def check_pickup(self) -> "QuoteRequest":
@@ -26,3 +27,8 @@ class QuoteResponse(BaseModel):
     distance_fee: float
     surge_multiplier: float
     total: float
+    # present when a coupon_code was supplied and accepted; total above is
+    # the fee BEFORE the discount, final_total is what the order would pay
+    discount: float = 0.0
+    coupon_code: str | None = None
+    final_total: float | None = None

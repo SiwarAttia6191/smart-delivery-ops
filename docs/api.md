@@ -76,6 +76,18 @@ UI's dev credentials). Unknown user and wrong password return the same
 
 `demand_ratio` on order creation and quotes is optional: omit it and the API derives it live from the `demand_forecasts` table (observed vs forecast demand for the dropoff zone-hour, floored 0.5 / capped 2.5, neutral 1.0 when no forecast covers the hour).
 
+## Coupons (promotions)
+
+Per-tenant discount codes, the mirror of the pricing engine (#159): the same code can exist in two tenants with different values, and cross-tenant use looks identical to an unknown code.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/coupons` | Create a code for the caller's tenant (writer). `discount_kind` `percent` (≤100) or `amount`; optional `expires_at` and `max_redemptions` |
+| GET | `/coupons` | List the caller's tenant's codes (open GET, tenant-scoped) |
+| DELETE | `/coupons/{id}` | Deactivate (soft — the code stays for auditing) (writer) |
+
+Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an auditable line: `total` stays the fee before the discount, `discount` is the applied amount (capped at the fee — never a payout), `final_total` is what the order would pay. Every rejection — unknown, inactive, expired, budget spent — is the same 422, so codes cannot be probed for existence. A quote is a preview: `times_used` only ticks when an order is placed with the code (wired with the ordering surface, #159 item 1).
+
 ## Routes
 
 | Method | Path | Description |
