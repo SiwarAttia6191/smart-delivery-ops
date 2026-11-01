@@ -64,6 +64,10 @@ curl -s -X POST localhost:8010/copilot/chat -H "Authorization: Bearer $TOKEN" \
   `COPILOT_MODEL_MINI`).
 - **RAG corpus re-ingest**: `python scripts/ingest_docs.py --reset` (chunks
   `docs/runbook.md` + `docs/decisions/*.md` into pgvector).
+- **Inspect the store**: `python scripts/inspect_knowledge.py` (or `make
+  knowledge-list`, `--prefix obsidian:` for your notes only) — every
+  source with its chunk count and a content preview, so "what does the
+  copilot know?" is answerable in one command.
 - **Your Obsidian vault as knowledge**: `python scripts/ingest_obsidian.py`
   ingests a vault (default `~/Documents/SmartDeliveryVault`, `--vault` to point
   elsewhere) into the same store, namespaced `obsidian:<note path>`. The
