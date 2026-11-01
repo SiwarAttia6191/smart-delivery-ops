@@ -22,6 +22,7 @@ body {
 }
 
 ::selection { background: var(--accent-a); color: #fff; }
+:focus-visible { outline: 2px solid var(--accent-b); outline-offset: 3px; border-radius: 4px; }
 
 /* ── ambient background ─────────────────────────────────────────── */
 .orbs { position: fixed; inset: 0; z-index: 0; overflow: hidden; }
@@ -77,7 +78,8 @@ body.no3d .fallback-blob { display: block; }
   font-family: "Space Grotesk", sans-serif; font-weight: 700;
   font-size: 1.12rem; letter-spacing: 0.04em;
 }
-.nav-links { display: flex; gap: 2.1rem; list-style: none; }
+.nav-links { display: flex; gap: 1.5rem; list-style: none; }
+.nav-links a, .logo span { white-space: nowrap; }
 .nav-links a {
   color: var(--muted); text-decoration: none; font-size: 0.93rem; font-weight: 500;
   background: linear-gradient(var(--text), var(--text)) no-repeat 0 100% / 0 1px;
@@ -85,6 +87,15 @@ body.no3d .fallback-blob { display: block; }
   padding-bottom: 3px;
 }
 .nav-links a:hover { color: var(--text); background-size: 100% 1px; }
+.nav-burger {
+  display: none; flex-direction: column; gap: 5px; background: none; border: none;
+  padding: 0.5rem; cursor: pointer;
+}
+.nav-burger span {
+  width: 22px; height: 2px; background: var(--text); border-radius: 2px;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
 
 /* ── buttons ─────────────────────────────────────────────────────── */
 .btn {
@@ -261,7 +272,7 @@ h1 {
 /* ── services (status chips + evidence links) ─────────────────────── */
 .chip-row { display: flex; gap: 0.4rem; margin-bottom: 0.75rem; }
 .chip {
-  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
   padding: 0.24rem 0.6rem; border-radius: 999px; border: 1px solid;
 }
 .chip.live { color: #4ade80; border-color: rgba(74, 222, 128, 0.4); background: rgba(74, 222, 128, 0.08); }
@@ -459,3 +470,23 @@ details.faq[open] summary { color: #38e1ff; }
 details.faq p { margin: .7rem 0 0; font-size: .93rem; color: rgba(255,255,255,.82); }
 details.faq code { font-size: .85em; }
 @media (max-width: 860px) { .compare-grid { grid-template-columns: 1fr; } }
+
+/* ── route map: the light OSM raster reads wrong on the dark theme (#125 review) ── */
+.route-map .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.95);
+}
+
+/* ── mobile navigation (the UX round: below 920px the links vanished —
+   a disclosure burger replaces them; this block lives at the END of the
+   file so it wins the cascade against the base rules above) ────────── */
+@media (max-width: 920px) {
+  .nav-burger { display: flex; }
+  .nav-links {
+    display: none; position: fixed; top: var(--nav-h); left: 0; right: 0;
+    flex-direction: column; gap: 1.1rem; padding: 1.6rem 2rem 2rem;
+    background: rgba(6, 7, 16, 0.97); border-bottom: 1px solid var(--line);
+    -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  }
+  .nav-links.open { display: flex; }
+  .scroll-cue { display: none; }
+}
