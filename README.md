@@ -125,6 +125,21 @@ disagrees with the manifest — no city's history can be mis-grained by a stale 
 follows the city. Adding a new city = one JSON file; swapping the default deployment's
 map region = `OSRM_EXTRACT_ID` + `OSRM_DATA_DIR` (see `.env.example`).
 
+### 🧳 The demo unit — four containers, the whole story (#169)
+
+`docker-compose.demo.yml` runs exactly what the storefront touches — postgres, api, osrm, and the migrate one-shot — sized for a ~2 GB box. No Airflow, MLflow, Kafka, dbt, Grafana or Prometheus (the outbox accumulates instead of draining; demand forecasts are seeded as rows, so the live surge derivation works without the ML pipeline):
+
+```bash
+docker compose -f docker-compose.demo.yml up -d --build
+# ports: API ${DEMO_API_PORT:-8010}, Postgres ${DEMO_PG_PORT:-5434} (shift if the full stack is up)
+DATABASE_URL="postgresql+psycopg://smartops:$(cat secrets/db_password.txt | tr -d '\r\n')@localhost:${DEMO_PG_PORT:-5434}/smart_delivery_ops" \
+  python scripts/seed_demo.py
+```
+
+Then the storefront is at `http://localhost:${DEMO_API_PORT:-8010}/storefront/ordering-demo.html`, seeded with the demo sign-in trio, the `STOREDEMO10` coupon, a dispatchable driver and 24h of forecasts. `scripts/seed_demo.py` is idempotent — the same command re-tops-up a running demo and is the nightly-reset body on the hosted deployment (decision record [0004](docs/decisions/0004-live-public-demo.md)).
+
+Building it also fixed a **fresh-install gap in the main stack**: nothing created the `sdo_app` runtime role the api connects as — every deployment's volume had it only from manual setup, so a brand-new `docker compose up` crash-looped the api on authentication. The migrate one-shot now runs `scripts/bootstrap_roles.py` (role created-if-absent, password synced from the mounted secret, grants applied) before the Alembic chain.
+
 ## 🎮 Try it live — Swagger walkthrough
 
 The fastest way to feel the whole lifecycle is the interactive docs at
