@@ -100,6 +100,19 @@ The checkout seam (#159 item 2): the pricing engine produces the amount, a payme
 
 A settlement appends a `paid` event to the order's event log (`amount`, `provider`, `provider_ref`) — the same feed the warehouse consumes, so revenue analytics never need the ops tables. The storefront's "Pay now (sandbox)" button drives the whole seam live.
 
+## Menu (restaurant portal)
+
+The kitchen's CRUD surface (#159 item 4): menu items per restaurant, tenant-scoped (9th RLS table, migration 008). The portal (`docs/restaurant-portal.html`) drives it; the storefront browses it read-only. V1 honesty: an order does not carry line items yet — the menu prices what the restaurant sells, the delivery fee prices the ride; a cart with per-order items is the documented next step.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/restaurants/{id}/menu-items` | Add an item — `name`, `price` (>0), optional `description`, `is_available` (writer) |
+| GET | `/restaurants/{id}/menu-items` | The menu (open GET, tenant-scoped) |
+| PATCH | `/menu-items/{id}` | Rename / reprice / flip availability ("sold out") (writer) |
+| DELETE | `/menu-items/{id}` | Remove the item (writer; availability flips cover sold-out) |
+
+Cross-tenant reads and writes are the same uniform 404 as an unknown id — no probing.
+
 ## Routes
 
 | Method | Path | Description |

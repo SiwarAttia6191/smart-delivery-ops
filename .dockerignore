@@ -18,6 +18,8 @@ docs/*
 !docs/decisions
 !docs/decisions/*.md
 !docs/ordering-demo.html
+!docs/restaurant-portal.html
+!docs/demos.html
 !docs/styles.css
 tests
 .github
