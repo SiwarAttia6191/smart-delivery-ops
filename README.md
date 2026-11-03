@@ -657,7 +657,7 @@ one commit and explains what landed and why.
 
 - **[Product page](docs/product.html)** — what the platform does for a delivery operator, and the three tiers (core operations / intelligence / AI copilot) — the sales story, no code links needed
 - [`docs/runbook.md`](docs/runbook.md) — recovery story (incarnation tokens), the supply-overcount monitoring note, the ETA hot-reload semantics, the compose memory budget, and the alert paging flow (Airflow narrated alerts + Alertmanager)
-- [`docs/decisions/`](docs/decisions/) — decision records: multi-tenancy (0001), open-dataset evaluation (0002), hosting migration when the repo goes private (0003)
+- [`docs/decisions/`](docs/decisions/) — decision records: multi-tenancy (0001), open-dataset evaluation (0002), hosting migration when the repo goes private (0003), a public always-on live demo on a small VPS (0004)
 
 - [Architecture overview](docs/architecture.md) — system diagram and design decisions
 - [API reference](docs/api.md) — endpoint catalogue (also live at `/docs`)
