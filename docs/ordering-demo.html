@@ -81,6 +81,7 @@
             <select id="rest"></select>
           </div>
         </div>
+        <p class="hint" id="menu-preview" hidden></p>
       </section>
 
       <section class="card step" aria-labelledby="h-quote">
@@ -250,6 +251,22 @@
       fillSelect($("cust"), state.customers.slice(0, PICKER_LIMIT), "Customer");
       fillSelect($("rest"), state.restaurants, "Restaurant");
       prefillDropoff();
+      await loadMenuPreview();
+    }
+
+    // read-only menu browsing (#159 item 4): the portal owns the CRUD,
+    // the customer just sees what the kitchen sells today
+    async function loadMenuPreview() {
+      const preview = $("menu-preview");
+      try {
+        const items = (await api("/restaurants/" + $("rest").value + "/menu-items"))
+          .filter((item) => item.is_available);
+        preview.hidden = items.length === 0;
+        preview.textContent = "Menu: " +
+          items.map((item) => item.name + " " + item.price.toFixed(2)).join(" · ");
+      } catch {
+        preview.hidden = true;
+      }
     }
 
     function quotePayload() {
@@ -437,6 +454,7 @@
     $("btn-deliver").addEventListener("click", () => action("/status", { status: "delivered" }));
     $("btn-cancel").addEventListener("click", () => action("/status", { status: "cancelled" }));
     $("cust").addEventListener("change", prefillDropoff);
+    $("rest").addEventListener("change", loadMenuPreview);
     apiInput.addEventListener("change", () => { checkApi().then((up) => { if (up) loadCatalog().catch(() => {}); }); });
 
     checkApi().then(async (up) => {

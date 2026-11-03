@@ -21,6 +21,7 @@ from apps.api.routes import (
     customers,
     drivers,
     health,
+    menu,
     orders,
     payments,
     pricing,
@@ -94,6 +95,7 @@ def create_app() -> FastAPI:
     for router in (
         health.router,
         auth.router,
+        menu.router,
         customers.router,
         restaurants.router,
         drivers.router,

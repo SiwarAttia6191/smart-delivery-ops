@@ -9,6 +9,7 @@ from domain.models.driver import Driver
 from domain.models.driver_event import DriverEvent
 from domain.models.driver_relay_dead_letter import DriverRelayDeadLetter
 from domain.models.knowledge_chunk import KnowledgeChunk
+from domain.models.menu_item import MenuItem
 from domain.models.order import Order, OrderStatus
 from domain.models.order_event import OrderEvent
 from domain.models.payment import Payment
@@ -31,6 +32,7 @@ __all__ = [
     "DriverEvent",
     "DriverRelayDeadLetter",
     "KnowledgeChunk",
+    "MenuItem",
     "Order",
     "OrderEvent",
     "OrderStatus",

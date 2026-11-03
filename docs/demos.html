@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live demos — Smart Delivery Ops</title>
+  <meta name="description" content="One entry point per role: the operator's dashboard, the AI copilot chat, the customer ordering storefront, and the restaurant portal — all driving the same real API." />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .demos-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .demos-lead { max-width: 62ch; color: var(--muted, #5b6472); }
+    .demos-grid { display: grid; gap: 1.25rem; margin-top: 2rem; }
+    @media (min-width: 900px) { .demos-grid { grid-template-columns: 1fr 1fr; } }
+    .demos-grid h2 { margin-top: 0; font-size: 1.05rem; }
+    .demos-grid .role { font-size: .78rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+                        color: #8ab4ff; display: block; margin-bottom: .3rem; }
+    .demos-grid ul { margin: .6rem 0 1rem; padding-left: 1.1rem; color: var(--muted, #5b6472); font-size: .9rem; }
+    .demos-grid li { margin-bottom: .25rem; }
+    .demos-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
+    .demos-foot a { color: #8ab4ff; }
+    .demos-foot code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.5rem">
+    <div class="demos-main" style="padding-bottom:0">
+      <p class="eyebrow">Live demos · one entry point per role</p>
+      <h1>Pick your seat at the counter</h1>
+      <p class="demos-lead">
+        The same platform looks different depending on where you stand. Each card below is a
+        real surface over one API — nothing mocked, every number traceable to code. With the
+        stack running (<code>docker compose up -d</code>), they are all live at once.
+      </p>
+    </div>
+  </header>
+
+  <main class="demos-main" style="padding-top:0">
+    <div class="demos-grid">
+      <section class="card">
+        <span class="role">For the operator</span>
+        <h2>Operations dashboard</h2>
+        <ul>
+          <li>KPIs, daily volume and revenue, demand vs supply per zone, driver utilization</li>
+          <li>Fed by the warehouse marts, not the ops tables — the same numbers the copilot sees</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="http://localhost:8501/">Open the dashboard</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="role">For the operator who asks</span>
+        <h2>AI copilot chat</h2>
+        <ul>
+          <li>"How did we do today?" — answered from your data, scoped to your tenant by RLS</li>
+          <li>Sign in on the dashboard, then the <b>Copilot</b> page — the answer shows its provider, tool calls and any degraded fallback</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="http://localhost:8501/Copilot">Open the copilot</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="role">For the customer</span>
+        <h2>Ordering storefront</h2>
+        <ul>
+          <li>Quote the delivery fee (live surge from demand forecasts), apply a coupon, place the order, pay in sandbox mode</li>
+          <li>Watch the driver get dispatched and the lifecycle land event by event</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="http://localhost:8010/storefront/ordering-demo.html">Open the storefront</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="role">For the restaurant</span>
+        <h2>Restaurant portal</h2>
+        <ul>
+          <li>Keep the menu true: prices, sold-out flips, new items — CRUD over the live API</li>
+          <li>Watch incoming orders land in real time, polled from the same feed dispatch reads</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="http://localhost:8010/storefront/restaurant-portal.html">Open the portal</a>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <p class="demos-foot">
+    Stack up: <code>docker compose up -d</code> · demo sign-in: <code>python scripts/create_user.py --demo</code>
+    (ops/ops) · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md">api.md</a> ·
+    <a href="https://siwarattia6191.github.io/smart-delivery-ops/">landing page</a> ·
+    <a href="product.html">pricing</a>
+  </p>
+</body>
+</html>

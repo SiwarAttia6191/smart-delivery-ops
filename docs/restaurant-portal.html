@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Restaurant portal — Smart Delivery Ops</title>
+  <meta name="description" content="The restaurant's view of the platform: manage the menu (prices, availability) and watch incoming orders arrive in real time — every action a real API call." />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .portal-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .portal-lead { max-width: 62ch; color: var(--muted, #5b6472); }
+    .portal-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: end; margin: 1.5rem 0 2rem; }
+    .portal-bar .field { flex: 1 1 180px; }
+    .banner { display: none; margin: 0 0 1.25rem; padding: .7rem 1rem; border-radius: 10px;
+              background: #fdeceb; color: #ff9d94; border: 1px solid #f3c2be; font-size: .9rem; }
+    .banner.show { display: block; }
+    .portal-grid { display: grid; gap: 1.25rem; }
+    @media (min-width: 900px) { .portal-grid { grid-template-columns: 1.2fr 1fr; } }
+    .portal-grid h2 { margin-top: 0; font-size: 1.05rem; }
+    .hint { font-size: .82rem; color: var(--muted, #5b6472); margin: .35rem 0 .75rem; }
+    .menu-table { width: 100%; border-collapse: collapse; font-size: .9rem; }
+    .menu-table td { padding: .45rem .3rem; border-bottom: 1px dashed #e3e6ec33; vertical-align: middle; }
+    .menu-table .price { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .menu-table .off { color: #ff9d94; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; }
+    .menu-form { display: grid; gap: .6rem; margin-top: 1rem; }
+    @media (min-width: 640px) { .menu-form { grid-template-columns: 2fr 1fr auto; } }
+    .order-card { border: 1px solid #e3e6ec33; border-radius: 10px; padding: .7rem .9rem; margin-bottom: .6rem; }
+    .order-card .oid { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--muted, #5b6472); }
+    .order-card .sum { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .9rem; margin-top: .2rem; }
+    .badge-new { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem;
+                 font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+                 background: #f3ecfd; color: #b79df0; margin-left: .4rem; }
+    .btn-xs { padding: .15rem .55rem; font-size: .78rem; }
+    .who { font-size: .85rem; color: var(--muted, #5b6472); }
+    .empty { color: var(--muted, #5b6472); font-size: .85rem; }
+    .portal-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
+    .portal-foot code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; }
+    .portal-foot a { color: #8ab4ff; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.5rem">
+    <div class="portal-main" style="padding-bottom:0">
+      <p class="eyebrow">Live demo · runs on the real stack</p>
+      <h1>The restaurant portal</h1>
+      <p class="portal-lead">
+        The restaurant's side of the counter: keep the menu true (prices, what's sold out)
+        and watch incoming orders arrive — polled from the same event feed the dispatch
+        console and the warehouse read. Every button is a real API call.
+      </p>
+      <div class="portal-bar">
+        <div class="field">
+          <label for="user"><span>Username</span></label>
+          <input id="user" type="text" value="ops" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="pass"><span>Password</span></label>
+          <input id="pass" type="password" value="ops" autocomplete="current-password" />
+        </div>
+        <div class="field">
+          <button class="btn btn-ghost btn-sm" id="btn-signin" type="button">Sign in</button>
+        </div>
+        <div class="field">
+          <label for="rest"><span>Restaurant</span></label>
+          <select id="rest" disabled></select>
+        </div>
+        <span class="who" id="who"></span>
+      </div>
+      <div class="banner" id="banner"></div>
+    </div>
+  </header>
+
+  <main class="portal-main" style="padding-top:0">
+    <div class="portal-grid">
+      <section class="card">
+        <h2>Menu</h2>
+        <p class="hint"><code>POST/GET/PATCH/DELETE</code> on <code>/restaurants/{id}/menu-items</code> —
+          availability flips are the "sold out" switch; the storefront reads this list.</p>
+        <div id="menu-empty" class="empty">Sign in and pick a restaurant to manage its menu.</div>
+        <table class="menu-table" id="menu-table" hidden></table>
+        <form class="menu-form" id="add-form" hidden>
+          <input id="mi-name" type="text" placeholder="Item name" required minlength="1" />
+          <input id="mi-price" type="number" placeholder="Price" required min="0.01" step="0.01" />
+          <button class="btn btn-primary btn-sm" type="submit">Add item</button>
+        </form>
+      </section>
+
+      <section class="card">
+        <h2>Incoming orders <span class="badge-new" id="orders-live">live</span></h2>
+        <p class="hint">Pending orders for this restaurant — the dispatcher assigns the driver;
+          this is where the kitchen sees demand land.</p>
+        <div id="orders-empty" class="empty">No pending orders right now.</div>
+        <div id="orders"></div>
+      </section>
+    </div>
+  </main>
+
+  <p class="portal-foot">
+    Needs the stack running: <code>docker compose up -d</code> · sign in with the demo trio
+    (<code>ops/ops</code>) · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md">api.md</a> ·
+    <a href="https://siwarattia6191.github.io/smart-delivery-ops/">landing page</a> ·
+    <a href="ordering-demo.html">customer storefront</a>
+  </p>
+
+  <script type="module">
+    const apiBase = "http://localhost:8010";
+    const state = { token: null, role: null, restaurants: [], restId: null, timer: null };
+
+    const $ = (id) => document.getElementById(id);
+    function showBanner(message) {
+      const banner = $("banner");
+      banner.textContent = message;
+      banner.classList.add("show");
+    }
+    function hideBanner() { $("banner").classList.remove("show"); }
+
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      if (options.json !== undefined) {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(options.json);
+      }
+      const response = await fetch(apiBase + path, { ...options, headers });
+      if (!response.ok) {
+        let detail = response.status + " " + response.statusText;
+        try {
+          const body = await response.json();
+          detail = body.detail || body.error?.message || detail;
+        } catch { /* non-JSON error body */ }
+        const error = new Error(detail);
+        error.status = response.status;
+        throw error;
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    async function signin() {
+      hideBanner();
+      const form = new FormData();
+      form.set("username", $("user").value);
+      form.set("password", $("pass").value);
+      try {
+        const body = await api("/auth/token", { method: "POST", body: form });
+        state.token = body.access_token;
+        const claims = JSON.parse(atob(body.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+        state.role = claims.role || "user";
+        $("who").textContent = "signed in as " + state.role;
+        $("rest").disabled = false;
+        await loadRestaurants();
+      } catch (error) {
+        showBanner("Sign-in failed: " + error.message);
+      }
+    }
+
+    async function loadRestaurants() {
+      const restaurants = await api("/restaurants");
+      state.restaurants = restaurants.filter((r) => r.is_active);
+      $("rest").innerHTML = state.restaurants
+        .map((r) => '<option value="' + r.id + '">#' + r.id + " · " + r.name + "</option>")
+        .join("");
+      state.restId = state.restaurants[0]?.id ?? null;
+      if (state.restId) {
+        await loadMenu();
+        await loadOrders();
+        if (state.timer) clearInterval(state.timer);
+        state.timer = setInterval(loadOrders, 5000);
+      }
+    }
+
+    async function loadMenu() {
+      const items = await api("/restaurants/" + state.restId + "/menu-items");
+      $("menu-empty").hidden = items.length > 0;
+      $("menu-table").hidden = items.length === 0;
+      $("add-form").hidden = false;
+      $("menu-table").innerHTML = items
+        .map((item) => {
+          const avail = item.is_available
+            ? '<button class="btn btn-ghost btn-xs" data-act="off" data-id="' + item.id + '">mark sold out</button>'
+            : '<span class="off">sold out</span> <button class="btn btn-ghost btn-xs" data-act="on" data-id="' + item.id + '">restore</button>';
+          return "<tr><td>" + item.name + "</td>" +
+            '<td class="price">' + item.price.toFixed(2) + "</td>" +
+            "<td>" + avail + "</td>" +
+            '<td><button class="btn btn-ghost btn-xs" data-act="del" data-id="' + item.id + '">remove</button></td></tr>';
+        })
+        .join("");
+    }
+
+    $("menu-table").addEventListener("click", async (event) => {
+      const button = event.target.closest("button[data-act]");
+      if (!button) return;
+      hideBanner();
+      const id = button.dataset.id;
+      const act = button.dataset.act;
+      try {
+        if (act === "del") await api("/menu-items/" + id, { method: "DELETE" });
+        else await api("/menu-items/" + id, { method: "PATCH", json: { is_available: act === "on" } });
+        await loadMenu();
+      } catch (error) {
+        showBanner("Menu update failed: " + error.message);
+      }
+    });
+
+    $("add-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      hideBanner();
+      try {
+        await api("/restaurants/" + state.restId + "/menu-items", {
+          method: "POST",
+          json: { name: $("mi-name").value.trim(), price: Number($("mi-price").value) },
+        });
+        $("mi-name").value = "";
+        $("mi-price").value = "";
+        await loadMenu();
+      } catch (error) {
+        showBanner("Could not add the item: " + error.message);
+      }
+    });
+
+    async function loadOrders() {
+      const orders = await api("/orders?status=pending&limit=50");
+      const mine = orders.filter((o) => o.restaurant_id === state.restId);
+      $("orders-empty").hidden = mine.length > 0;
+      $("orders").innerHTML = mine
+        .map((order) => {
+          const short = order.id.slice(0, 8);
+          return '<div class="order-card"><span class="oid">order ' + short + "…</span>" +
+            '<div class="sum"><span>fee ' + order.delivery_fee.toFixed(2) + "</span>" +
+            "<span>surge ×" + order.surge_multiplier.toFixed(2) + "</span>" +
+            "<span>ETA " + order.eta_minutes + " min</span>" +
+            "<span>drop " + order.dropoff_latitude.toFixed(4) + ", " + order.dropoff_longitude.toFixed(4) + "</span></div></div>";
+        })
+        .join("");
+    }
+
+    $("btn-signin").addEventListener("click", signin);
+    $("rest").addEventListener("change", async () => {
+      state.restId = Number($("rest").value);
+      await loadMenu();
+      await loadOrders();
+    });
+  </script>
+</body>
+</html>
