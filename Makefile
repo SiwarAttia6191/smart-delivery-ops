@@ -48,6 +48,14 @@ lint:            ## ruff check + format verification
 typecheck:       ## static type checking (mypy)
 	.venv/Scripts/python -m mypy apps core domain scripts tests
 
+# The pre-push gate, exactly CI's set — one command, first failure wins.
+# (Born 2026-11-03: an ad-hoc `gate | tail` masked a failure and CI caught
+# what the local chain waved through. The script exists so "run the gates"
+# can never mean a hand-typed pipe again — and it runs where make doesn't.)
+gates:           ## ALL pre-push gates unmasked: ruff, format, inline-JS, mypy, tests, audit (STANDING RULE: run before every push)
+	.venv/Scripts/python scripts/run_gates.py
+
+
 audit:           ## dependency vulnerability audit (production requirements)
 	.venv/Scripts/python -m pip_audit -r requirements.txt
 
