@@ -31,6 +31,8 @@
         real surface over one API — nothing mocked, every number traceable to code. With the
         stack running (<code>docker compose up -d</code>), they are all live at once.
       </p>
+      <p class="demos-lead" id="env-note" hidden
+         style="margin-top:1rem; padding:.7rem 1rem; border-radius:10px; background:#eef4fd; color:#9cc0f5; border:1px solid #c4d8f2; font-size:.9rem"></p>
     </div>
   </header>
 
@@ -92,5 +94,19 @@
     <a href="https://siwarattia6191.github.io/smart-delivery-ops/">landing page</a> ·
     <a href="product.html">pricing</a>
   </p>
+
+  <script type="module">
+    // The demo links are machine-local (the stack serves them). When this
+    // hub is viewed from static hosting — where no stack runs — say so
+    // instead of letting four dead links speak for themselves.
+    const local = ["localhost", "127.0.0.1"].includes(location.hostname);
+    if (!local) {
+      const note = document.getElementById("env-note");
+      note.textContent = "You are viewing this page from static hosting — the demo links " +
+        "need the stack running locally: docker compose up -d, then " +
+        "python scripts/create_user.py --demo. On a guided call it runs on our screen, not a slide.";
+      note.hidden = false;
+    }
+  </script>
 </body>
 </html>
