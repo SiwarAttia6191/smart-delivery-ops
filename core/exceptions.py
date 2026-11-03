@@ -21,3 +21,18 @@ class InvalidTransitionError(DomainError):
 class NoDriverAvailableError(DomainError):
     status_code = 409
     error_code = "no_driver_available"
+
+
+class CouponInvalidError(DomainError):
+    """The uniform coupon rejection (#159 item 3): unknown, inactive,
+    expired or budget-spent all read identically — codes cannot be probed."""
+
+    status_code = 422
+    error_code = "coupon_invalid"
+
+
+class PaymentError(DomainError):
+    """The provider refused the charge (sandbox: non-positive amount)."""
+
+    status_code = 409
+    error_code = "payment_rejected"

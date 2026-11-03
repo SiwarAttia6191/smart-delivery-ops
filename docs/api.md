@@ -86,7 +86,19 @@ Per-tenant discount codes, the mirror of the pricing engine (#159): the same cod
 | GET | `/coupons` | List the caller's tenant's codes (open GET, tenant-scoped) |
 | DELETE | `/coupons/{id}` | Deactivate (soft — the code stays for auditing) (writer) |
 
-Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an auditable line: `total` stays the fee before the discount, `discount` is the applied amount (capped at the fee — never a payout), `final_total` is what the order would pay. Every rejection — unknown, inactive, expired, budget spent — is the same 422, so codes cannot be probed for existence. A quote is a preview: `times_used` only ticks when an order is placed with the code (wired with the ordering surface, #159 item 1).
+Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an auditable line: `total` stays the fee before the discount, `discount` is the applied amount (capped at the fee — never a payout), `final_total` is what the order would pay. Every rejection — unknown, inactive, expired, budget spent — is the same 422, so codes cannot be probed for existence. A quote is a preview: pass `coupon_code` on `POST /orders` instead and the code REDEEMS — the fee is discounted, the `created` event carries the audit line (`list_fee`, `coupon_code`, `coupon_discount`), and `times_used` ticks.
+
+## Payments
+
+The checkout seam (#159 item 2): the pricing engine produces the amount, a payment provider settles it. The configured provider is the **sandbox** (`PAYMENT_PROVIDER=sandbox` — instant, deterministic, every receipt prefixed `sbx_`, no money moves); a real gateway is a config flip plus one class implementing the same `charge(amount, reference)` seam.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/orders/{id}/pay` | Settle the order's delivery fee (writer). Only while `pending` — pay at checkout, then dispatch; a second charge 409s with the existing receipt reference |
+| GET | `/payments` | The caller's tenant's receipts (open GET, tenant-scoped — the 8th RLS table, migration 007) |
+| GET | `/payments/{id}` | One receipt (404 outside the caller's tenant) |
+
+A settlement appends a `paid` event to the order's event log (`amount`, `provider`, `provider_ref`) — the same feed the warehouse consumes, so revenue analytics never need the ops tables. The storefront's "Pay now (sandbox)" button drives the whole seam live.
 
 ## Routes
 

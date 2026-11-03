@@ -11,6 +11,7 @@ from domain.models.driver_relay_dead_letter import DriverRelayDeadLetter
 from domain.models.knowledge_chunk import KnowledgeChunk
 from domain.models.order import Order, OrderStatus
 from domain.models.order_event import OrderEvent
+from domain.models.payment import Payment
 from domain.models.relay_dead_letter import RelayDeadLetter
 from domain.models.relay_state import RelayState
 from domain.models.restaurant import Restaurant
@@ -33,6 +34,7 @@ __all__ = [
     "Order",
     "OrderEvent",
     "OrderStatus",
+    "Payment",
     "RelayDeadLetter",
     "RelayState",
     "Restaurant",

@@ -16,6 +16,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from core.exceptions import (
+    CouponInvalidError,
     InvalidTransitionError,
     NoDriverAvailableError,
     NotFoundError,
@@ -28,6 +29,7 @@ from domain.services import (
     eta_model_service,
     eta_service,
     pricing_service,
+    promotion_service,
     route_service,
     tenant_service,
 )
@@ -83,6 +85,7 @@ def create_order(
     dropoff_lat: float,
     dropoff_lon: float,
     demand_ratio: float | None = None,
+    coupon_code: str | None = None,
 ) -> Order:
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -102,6 +105,18 @@ def create_order(
         settings=tenant_service.effective_settings(session),
     )
 
+    # Coupon redemption (#159 item 3): the quote is a preview, THIS is the
+    # tick — an accepted code discounts the fee, the created event records
+    # the audit line, and times_used increments with the order's commit.
+    coupon = None
+    discount = 0.0
+    if coupon_code:
+        coupon = promotion_service.active_coupon(session, coupon_code)
+        if coupon is None:
+            raise CouponInvalidError("coupon code is not valid")
+        discount = promotion_service.apply_discount(coupon, quote.breakdown.total)
+        coupon.times_used += 1
+
     order = Order(
         tenant_id=tenant_service.context_tenant_id(session),
         customer=customer,
@@ -112,7 +127,7 @@ def create_order(
         dropoff_latitude=dropoff_lat,
         dropoff_longitude=dropoff_lon,
         distance_km=quote.distance_km,
-        delivery_fee=quote.breakdown.total,
+        delivery_fee=round(quote.breakdown.total - discount, 2),
         surge_multiplier=quote.breakdown.surge_multiplier,
         eta_minutes=(
             eta_model_service.estimate_eta_minutes(
@@ -127,25 +142,31 @@ def create_order(
         )
         or eta_service.estimate_eta_minutes(quote.distance_km),
     )
-    _event(
-        session,
-        order,
-        "created",
-        {
-            "customer_id": customer_id,
-            "restaurant_id": restaurant_id,
-            "distance_km": quote.distance_km,
-            "delivery_fee": quote.breakdown.total,
-            "surge_multiplier": quote.breakdown.surge_multiplier,
-            "eta_minutes": order.eta_minutes,
-            # Coordinates ride on the event so downstream consumers (zone
-            # demand marts, dispatch analytics) never need the ops tables.
-            "pickup_latitude": restaurant.latitude,
-            "pickup_longitude": restaurant.longitude,
-            "dropoff_latitude": dropoff_lat,
-            "dropoff_longitude": dropoff_lon,
-        },
-    )
+    payload: dict[str, Any] = {
+        "customer_id": customer_id,
+        "restaurant_id": restaurant_id,
+        "distance_km": quote.distance_km,
+        "delivery_fee": round(quote.breakdown.total - discount, 2),
+        "surge_multiplier": quote.breakdown.surge_multiplier,
+        "eta_minutes": order.eta_minutes,
+        # Coordinates ride on the event so downstream consumers (zone
+        # demand marts, dispatch analytics) never need the ops tables.
+        "pickup_latitude": restaurant.latitude,
+        "pickup_longitude": restaurant.longitude,
+        "dropoff_latitude": dropoff_lat,
+        "dropoff_longitude": dropoff_lon,
+    }
+    if coupon:
+        # the audit line only exists when a coupon actually applied —
+        # null coupon keys on every event would be warehouse noise
+        payload.update(
+            {
+                "list_fee": quote.breakdown.total,
+                "coupon_code": coupon.code,
+                "coupon_discount": round(discount, 2),
+            }
+        )
+    _event(session, order, "created", payload)
     session.add(order)
     session.commit()
     session.refresh(order)

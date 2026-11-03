@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     environment: str = "local"
 
+    # ── Payments (#159 item 2) ─────────────────────────────────
+    # The checkout seam's provider: "sandbox" settles instantly with a
+    # fake reference (no money moves); a real gateway is a config flip.
+    payment_provider: str = "sandbox"
+
     # ── Database ───────────────────────────────────────────────
     # Production stack: PostgreSQL (matches docker-compose.yml credentials).
     # Zero-dependency fallback for quick experiments: DATABASE_URL=sqlite:///./local.db

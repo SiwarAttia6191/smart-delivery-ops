@@ -146,6 +146,7 @@
             <span class="who" id="order-meta"></span>
           </div>
           <div class="flow-actions">
+            <button class="btn btn-ghost btn-sm" id="btn-pay" type="button">Pay now (sandbox)</button>
             <button class="btn btn-ghost btn-sm" id="btn-assign" type="button">Assign nearest driver</button>
             <button class="btn btn-ghost btn-sm" id="btn-transit" type="button">Start transit</button>
             <button class="btn btn-ghost btn-sm" id="btn-deliver" type="button">Mark delivered</button>
@@ -169,7 +170,7 @@
     const apiInput = document.getElementById("api-base");
     apiInput.value = params.get("api") || "http://localhost:8010";
 
-    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null };
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null };
 
     const $ = (id) => document.getElementById(id);
     const banner = $("banner");
@@ -324,6 +325,9 @@
         dropoff_longitude: Number($("lon").value),
       };
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);
+      // checkout redemption (#159 item 3): an accepted code discounts the
+      // fee HERE and ticks the counter — the quote was only a preview
+      if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
       try {
         const order = await api("/orders", { method: "POST", json: payload });
         showOrder(order);
@@ -336,14 +340,25 @@
       }
     }
 
+    function eventNote(event) {
+      const p = event.payload || {};
+      if (event.event_type === "created") {
+        let note = " · fee " + Number(p.delivery_fee).toFixed(2);
+        if (p.coupon_code) note += " · " + p.coupon_code + " −" + Number(p.coupon_discount).toFixed(2);
+        return note;
+      }
+      if (event.event_type === "paid" && p.provider_ref) {
+        return " · receipt " + p.provider_ref + " (" + Number(p.amount).toFixed(2) + ", sandbox)";
+      }
+      return "";
+    }
+
     function renderEvents(order) {
       $("events").innerHTML = order.events
         .map((event) => {
           const time = new Date(event.created_at).toLocaleTimeString();
-          const note = event.event_type === "created" && event.payload?.quoted_fee !== undefined
-            ? " · fee " + Number(event.payload.quoted_fee).toFixed(2)
-            : "";
-          return "<li><time>" + time + "</time><span><b>" + event.event_type + "</b>" + note + "</span></li>";
+          return "<li><time>" + time + "</time><span><b>" + event.event_type + "</b>" +
+            eventNote(event) + "</span></li>";
         })
         .join("");
     }
@@ -356,12 +371,19 @@
         " · surge ×" + order.surge_multiplier.toFixed(2) + " · ETA " + order.eta_minutes + " min" +
         (order.driver_id ? " · driver #" + order.driver_id : "") +
         (order.delivery_minutes != null ? " · delivered in " + order.delivery_minutes + " min" : "");
+      renderReceipt(order);
       renderEvents(order);
       const writable = state.role === "ops" || state.role === "admin";
+      $("btn-pay").disabled = !writable || order.status !== "pending" || state.receipt !== null;
       $("btn-assign").disabled = !writable || order.status !== "pending";
       $("btn-transit").disabled = !writable || order.status !== "assigned";
       $("btn-deliver").disabled = !writable || order.status !== "in_transit";
       $("btn-cancel").disabled = !writable || !["pending", "assigned", "in_transit"].includes(order.status);
+    }
+
+    function renderReceipt(order) {
+      const paid = order.events.find((event) => event.event_type === "paid");
+      if (paid) state.receipt = paid.payload?.provider_ref || "sbx_?";
     }
 
     function showOrder(order) {
@@ -395,6 +417,7 @@
     $("btn-quote").addEventListener("click", quote);
     $("btn-signin").addEventListener("click", signin);
     $("btn-place").addEventListener("click", placeOrder);
+    $("btn-pay").addEventListener("click", () => action("/pay"));
     $("btn-assign").addEventListener("click", () => action("/assign"));
     $("btn-transit").addEventListener("click", () => action("/status", { status: "in_transit" }));
     $("btn-deliver").addEventListener("click", () => action("/status", { status: "delivered" }));
