@@ -1,0 +1,35 @@
+name: deploy-demo
+
+# Phase B of decision 0004: one-click deploy of the demo unit to the VPS.
+# INERT until the repo secrets exist — set them once the box is provisioned:
+#   DEMO_HOST   the server's hostname or IP
+#   DEMO_USER   a sudo-capable SSH user (key auth)
+#   DEMO_SSH_KEY  the PRIVATE key contents
+#   DEMO_DOMAIN the demo hostname (optional — empty deploys without TLS)
+# Then run it from the Actions tab ("Run workflow"); it converges the box
+# to main and reports the health check.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy the demo unit over SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEMO_HOST }}
+          username: ${{ secrets.DEMO_USER }}
+          key: ${{ secrets.DEMO_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/smart-delivery-ops
+            git pull --ff-only origin main
+            docker compose -f docker-compose.demo.yml up -d --build
+            for i in $(seq 1 30); do
+              sleep 5
+              curl -fsS -m 3 localhost:${DEMO_API_PORT:-8010}/health >/dev/null 2>&1 && break
+            done
+            curl -fsS localhost:${DEMO_API_PORT:-8010}/health
+            echo "demo unit converged to main"

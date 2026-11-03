@@ -1,0 +1,19 @@
+# Caddyfile — TLS front for the demo unit (decision 0004, phase B).
+# Automatic HTTPS via Let's Encrypt; the only manual act is pointing the
+# domain's DNS at the server. Used through deploy/caddy.override.yml:
+#
+#   docker compose -f docker-compose.demo.yml -f deploy/caddy.override.yml up -d
+#
+# The api needs nothing exposed but 80/443 once Caddy fronts it — remove
+# the api's host port mapping on a public box (deploy_demo.sh comments it).
+
+{$DEMO_DOMAIN} {
+	# The storefront, the portal and the API are one origin (the api's
+	# StaticFiles mount) — everything routes to the api container.
+	reverse_proxy api:8000
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+	}
+}

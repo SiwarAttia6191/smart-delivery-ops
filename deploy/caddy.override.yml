@@ -1,0 +1,31 @@
+# Phase-B override: adds the Caddy TLS front to the demo unit. Use together
+# with the base file (DEMO_DOMAIN must be set — Caddy derives the ACME
+# identifier and the config from it):
+#
+#   DEMO_DOMAIN=demo.example.com \
+#   docker compose -f docker-compose.demo.yml -f deploy/caddy.override.yml up -d
+#
+# When this override is active, drop the api's host port mapping (comment it
+# in docker-compose.demo.yml or set DEMO_API_PORT to 127.0.0.1:8010 style) so
+# the box answers on 80/443 only.
+
+services:
+  caddy:
+    image: caddy:2.8
+    mem_limit: 256m
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DEMO_DOMAIN: ${DEMO_DOMAIN:?set DEMO_DOMAIN to the demo hostname}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+  caddy_config:
