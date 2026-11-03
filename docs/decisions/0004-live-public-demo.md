@@ -1,9 +1,13 @@
 # 0004 — A public, always-on live demo on a small VPS
 
-Date: 2026-11-03 · Status: accepted (plan of record — execution pending
-provider choice) · Trigger: the storefront demo (#163/#164/#165) became the
+Date: 2026-11-03 · Status: accepted — phase A SHIPPED (#174: demo unit +
+seeding), phase B deploy pack PREPARED (`deploy/`), execution pending the
+provider choice · Trigger: the storefront demo (#163/#164/#165) became the
 sales story, but GitHub Pages is static, so the "Try it" section on
 product.html hands visitors setup instructions instead of a working demo.
+Implementation note: the demo unit shipped as a STANDALONE compose file
+(`docker-compose.demo.yml`), not a `--profile demo` — `docker compose up -d`
+keeps meaning the full stack, and nothing can config-drift it.
 
 ## Context
 

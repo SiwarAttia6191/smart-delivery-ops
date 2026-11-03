@@ -322,6 +322,10 @@ services:
       - ./core:/home/airflow/mlrun/core:ro
       - ./domain:/home/airflow/mlrun/domain:ro
       - ./data/evals:/home/airflow/mlrun/data/evals:ro
+      # Knowledge sync (#173): the ingest scripts + the corpus they read,
+      # read-only beside the other app mounts.
+      - ./scripts:/home/airflow/mlrun/scripts:ro
+      - ./docs:/home/airflow/mlrun/docs:ro
       - ./.git:/opt/git:ro
       # LocalExecutor writes task logs into the SCHEDULER's filesystem; the
       # webserver needs the same volume or every "View log" in the UI fails.
