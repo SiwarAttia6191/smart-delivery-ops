@@ -10,14 +10,20 @@ services:
     build:
       context: .
       dockerfile: infra/docker/Dockerfile.api
-    command: alembic upgrade head
+    # Bootstraps the sdo_app runtime role (created-if-absent, password synced
+    # from the mounted secret) BEFORE the chain — a fresh volume used to
+    # crash-loop the api on "password authentication failed" because nothing
+    # in the chain created the role it connects as (exposed by the demo
+    # unit, #169; the live volume had the role only from manual setup).
+    command: python scripts/bootstrap_roles.py
     environment:
       ENVIRONMENT: docker
       # DATABASE_URL's inline password is a dev template — the settings
       # loader overrides it with the mounted secret file's contents.
       DATABASE_URL: postgresql+psycopg://smartops:smartops@postgres:5432/smart_delivery_ops
       DB_PASSWORD_FILE: /run/secrets/db_password
-    secrets: [db_password]
+      DB_APP_PASSWORD_FILE: /run/secrets/app_db_password
+    secrets: [db_password, app_db_password]
     depends_on:
       postgres:
         condition: service_healthy

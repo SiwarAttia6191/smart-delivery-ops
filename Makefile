@@ -26,6 +26,9 @@ migrate:         ## apply the Alembic chain to the ops DB (schema owner, #28)
 seed:            ## seed the database with demo data (needs migrations first: make migrate)
 	.venv/Scripts/python scripts/seed_demo_data.py
 
+demo-seed:       ## make the DB demo-ready: sign-in trio, STOREDEMO10, dispatchable driver, 24h forecasts (#170)
+	.venv/Scripts/python scripts/seed_demo.py
+
 docs-ingest:      ## (re)ingest the platform docs into the copilot's knowledge store
 	.venv/Scripts/python scripts/ingest_docs.py
 
