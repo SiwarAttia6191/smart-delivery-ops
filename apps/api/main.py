@@ -6,10 +6,12 @@ Interactive docs: http://127.0.0.1:8000/docs  (Swagger)  /  /redoc
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from apps.api.routes import (
     analytics,
@@ -107,6 +109,16 @@ def create_app() -> FastAPI:
         city_config.router,
     ):
         app.include_router(router)
+
+    # The ordering storefront served BY the API (#159 item 1): same-origin
+    # for its fetch calls, stylesheet included, no separate static server —
+    # any clone with the stack up gets it at /storefront/ordering-demo.html.
+    # GitHub Pages also serves the file, with an offline banner when the API
+    # is away. The image whitelists only the RAG corpus files from docs/
+    # (.dockerignore), so the demo page and its stylesheet are added there.
+    docs_dir = Path(__file__).resolve().parents[2] / "docs"
+    app.mount("/storefront", StaticFiles(directory=str(docs_dir)), name="storefront")
+
     return app
 
 

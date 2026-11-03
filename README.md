@@ -131,8 +131,9 @@ The fastest way to feel the whole lifecycle is the interactive docs at
 below was executed against the real API with PostgreSQL behind it — the
 captures are genuine responses, not mockups.
 
-Prefer clicking to curling? The **[ordering storefront](docs/ordering-demo.html)**
-(`docs/ordering-demo.html` — serve `docs/` locally or open the file) is a minimal
+Prefer clicking to curling? The **ordering storefront** — served by the API
+itself at **http://localhost:8010/storefront** once the stack is up (also at
+`docs/ordering-demo.html`) — is a minimal
 customer face over the same API: pick a customer and restaurant, quote the fee
 (coupon codes included), sign in as the demo `ops` user, place the order, then
 assign a driver and watch the lifecycle events arrive in real time.
