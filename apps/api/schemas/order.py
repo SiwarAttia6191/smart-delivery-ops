@@ -23,6 +23,15 @@ class OrderCreate(BaseModel):
             "honored for demos and tests."
         ),
     )
+    coupon_code: str | None = Field(
+        None,
+        max_length=60,
+        description=(
+            "Promotion code to redeem at checkout (#159 item 3): an accepted "
+            "code discounts the fee and ticks its redemption counter — a quote "
+            "never does. Rejections are one uniform 422."
+        ),
+    )
 
 
 class OrderStatusUpdate(BaseModel):
