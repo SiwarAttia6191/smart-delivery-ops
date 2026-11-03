@@ -417,7 +417,21 @@
     $("btn-quote").addEventListener("click", quote);
     $("btn-signin").addEventListener("click", signin);
     $("btn-place").addEventListener("click", placeOrder);
-    $("btn-pay").addEventListener("click", () => action("/pay"));
+    // pay returns a RECEIPT, not the order — settle, then re-read the order
+    // so the paid event (with its sbx_ reference) lands in the timeline
+    $("btn-pay").addEventListener("click", async () => {
+      hideBanner();
+      try {
+        const receipt = await api("/orders/" + state.order.id + "/pay", { method: "POST" });
+        state.receipt = receipt.provider_ref;
+        state.order = await api("/orders/" + state.order.id);
+        renderTrack(state.order);
+      } catch (error) {
+        if (error.status === 401) showBanner("401 — sign in first (step 3).");
+        else if (error.status === 403) showBanner("403 — role '" + (state.role || "anonymous") + "' may not pay. Use ops or admin.");
+        else showBanner("Payment failed: " + error.message);
+      }
+    });
     $("btn-assign").addEventListener("click", () => action("/assign"));
     $("btn-transit").addEventListener("click", () => action("/status", { status: "in_transit" }));
     $("btn-deliver").addEventListener("click", () => action("/status", { status: "delivered" }));

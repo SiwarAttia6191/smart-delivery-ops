@@ -17,5 +17,7 @@ docs/*
 !docs/runbook.md
 !docs/decisions
 !docs/decisions/*.md
+!docs/ordering-demo.html
+!docs/styles.css
 tests
 .github
