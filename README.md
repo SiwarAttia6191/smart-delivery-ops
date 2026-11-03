@@ -537,7 +537,7 @@ table → pricing.
 ### ⏰ Orchestration (Airflow)
 
 The warehouse routine AND the ML loop are scheduled: **Airflow 2.10
-(LocalExecutor)** runs three DAGs — UI at `localhost:8081` (admin/admin in
+(LocalExecutor)** runs five DAGs — UI at `localhost:8081` (admin/admin in
 dev):
 
 | DAG | schedule | what it does |
@@ -545,6 +545,8 @@ dev):
 | `warehouse_daily_build` | 03:00 UTC daily | `dbt build` (all 49 checks) + `dbt source freshness` |
 | `ml_forecast_serving` | hourly | retrains the pooled LightGBM and refreshes the next-24h `demand_forecasts` the surge loop reads — the loop can no longer go dormant because nobody ran `make ml-forecast` |
 | `ml_retrain_benchmark` | 04:15 UTC daily (after the warehouse build) | re-runs both benchmarks on the accumulated history; the ETA benchmark's promotion stays champion-gated — a model that can't beat the heuristic never reaches Production |
+| `copilot_evals` | 05:00 UTC daily — **paused** until the provider account is funded | the golden copilot eval set against the configured provider; a batch scoring under 0.8 fails the task (an eval regression pages like any other) |
+| `knowledge_sync` | every 6 hours | re-ingests the shipped docs into the copilot's pgvector store (idempotent — unchanged = 0 work, deleted = tombstoned) and prints the corpus census, so the store always tracks the repo |
 
 CLI shortcuts: `make airflow-trigger` / `airflow-state`,
 `make ml-serving-trigger` / `ml-retrain-trigger` / `ml-state`.
@@ -623,15 +625,15 @@ smart-delivery-ops/
 ├── config/cities/      # region pack (#78): one manifest per city (tunis, paris)
 ├── data/transform/     # dbt project: staging + warehouse marts (Phase 2)
 ├── domain/
-│   ├── models/         # SQLAlchemy entities (Customer, Driver, Restaurant, Order, OrderEvent)
+│   ├── models/         # SQLAlchemy entities: tenants, users, customers, drivers, restaurants, menu items, orders + events, coupons, payments, knowledge chunks, forecasts
 │   ├── rules/          # pure business rules (geo, pricing tiers, driver eligibility)
 │   └── services/       # use-cases (order lifecycle, dispatch, pricing, ETA)
 ├── data/               # transform/ (dbt) · osrm/ (map data, gitignored) · benchmarks/ (reports) — see data/README.md
 ├── ml/                 # Phase 3 — training (benchmark_demand), pipelines (forecast serving)
 ├── infra/              # docker, kubernetes, monitoring
-├── deploy/cities/      # side-by-side second-city deployment envs (paris.env)
+├── deploy/             # demo deployment pack (decision 0004: bootstrap script, Caddy TLS override) + per-city envs (cities/paris.env)
 ├── tests/              # unit + integration
-├── scripts/            # seed, smoke test, bootstrap
+├── scripts/            # seed, seed_demo, bootstrap_roles, reset_demo, gates, ingest, inspect, smoke
 └── docs/               # architecture, data model, API, ML design, roadmap
 ```
 
@@ -672,6 +674,7 @@ one commit and explains what landed and why.
 ## 📖 Documentation
 
 - **[Product page](docs/product.html)** — what the platform does for a delivery operator, and the three tiers (core operations / intelligence / AI copilot) — the sales story, no code links needed
+- **[Demos hub](docs/demos.html)** — one entry point per role: operator dashboard, AI copilot chat, customer storefront, restaurant portal
 - [`docs/runbook.md`](docs/runbook.md) — recovery story (incarnation tokens), the supply-overcount monitoring note, the ETA hot-reload semantics, the compose memory budget, and the alert paging flow (Airflow narrated alerts + Alertmanager)
 - [`docs/decisions/`](docs/decisions/) — decision records: multi-tenancy (0001), open-dataset evaluation (0002), hosting migration when the repo goes private (0003), a public always-on live demo on a small VPS (0004)
 
