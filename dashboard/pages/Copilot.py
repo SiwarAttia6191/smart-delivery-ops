@@ -72,35 +72,44 @@ if question := st.chat_input("Ask the copilot… (e.g. how did we do today?)"):
         st.write(question)
 
     with st.chat_message("assistant"):
-        with st.spinner("the agent is working…"):
-            try:
-                response = httpx.post(
-                    f"{API_BASE}/copilot/chat",
-                    headers={"Authorization": f"Bearer {st.session_state['token']}"},
-                    json={"question": question},
-                    timeout=120,
-                )
-            except httpx.HTTPError as exc:
-                st.error(f"the API is unreachable ({exc.__class__.__name__})")
-            else:
-                if response.status_code == 200:
-                    data = response.json()
-                    st.write(data["answer"])
-                    meta = (
-                        f"provider `{data['provider']}` · tool calls "
-                        f"{data['tool_calls_used']} · "
-                        + ("⚠️ degraded" if data["degraded"] else "served")
-                    )
-                    if data.get("degraded_reason"):
-                        meta += f" · {data['degraded_reason']}"
-                    st.caption(meta)
-                    st.session_state.messages.append(
-                        {"role": "assistant", "content": data["answer"]}
-                    )
-                else:
-                    detail = (
-                        response.json().get("detail", response.text)
-                        if response.headers.get("content-type", "").startswith("application/json")
-                        else response.text
-                    )
-                    st.error(f"{response.status_code}: {str(detail)[:200]}")
+        progress = st.empty()
+        try:
+            # the streaming endpoint (#156): every graph hop arrives AS it
+            # happens, so the tool work is visible instead of a silent wait
+            with httpx.post(
+                f"{API_BASE}/copilot/chat/stream",
+                headers={"Authorization": f"Bearer {st.session_state['token']}"},
+                json={"question": question},
+                timeout=180,
+            ) as response:
+                if response.status_code != 200:
+                    st.error(f"{response.status_code}: {response.text[:200]}")
+                    st.stop()
+                event, data = None, {}
+                for line in response.iter_lines():
+                    if line.startswith("event: "):
+                        event = line[7:].strip()
+                    elif line.startswith("data: ") and event:
+                        import json as _json
+
+                        data = _json.loads(line[6:])
+                        if event == "node":
+                            progress.write(f"🛠 `{data['node']}`")
+                        elif event == "degraded":
+                            progress.warning("primary model hiccup — the fallback chain is serving")
+                        elif event == "answer":
+                            progress.empty()
+                            st.write(data["answer"])
+                            meta = (
+                                f"provider `{data['provider']}` · tool calls "
+                                f"{data['tool_calls_used']} · "
+                                + ("⚠️ degraded" if data["degraded"] else "served")
+                            )
+                            if data.get("degraded_reason"):
+                                meta += f" · {data['degraded_reason']}"
+                            st.caption(meta)
+                            st.session_state.messages.append(
+                                {"role": "assistant", "content": data["answer"]}
+                            )
+        except httpx.HTTPError as exc:
+            st.error(f"the API is unreachable ({exc.__class__.__name__})")
