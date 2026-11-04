@@ -188,7 +188,7 @@ def dbt_build() -> None:
         raise SystemExit(f"dbt build failed with exit {result.returncode}")
 
 
-def rls_proof(engine) -> None:
+def rls_proof(engine) -> tuple[int, int]:
     """#36 acceptance: isolation enforced by the DATABASE ENGINE.
 
     Two tenants, one customer row each. Every session goes through the SAME
@@ -294,6 +294,186 @@ def rls_proof(engine) -> None:
         val = conn.execute(text(f"SELECT current_setting('{TENANT_GUC}', true)")).scalar_one()
     assert val == "1", f"GUC roundtrip failed: {val!r}"
     print("GUC roundtrip ok")
+    return a_id, b_id
+
+
+def dispatch_race_proof(engine, tenant_id: int) -> str:
+    """#190 acceptance: the SKIP LOCKED claim survives a real race.
+
+    Two orders, ONE eligible driver, two threads on separate connections
+    assigning simultaneously. Without FOR UPDATE SKIP LOCKED both threads
+    read the same available driver and double-book it; with it the loser
+    skips the locked rows and honestly reports nobody available."""
+    import concurrent.futures
+
+    from core.exceptions import NoDriverAvailableError
+    from domain.models import Customer, Driver, Order, Restaurant
+    from domain.services import order_service
+
+    step("7 - dispatch race: two orders, one driver, two connections")
+    bypass = create_engine(engine.url)
+    import core.tenancy
+
+    core.tenancy.mark_tenant_bypass(bypass)
+    with sessionmaker(bind=bypass)() as s:
+        customer = Customer(
+            tenant_id=tenant_id, name="race-cust", latitude=36.8381, longitude=10.2385
+        )
+        restaurant = Restaurant(
+            tenant_id=tenant_id, name="race-kitchen", latitude=36.8065, longitude=10.1815
+        )
+        driver = Driver(
+            tenant_id=tenant_id,
+            name="race-driver",
+            vehicle="motorcycle",
+            latitude=36.8065,
+            longitude=10.1815,
+            is_available=True,
+        )
+        s.add_all([customer, restaurant, driver])
+        s.commit()
+        driver_id = driver.id
+        order_a = order_service.create_order(
+            s,
+            customer_id=customer.id,
+            restaurant_id=restaurant.id,
+            dropoff_lat=36.8381,
+            dropoff_lon=10.2385,
+            demand_ratio=0,
+        )
+        order_b = order_service.create_order(
+            s,
+            customer_id=customer.id,
+            restaurant_id=restaurant.id,
+            dropoff_lat=36.84,
+            dropoff_lon=10.24,
+            demand_ratio=0,
+        )
+        a_id, b_id = order_a.id, order_b.id
+
+    def assign(order_id: str) -> str:
+        s = sessionmaker(bind=bypass)()
+        try:
+            order_service.assign_driver(s, order_id)
+            return "assigned"
+        except NoDriverAvailableError:
+            return "no-driver"
+        finally:
+            s.close()
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(assign, oid) for oid in (a_id, b_id)]
+        results = [f.result() for f in futures]
+
+    with sessionmaker(bind=bypass)() as s:
+        assigned_drivers = [o.driver_id for o in s.query(Order).filter(Order.id.in_([a_id, b_id]))]
+    assert results.count("assigned") == 1, f"race outcome {results}: double-booking"
+    assert results.count("no-driver") == 1, f"race outcome {results}"
+    claimed = [d for d in assigned_drivers if d is not None]
+    assert len(claimed) == len(set(claimed)) == 1, f"double-booking: {assigned_drivers}"
+    assert claimed[0] == driver_id
+    print("dispatch race: one assigned, one refused, no double-booking")
+    return a_id
+
+
+def rls_new_tables_proof(engine, tenant_a: int, tenant_b: int, order_a: str) -> None:
+    """The migrations-006..010 tenant tables enforce RLS like the six
+    originals - proven as the least-privilege role with the app's own
+    pinning mechanics, SELECT side per scope + WITH CHECK for inserts."""
+    from apps.copilot.corpus import add_chunk
+    from apps.copilot.providers.embeddings import embed
+    from core.tenancy import reset_request_tenant, set_request_tenant
+    from domain.models import (
+        Conversation,
+        ConversationMessage,
+        Coupon,
+        KnowledgeChunk,
+        MenuItem,
+        Payment,
+    )
+
+    step("8 - RLS proof: coupons, payments, menu items, knowledge, conversations")
+    bypass = create_engine(engine.url)
+    import core.tenancy
+
+    core.tenancy.mark_tenant_bypass(bypass)
+    with sessionmaker(bind=bypass)() as s:
+        restaurant = s.query(Restaurant).first()
+        assert restaurant is not None, "the dispatch step seeded the restaurant"
+        s.add_all(
+            [
+                Coupon(tenant_id=tenant_a, code="RLSA", discount_kind="percent", discount_value=10),
+                Coupon(tenant_id=tenant_b, code="RLSB", discount_kind="percent", discount_value=10),
+                MenuItem(tenant_id=tenant_a, restaurant_id=restaurant.id, name="a-item", price=1.0),
+                MenuItem(tenant_id=tenant_b, restaurant_id=restaurant.id, name="b-item", price=1.0),
+                Payment(
+                    tenant_id=tenant_a,
+                    order_id=order_a,
+                    amount=1.0,
+                    status="paid",
+                    provider="sandbox",
+                    provider_ref="smoke-a",
+                ),
+                Payment(
+                    tenant_id=tenant_b,
+                    order_id=order_a,
+                    amount=1.0,
+                    status="paid",
+                    provider="sandbox",
+                    provider_ref="smoke-b",
+                ),
+                Conversation(id="smoke-a", tenant_id=tenant_a),
+                Conversation(id="smoke-b", tenant_id=tenant_b),
+                ConversationMessage(
+                    tenant_id=tenant_a, conversation_id="smoke-a", role="user", content="a"
+                ),
+                ConversationMessage(
+                    tenant_id=tenant_b, conversation_id="smoke-b", role="user", content="b"
+                ),
+            ]
+        )
+        # the vector column takes the CAST writer, never a plain ORM bind
+        add_chunk(s, "smoke/a", 0, "a", embed("smoke a"), tenant_id=tenant_a)
+        add_chunk(s, "smoke/b", 0, "b", embed("smoke b"), tenant_id=tenant_b)
+        s.commit()
+
+    app_url = engine.url.set(username="sdo_smoke", password="sdo_smoke")
+    app_engine = create_engine(app_url)
+    app_factory = sessionmaker(bind=app_engine)
+
+    def scoped(model, tenant_id: int) -> int:
+        reset = set_request_tenant(tenant_id)
+        try:
+            with app_factory() as s:
+                return len(s.query(model).all())
+        finally:
+            reset_request_tenant(reset)
+
+    for model in (Coupon, MenuItem, Payment, KnowledgeChunk, Conversation, ConversationMessage):
+        seen_a, seen_b = scoped(model, tenant_a), scoped(model, tenant_b)
+        assert seen_a == 1 and seen_b == 1, (
+            f"{model.__name__} scoping broken: A saw {seen_a}, B saw {seen_b}"
+        )
+    print("scoped SELECT on all six new tables: no leaks in either direction")
+
+    denied = False
+    reset = set_request_tenant(tenant_a)
+    try:
+        with app_factory() as s:
+            s.add(
+                Coupon(
+                    tenant_id=tenant_b, code="SMUGGLED", discount_kind="percent", discount_value=10
+                )
+            )
+            try:
+                s.commit()
+            except Exception:
+                denied = True
+                s.rollback()
+    finally:
+        reset_request_tenant(reset)
+    assert denied, "RLS WITH CHECK must reject a cross-tenant coupon INSERT"
+    print("cross-tenant coupon INSERT: rejected by WITH CHECK")
 
 
 def main() -> None:
@@ -345,7 +525,9 @@ def main() -> None:
         step("6 · dbt build over the throwaway warehouse")
         dbt_build()
 
-    rls_proof(engine)
+    a_id, b_id = rls_proof(engine)
+    order_a = dispatch_race_proof(engine, a_id)
+    rls_new_tables_proof(engine, a_id, b_id, order_a)
 
     step("SMOKE PASS")
 
