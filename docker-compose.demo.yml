@@ -92,8 +92,18 @@ services:
       # No OpenAI key on the demo box (0004): the copilot serves its
       # documented degraded chain — that behavior is part of the demo.
       COPILOT_PROVIDER: ${COPILOT_PROVIDER:-scripted}
+      # crash visibility (#194): set ALERT_WEBHOOK on the VPS to a receiver
+      # that pings a human; empty = the external pinger is the alert path
+      ALERT_WEBHOOK: ${ALERT_WEBHOOK:-}
+      # the public demo calls from its own domain — no wildcard CORS on a TLS box
+      CORS_ORIGINS: https://${DEMO_DOMAIN:-localhost}
       SDO_TRACING: "0"  # no MLflow here to trace to
     secrets: [app_db_password, jwt_secret]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health', timeout=5)\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     depends_on:
       migrate:
         condition: service_completed_successfully
