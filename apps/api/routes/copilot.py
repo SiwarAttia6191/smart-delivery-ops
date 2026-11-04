@@ -42,6 +42,11 @@ class ChatRequest(BaseModel):
     )
 
 
+class ResumeRequest(BaseModel):
+    conversation_id: str = Field(min_length=1)
+    question: str = Field(min_length=1, max_length=guardrails.MAX_QUESTION_CHARS)
+
+
 class ChatResponse(BaseModel):
     answer: str
     tool_calls_used: int
@@ -105,6 +110,36 @@ def _persist_exchange(db: Session, conversation: Conversation, question: str, an
         ]
     )
     db.commit()
+
+
+@router.post("/chat/resume")
+def chat_resume(
+    payload: ResumeRequest,
+    db: Session = Depends(get_db),
+    claims: Annotated[dict[str, Any] | None, Depends(current_claims)] = None,
+) -> ChatResponse:
+    """Approve a proposed mutating action (#121): re-asks the SAME question
+    with the approval flag pinned, so the gated tool executes inside the
+    RLS-scoped session and the exchange lands in the thread's history."""
+    from apps.copilot.tools import _approval_granted
+
+    conversation, history = _conversation_context(payload.conversation_id, db)
+    token = _approval_granted.set(True)
+    try:
+        result = run_copilot(_build_providers(), _registry, db, payload.question, history=history)
+    finally:
+        _approval_granted.reset(token)
+    _persist_exchange(db, conversation, payload.question, result["answer"] or "")
+    return ChatResponse(
+        conversation_id=conversation.id,
+        answer=result["answer"],
+        tool_calls_used=result["tool_calls_used"],
+        provider=result["provider"],
+        degraded=result["degraded"],
+        degraded_reason=result.get("degraded_reason"),
+        prompt_version=result["prompt_version"],
+        usage_total=result.get("usage_total"),
+    )
 
 
 def _build_providers() -> list[Any]:
