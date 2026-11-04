@@ -42,7 +42,7 @@ services:
     volumes:
       - demo_pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -d smart_delivery_ops"]
+      test: ["CMD-SHELL", "pg_isready -U smartops -d smart_delivery_ops"]
       interval: 5s
       timeout: 5s
       retries: 12
