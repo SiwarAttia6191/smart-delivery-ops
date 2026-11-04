@@ -161,7 +161,8 @@ def _postgres_checkpointer() -> Any:
             # saver reads DICT rows, so the pool's row factory is dict_row.
             pool: ConnectionPool[Connection[dict[str, Any]]] = ConnectionPool(
                 conninfo=_checkpoint_dsn(),
-                kwargs={"row_factory": dict_row},
+                kwargs={"row_factory": dict_row, "autocommit": True},
+                min_size=1,
                 max_size=2,
                 open=True,
                 name="copilot-checkpoints",

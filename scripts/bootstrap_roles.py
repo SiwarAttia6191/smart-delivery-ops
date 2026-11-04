@@ -69,7 +69,10 @@ def bootstrap_runtime_role() -> None:
                 f"GRANT USAGE ON SCHEMA public TO {RUNTIME_ROLE}; "
                 f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES "
                 f"IN SCHEMA public TO {RUNTIME_ROLE}; "
-                f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {RUNTIME_ROLE};"
+                f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {RUNTIME_ROLE}; "
+                # the checkpointer's setup() creates its own tables (#184) —
+                # without CREATE the least-privilege role can't bootstrap them
+                f"GRANT CREATE ON SCHEMA public TO {RUNTIME_ROLE};"
             )
         )
         # future tables (the next migration's CREATE TABLE) pre-granted
