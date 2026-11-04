@@ -63,8 +63,14 @@ def _analytics_by_tenant(db: Session) -> list[Any]:  # pydantic slices; the exec
 
 def _search_docs(db: Session, query: str, source_prefix: str | None = None) -> list[dict[str, Any]]:
     from apps.copilot.retriever import search_docs
+    from domain.services import tenant_service
 
-    return search_docs(db, query, source_prefix=source_prefix)
+    # per-tenant knowledge (#154): the caller sees the deployment-shared
+    # corpus plus their OWN uploads — Postgres RLS enforces the same scope
+    # a second time; the explicit filter keeps SQLite (tests) correct.
+    return search_docs(
+        db, query, source_prefix=source_prefix, tenant_id=tenant_service.context_tenant_id(db)
+    )
 
 
 def _forecast_next_24h(db: Session) -> list[dict]:

@@ -15,7 +15,7 @@ engines for the math.
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, Integer, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.models.base import Base
@@ -29,6 +29,12 @@ class KnowledgeChunk(Base):
     __tablename__ = "knowledge_chunks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # NULL = deployment-shared (runbook, decision records — every tenant's
+    # copilot reads them); set = that tenant's private knowledge (#154).
+    # RLS (migration 009): private rows are engine-scoped to their owner.
+    tenant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tenants.id"), nullable=True, index=True
+    )
     source: Mapped[str] = mapped_column(String(200), index=True)  # e.g. docs/runbook.md
     chunk_index: Mapped[int] = mapped_column(Integer, default=0)
     content: Mapped[str] = mapped_column(Text)

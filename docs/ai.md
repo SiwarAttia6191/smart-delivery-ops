@@ -86,6 +86,10 @@ curl -s -X POST localhost:8010/copilot/chat -H "Authorization: Bearer $TOKEN" \
 - **Narrator drill**: `dags/ml_alerts.py` narrates every Airflow failure;
   `SDO_NARRATOR=0` disables.
 
+## Shipped after the phase snapshot
+
+- **Per-tenant knowledge + upload (#154)**: `knowledge_chunks.tenant_id` + RLS (migration 009 — the tenth tenant policy); `POST/GET /knowledge/documents`; the search tool resolves the request's tenant, so each customer's copilot reads the shared corpus plus THEIR docs and nothing else. Verified live: tenant 2's scope returns zero rows of tenant 1's uploads.
+
 ## What could come next (honest backlog, not a promise)
 
 Ordered by value-to-effort, each mapped to the layer it strengthens:
