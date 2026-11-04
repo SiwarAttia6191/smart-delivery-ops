@@ -128,7 +128,9 @@ def chat(
 
     conversation, history = _conversation_context(payload.conversation_id, db)
 
-    result = run_copilot(_build_providers(), _registry, db, question, history=history)
+    result = run_copilot(
+        _build_providers(), _registry, db, question, history=history, thread_id=conversation.id
+    )
     _persist_exchange(db, conversation, question, result["answer"] or "")
     return ChatResponse(
         conversation_id=conversation.id,

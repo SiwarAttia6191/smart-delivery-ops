@@ -48,7 +48,7 @@ class CopilotState(TypedDict):
     pending_tool_calls: list[dict[str, Any]]
 
 
-def build_graph(provider: Provider, registry: dict[str, ToolSpec]):
+def build_graph(provider: Provider, registry: dict[str, ToolSpec], checkpointer: Any = None):
     schemas = tool_schemas(registry)
 
     def agent_node(state: CopilotState) -> dict[str, Any]:
@@ -110,7 +110,9 @@ def build_graph(provider: Provider, registry: dict[str, ToolSpec]):
     graph.add_edge("tools", "agent")
     graph.add_edge("budget_stop", END)
     graph.add_edge("token_stop", END)
-    return graph.compile()
+    # the checkpointer (when a thread_id is served) persists state per
+    # super-step: conversation continuity + interrupt/resume (#184, #121)
+    return graph.compile(checkpointer=checkpointer) if checkpointer else graph.compile()
 
 
 # The request-scoped session, bound by the endpoint for the duration of
@@ -134,12 +136,63 @@ def _summarize_failures(failures: list[tuple[str, str]]) -> str:
     return " | ".join(f"{name} failed: {err}" for name, err in failures)[:400]
 
 
+_checkpointer: Any = None
+_checkpointer_ready = False
+
+
+def _postgres_checkpointer() -> Any:
+    """The production memory layer (#184): PostgresSaver persists the
+    graph state per super-step under thread_id = conversation id — the
+    prerequisite for confirm-before-write interrupts (#121) and the
+    LangGraph-native short-term memory. Free stack: self-hosted Postgres,
+    the open-source checkpoint package. Falls back to None (the buffer
+    replay path) if the tables can't be created."""
+    global _checkpointer, _checkpointer_ready
+    if not _checkpointer_ready:
+        _checkpointer_ready = True
+        try:
+            from langgraph.checkpoint.postgres import PostgresSaver
+            from psycopg import Connection
+            from psycopg.rows import dict_row
+            from psycopg_pool import ConnectionPool
+
+            # a long-lived pool (NOT from_conn_string — that's a context
+            # manager): the saver must outlive any single request. The
+            # saver reads DICT rows, so the pool's row factory is dict_row.
+            pool: ConnectionPool[Connection[dict[str, Any]]] = ConnectionPool(
+                conninfo=_checkpoint_dsn(),
+                kwargs={"row_factory": dict_row},
+                max_size=2,
+                open=True,
+                name="copilot-checkpoints",
+            )
+            saver = PostgresSaver(pool)
+            saver.setup()
+            _checkpointer = saver
+            logger.info("copilot checkpointer: PostgresSaver ready")
+        except Exception as exc:  # noqa: BLE001 - memory upgrade must not kill the copilot
+            logger.warning("checkpointer unavailable (%s); buffer-window memory stays", exc)
+    return _checkpointer
+
+
+def _checkpoint_dsn() -> str:
+    """The checkpointer wants a plain libpq DSN; derive it from the app's
+    SQLAlchemy URL (same credentials, postgresql:// scheme)."""
+    from core.config import get_settings
+
+    url = str(get_settings().database_url)
+    return url.replace("postgresql+psycopg2://", "postgresql://").replace(
+        "postgresql+psycopg://", "postgresql://"
+    )
+
+
 def run_copilot(
     providers: Provider | Sequence[Provider],
     registry: dict[str, ToolSpec],
     db: Any,
     question: str,
     history: list[dict[str, str]] | None = None,
+    thread_id: str | None = None,
 ) -> dict[str, Any]:
     """One question in, the final answer + trace summary out.
 
@@ -154,11 +207,26 @@ def run_copilot(
     bind_session(db)
     failures: list[tuple[str, str]] = []
     for provider in chain:
-        graph = build_graph(provider, registry)
+        checkpointer = _postgres_checkpointer() if thread_id else None
+        graph = build_graph(provider, registry, checkpointer=checkpointer)
+        # memory (#155 + #184): a WARM thread (checkpoint exists) carries its
+        # own history — invoke with only the new user message so the reducer
+        # appends instead of duplicating; a COLD thread replays the last-k
+        # buffer from conversation_messages exactly as before.
+        warm = False
+        if checkpointer is not None and thread_id:
+            try:
+                warm = (
+                    checkpointer.get_tuple({"configurable": {"thread_id": thread_id}}) is not None
+                )
+            except Exception:  # noqa: BLE001 - probe failure = cold path
+                warm = False
+        opening: list[dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
+        if not warm:
+            opening.extend(history or [])
         initial = {
             "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                *(history or []),  # conversation memory (#155): last-k turns
+                *opening,
                 {"role": "user", "content": question},
             ],
             "tool_calls_used": 0,
@@ -167,10 +235,12 @@ def run_copilot(
             "pending_tool_calls": [],
         }
         try:
-            final = graph.invoke(
-                initial,
-                config={"recursion_limit": 25},  # the backstop behind both budgets
-            )
+            config: dict[str, Any] = {
+                "recursion_limit": 25  # the backstop behind both budgets
+            }
+            if checkpointer is not None and thread_id:
+                config["configurable"] = {"thread_id": thread_id}
+            final = graph.invoke(initial, config=config)
         except Exception as exc:  # noqa: BLE001 - the fallback chain's rung
             logger.error("copilot rung %s failed (%s); trying the next rung", provider.name, exc)
             failures.append((provider.name, f"{type(exc).__name__}: {exc}"[:180]))
