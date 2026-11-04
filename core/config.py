@@ -33,6 +33,23 @@ class Settings(BaseSettings):
     # fake reference (no money moves); a real gateway is a config flip.
     payment_provider: str = "sandbox"
 
+    # ── Copilot embeddings (#153) ──────────────────────────────
+    # "hash" = the deterministic keyless embedder (default); "openai" =
+    # text-embedding-3-large via the same secret as the chat provider.
+    # Switching providers REQUIRES a re-embed of the corpus (make
+    # docs-ingest --re-embed): vectors from different models never mix.
+    embeddings_provider: str = "hash"
+    openai_embedding_model: str = "text-embedding-3-large"
+    # the model natively emits 3072 dims; the store column is VECTOR(1536)
+    # and text-embedding-3-large supports Matryoshka reduction to it.
+    openai_embedding_dimensions: int = 1536
+
+    # ── Copilot conversation memory (#155) ─────────────────────
+    copilot_memory_turns: int = 6  # last-k messages replayed into the graph
+
+    # ── Eval sink (#157): mlflow | langsmith | both ────────────
+    eval_sink: str = "mlflow"
+
     # ── Database ───────────────────────────────────────────────
     # Production stack: PostgreSQL (matches docker-compose.yml credentials).
     # Zero-dependency fallback for quick experiments: DATABASE_URL=sqlite:///./local.db

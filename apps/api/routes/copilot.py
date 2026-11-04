@@ -5,18 +5,30 @@ pluggable by settings — the live flagship→mini models under
 COPILOT_PROVIDER=openai, the deterministic script otherwise.
 """
 
+import json
+import uuid
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from apps.api.deps import current_claims, get_db
 from apps.copilot import guardrails
-from apps.copilot.graph import run_copilot
+from apps.copilot.graph import (
+    _SYSTEM_PROMPT,
+    PROMPT_VERSION,
+    bind_session,
+    build_graph,
+    run_copilot,
+)
 from apps.copilot.providers.factory import build_provider_chain
 from apps.copilot.tools import build_registry
+from core.config import get_settings
+from domain.models import Conversation, ConversationMessage
+from domain.services import tenant_service
 
 router = APIRouter(prefix="/copilot", tags=["copilot"])
 
@@ -25,6 +37,9 @@ _registry = build_registry()
 
 class ChatRequest(BaseModel):
     question: str = Field(min_length=1, max_length=guardrails.MAX_QUESTION_CHARS)
+    conversation_id: str | None = Field(
+        None, description="continue a thread (#155): the last-k turns join the context"
+    )
 
 
 class ChatResponse(BaseModel):
@@ -35,6 +50,61 @@ class ChatResponse(BaseModel):
     degraded_reason: str | None = None
     prompt_version: str
     usage_total: int | None = None
+    conversation_id: str | None = None
+
+
+def _conversation_context(
+    conversation_id: str | None, db: Session
+) -> tuple[Conversation, list[dict[str, str]]]:
+    """Conversation memory (#155): load the thread's last-k turns into the
+    graph context, creating the thread when no id is given. A conversation
+    id from another tenant reads as not-found (RLS + explicit filter)."""
+    settings = get_settings()
+    if conversation_id:
+        tid = tenant_service.context_tenant_id(db)
+        conversation = (
+            db.query(Conversation)
+            .filter(Conversation.id == conversation_id, Conversation.tenant_id == tid)
+            .one_or_none()
+        )
+        if conversation is None:
+            raise HTTPException(http_status.HTTP_404_NOT_FOUND, detail="conversation not found")
+        turns = (
+            db.query(ConversationMessage)
+            .filter(ConversationMessage.conversation_id == conversation.id)
+            .order_by(ConversationMessage.id)
+            .all()
+        )
+        history = [
+            {"role": m.role, "content": m.content} for m in turns[-settings.copilot_memory_turns :]
+        ]
+        return conversation, history
+    conversation = Conversation(
+        id=str(uuid.uuid4()), tenant_id=tenant_service.context_tenant_id(db)
+    )
+    db.add(conversation)
+    db.commit()
+    return conversation, []
+
+
+def _persist_exchange(db: Session, conversation: Conversation, question: str, answer: str) -> None:
+    db.add_all(
+        [
+            ConversationMessage(
+                tenant_id=conversation.tenant_id,
+                conversation_id=conversation.id,
+                role="user",
+                content=question,
+            ),
+            ConversationMessage(
+                tenant_id=conversation.tenant_id,
+                conversation_id=conversation.id,
+                role="assistant",
+                content=answer,
+            ),
+        ]
+    )
+    db.commit()
 
 
 def _build_providers() -> list[Any]:
@@ -56,8 +126,12 @@ def chat(
     except ValueError as exc:
         raise HTTPException(http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    result = run_copilot(_build_providers(), _registry, db, question)
+    conversation, history = _conversation_context(payload.conversation_id, db)
+
+    result = run_copilot(_build_providers(), _registry, db, question, history=history)
+    _persist_exchange(db, conversation, question, result["answer"] or "")
     return ChatResponse(
+        conversation_id=conversation.id,
         answer=result["answer"],
         tool_calls_used=result["tool_calls_used"],
         provider=result["provider"],
@@ -66,3 +140,83 @@ def chat(
         prompt_version=result["prompt_version"],
         usage_total=result.get("usage_total"),
     )
+
+
+def _sse(event: str, data: dict) -> str:
+    return "event: " + event + "\ndata: " + json.dumps(data, default=str) + "\n\n"
+
+
+@router.post("/chat/stream")
+def chat_stream(
+    payload: ChatRequest,
+    db: Session = Depends(get_db),
+    claims: Annotated[dict[str, Any] | None, Depends(current_claims)] = None,
+) -> StreamingResponse:
+    """The same copilot over Server-Sent Events (#156): progress events per
+    graph node (tool hops are visible AS they happen), then one final
+    `answer` event carrying the full ChatResponse. The primary rung
+    streams; if it dies the full fallback chain serves the answer event —
+    a degraded stream, never a dead one."""
+    try:
+        question = guardrails.screen_question(payload.question)
+    except ValueError as exc:
+        raise HTTPException(http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    conversation, history = _conversation_context(payload.conversation_id, db)
+    providers = _build_providers()
+    provider = providers[0]
+
+    def event_stream():
+        yield _sse("context", {"conversation_id": conversation.id, "provider": provider.name})
+        final: dict[str, Any] = {}
+        try:
+            bind_session(db)
+            graph = build_graph(provider, _registry)
+            initial = {
+                "messages": [
+                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    *history,
+                    {"role": "user", "content": question},
+                ],
+                "tool_calls_used": 0,
+                "total_tokens": 0,
+                "answer": None,
+                "pending_tool_calls": [],
+            }
+            # stream_mode="updates" yields one {node: delta} dict per hop
+            for update in graph.stream(
+                initial, config={"recursion_limit": 25}, stream_mode="updates"
+            ):
+                for node, delta in update.items():
+                    final.update(delta)
+                    yield _sse("node", {"node": node})
+        except Exception as exc:  # noqa: BLE001 - degrade into the fallback chain
+            yield _sse("degraded", {"reason": f"{type(exc).__name__}: {exc}"[:180]})
+        if not final.get("answer"):
+            result = run_copilot(providers, _registry, db, question, history=history)
+        else:
+            result = {
+                "answer": final.get("answer"),
+                "tool_calls_used": final.get("tool_calls_used", 0),
+                "usage_total": final.get("total_tokens") or None,
+                "provider": provider.name,
+                "degraded": False,
+                "degraded_reason": None,
+                "prompt_version": PROMPT_VERSION,
+            }
+        _persist_exchange(db, conversation, question, result["answer"] or "")
+        yield _sse(
+            "answer",
+            ChatResponse(
+                conversation_id=conversation.id,
+                answer=result["answer"],
+                tool_calls_used=result["tool_calls_used"],
+                provider=result["provider"],
+                degraded=result["degraded"],
+                degraded_reason=result.get("degraded_reason"),
+                prompt_version=result["prompt_version"],
+                usage_total=result.get("usage_total"),
+            ).model_dump(),
+        )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
