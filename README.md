@@ -296,12 +296,16 @@ using the **transactional outbox** pattern. Each API operation commits its
 business state and event together; the relay and warehouse consumer run off
 the request path:
 
+```mermaid
+flowchart LR
+    O["orders — state changes"] --> OE[("order_events — the outbox<br/>committed with the business state")]
+    D["drivers — availability changes"] --> DE[("driver_events — the outbox")]
+    OE -->|"relay publishes"| OT["Kafka topic: orders.events"]
+    DE -->|"relay publishes"| DT["Kafka topic: drivers.events"]
+    OT --> W["warehouse consumer → raw schema"]
+    DT --> W
+    W --> DBT["dbt staging → marts"]
 ```
-                          ┌──────────────────────── the platform ────────────────────────┐
-orders ──► order_events ──► orders.events ──┐
-                                             ├──► raw warehouse ──► dbt staging/marts
-drivers ─► driver_events ─► drivers.events ─┘
-
 
 Start the broker and the relay (the API comes up as before):
 
