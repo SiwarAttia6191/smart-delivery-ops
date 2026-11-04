@@ -37,7 +37,11 @@ def find_nearest_driver(
     Distance comes from the configured provider (champion by default; a
     shadow challenger may log alongside it - see domain/rules/geo.py)."""
     best: MatchResult | None = None
-    drivers = session.scalars(select(Driver)).all()
+    # Claim semantics (#190): SKIP LOCKED makes a concurrent assign skip
+    # rows another worker is dispatching against — two simultaneous
+    # POST /orders/{id}/assign can no longer both claim the same driver.
+    # The lock releases at the assign's commit.
+    drivers = session.scalars(select(Driver).with_for_update(skip_locked=True)).all()
     for driver in drivers:
         if not driver_rules.is_eligible(driver, vehicle):
             continue

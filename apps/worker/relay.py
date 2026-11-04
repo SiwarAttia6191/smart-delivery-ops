@@ -337,17 +337,20 @@ def main(settings: Settings | None = None) -> None:  # pragma: no cover - long-r
     # pool_pre_ping: recycle stale pooled connections after a Postgres restart
     # instead of crashing the worker with an OperationalError.
     engine = create_engine(s.database_url, pool_pre_ping=True)
+    # The relay publishes EVERY tenant's outbox (#36): mark the explicit
+    # cross-tenant GUC — forced RLS would otherwise hide all but the
+    # default tenant's events from this engine's sessions. The GUC is a
+    # CONNECT listener, so it MUST register before anything pools a
+    # connection: a session booted first gets a listener-less connection
+    # that stays RLS-pinned to tenant 1 forever (#191).
+    import core.tenancy
+
+    core.tenancy.mark_tenant_bypass(engine)
     # Resolve the deployment's incarnation token once (m4, #76) — it rides
     # on every wire message the relay produces from here on.
     with sessionmaker(bind=engine)() as boot_session:
         set_incarnation(deployment_service.incarnation_for(boot_session))
         boot_session.commit()
-    # The relay publishes EVERY tenant's outbox (#36): mark the explicit
-    # cross-tenant GUC — forced RLS would otherwise hide all but the
-    # default tenant's events from this engine's sessions.
-    import core.tenancy
-
-    core.tenancy.mark_tenant_bypass(engine)
     # The schema is owned by the Alembic chain (#28): compose starts this
     # service only after the one-shot `migrate` service reached head, which
     # removes the old startup race (create_all could not cover ALTERs
