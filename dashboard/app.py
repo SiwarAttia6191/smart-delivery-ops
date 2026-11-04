@@ -118,7 +118,14 @@ else:
     )
 
 
+def _nan0(value: float) -> float:
+    """NaN is truthy — the audit (#182) caught 'nan min' cards because
+    `or 0` never fires on it. Empty tenant windows produce NaN means."""
+    return 0.0 if value != value else value
+
+
 def _kpi(label, current: float, prev: float, fmt="{:,.0f}", lower_is_better=False):
+    current, prev = _nan0(current), _nan0(prev)
     delta = None
     if prev:
         pct = (current - prev) / prev * 100
@@ -138,12 +145,12 @@ with c3:
 with c4:
     avg_min = window["avg_delivery_minutes"].mean()
     prev_min = previous["avg_delivery_minutes"].mean() or 0
-    _kpi("Avg delivery", avg_min or 0, prev_min, "{:.1f} min")
+    _kpi("Avg delivery", _nan0(avg_min), _nan0(prev_min), "{:.1f} min")
 with c5:
     _kpi(
         "Avg surge",
-        window["avg_surge_multiplier"].mean() or 0,
-        previous["avg_surge_multiplier"].mean() or 0,
+        _nan0(window["avg_surge_multiplier"].mean()),
+        _nan0(previous["avg_surge_multiplier"].mean()),
         "{:.2f}×",
     )
 
