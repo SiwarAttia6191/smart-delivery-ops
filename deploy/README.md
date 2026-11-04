@@ -24,6 +24,13 @@ and index.html's demos hub get `https://<demo-domain>/storefront/ordering-demo.h
 | `reset_demo.py` (in `scripts/`) | the nightly reset: truncate the day's orders/events/payments, zero coupon counters, re-seed idempotently |
 | `.github/workflows/deploy-demo.yml` | one-click redeploy from the Actions tab after the repo secrets (`DEMO_HOST`/`DEMO_USER`/`DEMO_SSH_KEY`/`DEMO_DOMAIN`) are set — inert until then |
 
+## Backups (#193)
+
+`deploy/backup_demo.sh` — a timestamped `pg_dump` of the demo database,
+keeping the last 7; cron it daily (`10 3 * * *`). The restore drill:
+`docker compose -f docker-compose.demo.yml exec -T postgres psql -U smartops -d smart_delivery_ops < backups/<file>.sql` into a FRESH
+`demo_pgdata` volume (stop the unit, `docker volume rm`, up, restore).
+
 ## Deliberate posture (decision 0004)
 
 Published sandbox credentials by design (`ops/ops` printed on the demo
