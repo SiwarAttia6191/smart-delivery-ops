@@ -46,7 +46,12 @@ with DAG(
     # DBT_PASSWORD, host runs fall back to its documented dev default.
     dbt_env = (
         "DBT_LOG_PATH=/tmp/dbt-logs DBT_TARGET_PATH=/tmp/dbt-target "
-        "DBT_PASSWORD=$(cat /run/secrets/db_password | tr -d '\r')"
+        "DBT_PASSWORD=$(cat /run/secrets/db_password | tr -d '\r') "
+        "PGPASSWORD=$(cat /run/secrets/db_password | tr -d '\r') "
+        # the scheduled lane IS production (#181): without this, profiles.yml's
+        # default silently rebuilt analytics_draft every night while the
+        # production `analytics` schema froze (2026-11-04 dashboard audit)
+        "DBT_SCHEMA=analytics"
     )
 
     dbt_build = BashOperator(
@@ -64,5 +69,20 @@ with DAG(
         ),
     )
 
+    # Mart freshness (#181): the source-freshness step covers RAW only —
+    # the audit caught five silent days precisely because nothing checked
+    # the MARTS. Fails the DAG when the production summary mart is older
+    # than 26h (traffic-based: orders flow daily on the seeded volume).
+    marts_freshness = BashOperator(
+        task_id="marts_freshness",
+        bash_command=(
+            'if [ "$(psql -h postgres -U smartops -d smart_delivery_ops -tAc '
+            "'SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(source_created_at)))::int, 999999) "
+            "FROM analytics.mart_daily_order_summary')\" -lt 93600 ]; then "
+            "echo 'marts fresh'; else "
+            "echo 'production marts STALE: analytics.mart_daily_order_summary older than 26h (#181)'; exit 1; fi"
+        ),
+    )
+
     # Freshness only means something if the build just succeeded.
-    dbt_build >> dbt_source_freshness
+    dbt_build >> marts_freshness >> dbt_source_freshness
