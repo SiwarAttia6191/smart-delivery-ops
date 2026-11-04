@@ -202,7 +202,7 @@ average delivery time, fleet availability):
 
 The local port is configurable: `make api API_PORT=9090` (default **8010**, chosen to avoid the crowded 8000).
 
-**Docker (PostgreSQL profile):** `docker compose up --build` → API on **http://127.0.0.1:8010**, Postgres on :5434.
+**Docker (PostgreSQL profile):** `make secrets && docker compose up --build` → API on **http://127.0.0.1:8010**, Postgres on :5434 (the secrets step generates the files compose requires on a fresh clone).
 
 ## 📊 Dashboard (Phase 4, #27)
 
