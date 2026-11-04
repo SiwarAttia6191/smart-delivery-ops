@@ -475,5 +475,18 @@ const revealLoop = () => {
 requestAnimationFrame(revealLoop);
 const revealTimer = setInterval(revealLoop, 400);
 </script>
+  <script type="module">
+    // #178: embedded browsers don't always honor fragment navigation —
+    // scroll explicitly so the Tier CTAs land on their sections everywhere.
+    document.addEventListener("click", (event) => {
+      const link = event.target.closest('a[href^="#"]');
+      if (!link) return;
+      const target = document.querySelector(link.getAttribute("href"));
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      history.pushState(null, "", link.getAttribute("href"));
+    });
+  </script>
 </body>
 </html>
