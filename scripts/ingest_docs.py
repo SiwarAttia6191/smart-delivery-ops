@@ -24,6 +24,7 @@ from sqlalchemy.orm import sessionmaker  # noqa: E402
 from apps.copilot.corpus import add_chunk  # noqa: E402
 from apps.copilot.providers.embeddings import embed  # noqa: E402
 from apps.copilot.retriever import chunk_document  # noqa: E402
+from core.config import get_settings
 from core.database import engine  # noqa: E402
 from domain.models import KnowledgeChunk  # noqa: E402
 
@@ -69,5 +70,37 @@ def ingest(reset: bool = False) -> int:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reset", action="store_true", help="clear knowledge_chunks first")
+    parser.add_argument(
+        "--re-embed",
+        action="store_true",
+        help="recompute embeddings for the existing chunks with the CURRENT "
+        "provider (the provider-switch step: vectors from different models "
+        "never mix, so EMBEDDINGS_PROVIDER=openai requires one re-embed)",
+    )
     args = parser.parse_args()
+    if args.re_embed:
+        from sqlalchemy import text as sql_text
+
+        from apps.copilot.providers.embeddings import embed_strict
+
+        session = sessionmaker(bind=engine)()
+        try:
+            rows = session.query(KnowledgeChunk).all()
+            if session.get_bind().dialect.name == "postgresql":
+                # the vector column takes the CAST writer (no implicit cast)
+                for chunk in rows:
+                    session.execute(
+                        sql_text(
+                            "UPDATE knowledge_chunks "
+                            "SET embedding = CAST(:e AS vector) WHERE id = :id"
+                        ),
+                        {"e": embed_strict(chunk.content), "id": chunk.id},
+                    )
+            else:
+                for chunk in rows:
+                    chunk.embedding = embed_strict(chunk.content)
+            session.commit()
+            print(f"re-embedded {len(rows)} chunks with {get_settings().embeddings_provider}")
+        finally:
+            session.close()
     ingest(reset=args.reset)
