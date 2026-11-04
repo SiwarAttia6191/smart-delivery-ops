@@ -100,6 +100,8 @@ manually until it proves itself.
 
 ## References
 
+- The VPS price/quality benchmark: [docs/vps-benchmark.md](../vps-benchmark.md) (2026-11-04 — Hetzner CX22 recommended)
+
 - #159 items 1–3 (the storefront, coupons, payments — the thing being hosted)
 - 0003 (repo-visibility hosting — separate concern, unaffected)
 - #114 (the issue that carries the hosting conversation)
