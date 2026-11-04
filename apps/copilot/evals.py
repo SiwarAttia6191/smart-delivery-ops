@@ -152,6 +152,9 @@ def run_eval(
         for case in eval_set["cases"]
     ]
     passed = sum(1 for r in results if r["passed"])
+    from apps.copilot import eval_sink
+
+    eval_sink.dispatch("ops-copilot-eval", eval_set, results)
     return {
         "eval_set_version": eval_set["version"],
         "total": len(results),

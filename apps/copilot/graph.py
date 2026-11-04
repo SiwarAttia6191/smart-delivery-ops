@@ -135,7 +135,11 @@ def _summarize_failures(failures: list[tuple[str, str]]) -> str:
 
 
 def run_copilot(
-    providers: Provider | Sequence[Provider], registry: dict[str, ToolSpec], db: Any, question: str
+    providers: Provider | Sequence[Provider],
+    registry: dict[str, ToolSpec],
+    db: Any,
+    question: str,
+    history: list[dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     """One question in, the final answer + trace summary out.
 
@@ -154,6 +158,7 @@ def run_copilot(
         initial = {
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
+                *(history or []),  # conversation memory (#155): last-k turns
                 {"role": "user", "content": question},
             ],
             "tool_calls_used": 0,

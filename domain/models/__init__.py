@@ -1,6 +1,7 @@
 """SQLAlchemy models. Importing this package registers all tables on Base.metadata."""
 
 from domain.models.base import Base
+from domain.models.conversation import Conversation, ConversationMessage
 from domain.models.coupon import Coupon
 from domain.models.customer import Customer
 from domain.models.demand_forecast import DemandForecast
@@ -23,6 +24,8 @@ from domain.models.user import User
 __all__ = [
     "Base",
     "Coupon",
+    "Conversation",
+    "ConversationMessage",
     "Customer",
     "DeploymentState",
     "INCARNATION_KEY",
