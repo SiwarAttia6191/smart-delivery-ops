@@ -225,6 +225,21 @@ def run_copilot(
         opening: list[dict[str, str]] = [{"role": "system", "content": _SYSTEM_PROMPT}]
         if not warm:
             opening.extend(history or [])
+        # long-term memory (#208): the tenant's remembered facts shape
+        # every answer, warm or cold
+        try:
+            from domain.services import memory_service
+
+            facts = memory_service.recent_facts(db)
+            if facts:
+                opening.append(
+                    {
+                        "role": "system",
+                        "content": "What the operator asked you to remember: " + " | ".join(facts),
+                    }
+                )
+        except Exception:  # noqa: BLE001 - memory is an enhancement
+            pass
         initial = {
             "messages": [
                 *opening,

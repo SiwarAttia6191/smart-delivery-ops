@@ -97,6 +97,41 @@ def _mark_item_sold_out(db: Session, item_id: int) -> str:
     return f"executed: menu item {item_id} ({item.name}) marked sold out"
 
 
+def _remember_fact(db: Session, fact: str) -> str:
+    from domain.services import tenant_service
+
+    """The long-term memory tool (#208): store the operator's fact
+    verbatim, tenant-scoped, injected into every future answer."""
+    from domain.models import Memory
+
+    fact = fact.strip()
+    if not fact:
+        return "nothing to remember — the fact was empty"
+    db.add(
+        Memory(
+            tenant_id=tenant_service.context_tenant_id(db),
+            content=fact[:500],
+            source_conversation_id=None,
+        )
+    )
+    db.commit()
+    return f"remembered: {fact[:200]}"
+
+
+def _recall_facts(db: Session) -> list[str]:
+    from domain.services import tenant_service
+
+    """The tenant's remembered facts, newest first — injected into the
+    chat context so past instructions shape future answers."""
+    from domain.models import Memory
+
+    tid = tenant_service.context_tenant_id(db)
+    rows = (
+        db.query(Memory).filter(Memory.tenant_id == tid).order_by(Memory.id.desc()).limit(10).all()
+    )
+    return [m.content for m in rows]
+
+
 def _forecast_next_24h(db: Session) -> list[dict]:
     from domain.models import DemandForecast
 
@@ -156,6 +191,20 @@ def build_registry() -> dict[str, ToolSpec]:
             "endpoint — without approval it returns a proposal.",
             parameters={"item_id": {"type": "int"}},
             func=_mark_item_sold_out,
+        ),
+        ToolSpec(
+            name="remember_fact",
+            description="Store a durable fact about this operation ('remember "
+            "that we always deliver pizza first') — it shapes every future "
+            "answer for this tenant.",
+            parameters={"fact": {"type": "str"}},
+            func=_remember_fact,
+        ),
+        ToolSpec(
+            name="recall_facts",
+            description="The facts this tenant asked the copilot to remember.",
+            parameters={},
+            func=_recall_facts,
         ),
     ]
     return {s.name: s for s in specs}
