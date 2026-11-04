@@ -31,6 +31,18 @@ def reset() -> None:
         # the menu is the operator's work, not the day's traffic.
         conn.execute(text("TRUNCATE orders, order_events, payments RESTART IDENTITY CASCADE"))
         conn.execute(text("UPDATE coupons SET times_used = 0"))
+        # checkpoint retention (#184): LangGraph does not prune — without
+        # this the checkpoint tables balloon (a 2026 production postmortem
+        # measured 40 GB in six weeks). Threads older than 7 days go.
+        try:
+            stale = (
+                "DELETE FROM {table} WHERE thread_id IN "
+                "(SELECT id FROM conversations WHERE created_at < now() - interval '7 days')"
+            )
+            for table in ("checkpoint_writes", "checkpoint_blobs", "checkpoints"):
+                conn.execute(text(stale.format(table=table)))
+        except Exception:  # noqa: BLE001 - checkpoint tables may not exist yet
+            pass
     print("demo activity wiped (orders, events, payments; coupon counters zeroed)")
 
     from scripts.seed_demo import main as seed_demo
