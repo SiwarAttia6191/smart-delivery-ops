@@ -19,3 +19,13 @@ class CustomerResponse(ORMModel):
     latitude: float
     longitude: float
     created_at: datetime
+
+
+class CustomerPublicResponse(ORMModel):
+    """The anonymous-GET shape (#192): no phone — the one clear PII field.
+    Name stays: it is the storefront's visible identity, not contact data."""
+
+    id: int
+    name: str
+    latitude: float
+    longitude: float
