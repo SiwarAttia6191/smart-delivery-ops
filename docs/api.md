@@ -113,6 +113,15 @@ The kitchen's CRUD surface (#159 item 4): menu items per restaurant, tenant-scop
 
 Cross-tenant reads and writes are the same uniform 404 as an unknown id — no probing.
 
+## Knowledge (per-tenant RAG)
+
+The customer version of the knowledge bridge (#154): a tenant uploads markdown documents that become THEIR copilot's private knowledge — chunked, embedded, stored with `tenant_id` and scoped twice (explicit filter + RLS, migration 009 — the tenth tenant policy). The deployment-shared corpus (runbook, decision records, `tenant_id` NULL) reaches every tenant.
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/knowledge/documents` | Upload a markdown doc as the caller tenant's private knowledge (writer); re-uploading a title replaces its chunks |
+| GET | `/knowledge/documents` | The caller's private documents + the shared corpus (open GET, tenant-scoped) |
+
 ## Routes
 
 | Method | Path | Description |

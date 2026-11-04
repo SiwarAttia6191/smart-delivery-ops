@@ -63,7 +63,11 @@ def chunk_document(text: str) -> list[str]:
 
 
 def search_docs(
-    db: Session, query: str, limit: int = 3, source_prefix: str | None = None
+    db: Session,
+    query: str,
+    limit: int = 3,
+    source_prefix: str | None = None,
+    tenant_id: int | None = None,
 ) -> list[dict[str, Any]]:
     """The retriever: the question's nearest chunks from the knowledge
     corpus, with their sources so the answer can cite them. NOTE: no
@@ -88,9 +92,15 @@ def search_docs(
             "FROM knowledge_chunks"
         )
         params: dict[str, Any] = {"q": query_embedding, "limit": limit}
+        wheres = []
         if source_prefix:
-            sql += " WHERE source LIKE :prefix"
+            wheres.append("source LIKE :prefix")
             params["prefix"] = f"{source_prefix}%"
+        if tenant_id is not None:
+            wheres.append("(tenant_id IS NULL OR tenant_id = :tid)")
+            params["tid"] = tenant_id
+        if wheres:
+            sql += " WHERE " + " AND ".join(wheres)
         sql += " ORDER BY embedding <=> CAST(:q AS vector) LIMIT :limit"
         rows = db.execute(text(sql), params).mappings().all()
         hits = [dict(r) for r in rows]
@@ -98,6 +108,8 @@ def search_docs(
         chunks = db.query(KnowledgeChunk).all()
         if source_prefix:
             chunks = [c for c in chunks if c.source.startswith(source_prefix)]
+        if tenant_id is not None:
+            chunks = [c for c in chunks if c.tenant_id is None or c.tenant_id == tenant_id]
         query_vec = _parse_vector(query_embedding)
         scored = sorted(
             ((c, _cosine(_parse_vector(c.embedding), query_vec)) for c in chunks),
