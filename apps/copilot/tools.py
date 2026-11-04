@@ -11,6 +11,7 @@ platform's EXISTING read logic. Three properties are architectural:
 """
 
 import json
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -73,6 +74,29 @@ def _search_docs(db: Session, query: str, source_prefix: str | None = None) -> l
     )
 
 
+_approval_granted: ContextVar[bool] = ContextVar("approval_granted", default=False)
+
+
+def _mark_item_sold_out(db: Session, item_id: int) -> str:
+    """The first MUTATING copilot tool (#121, confirm-before-write). The
+    approval gate is a ContextVar set ONLY by the resume endpoint: without
+    it the tool RETURNS a proposal instead of executing — prompt injection
+    cannot flip it, because the flag never comes from the conversation."""
+    from domain.models import MenuItem
+
+    item = db.get(MenuItem, item_id)
+    if item is None:
+        return f"menu item {item_id} not found"
+    if not _approval_granted.get():
+        return (
+            f"PROPOSED (not executed): mark menu item {item_id} ({item.name}) sold out. "
+            "Approve via POST /copilot/chat/resume with the conversation id."
+        )
+    item.is_available = False
+    db.commit()
+    return f"executed: menu item {item_id} ({item.name}) marked sold out"
+
+
 def _forecast_next_24h(db: Session) -> list[dict]:
     from domain.models import DemandForecast
 
@@ -124,6 +148,14 @@ def build_registry() -> dict[str, ToolSpec]:
                 "source_prefix": {"type": "str", "optional": True},
             },
             func=_search_docs,
+        ),
+        ToolSpec(
+            name="mark_item_sold_out",
+            description="Propose marking a menu item sold out. MUTATING: it "
+            "only executes after the operator approves via the resume "
+            "endpoint — without approval it returns a proposal.",
+            parameters={"item_id": {"type": "int"}},
+            func=_mark_item_sold_out,
         ),
     ]
     return {s.name: s for s in specs}
