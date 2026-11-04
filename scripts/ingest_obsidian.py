@@ -135,7 +135,41 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--vault", default=str(DEFAULT_VAULT), help="path to the Obsidian vault")
     parser.add_argument(
+        "--re-embed",
+        action="store_true",
+        help="recompute embeddings for the existing obsidian: chunks with the "
+        "CURRENT provider (the provider-switch step)",
+    )
+    parser.add_argument(
         "--reset", action="store_true", help="clear previously ingested vault notes first"
     )
     args = parser.parse_args()
+    if args.re_embed:
+        from sqlalchemy import text as sql_text
+
+        from apps.copilot.providers.embeddings import embed_strict
+        from domain.models import KnowledgeChunk
+
+        session = sessionmaker(bind=engine)()
+        try:
+            rows = (
+                session.query(KnowledgeChunk).filter(KnowledgeChunk.source.like("obsidian:%")).all()
+            )
+            if session.get_bind().dialect.name == "postgresql":
+                # the vector column takes the CAST writer (no implicit cast)
+                for chunk in rows:
+                    session.execute(
+                        sql_text(
+                            "UPDATE knowledge_chunks "
+                            "SET embedding = CAST(:e AS vector) WHERE id = :id"
+                        ),
+                        {"e": embed_strict(chunk.content), "id": chunk.id},
+                    )
+            else:
+                for chunk in rows:
+                    chunk.embedding = embed_strict(chunk.content)
+            session.commit()
+            print(f"re-embedded {len(rows)} obsidian chunks")
+        finally:
+            session.close()
     ingest(Path(args.vault), reset=args.reset)
