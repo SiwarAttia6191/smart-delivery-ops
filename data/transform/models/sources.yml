@@ -21,18 +21,26 @@ sources:
     loaded_at_field: ingested_at
     tables:
       - name: order_events
-        description: One row per order-lifecycle event, deduped by event_id.
+        description: One row per order-lifecycle event. Uniqueness is per
+          (incarnation, event_id) — the DB's PK enforces it; replays after a
+          restart legitimately re-land events under a new incarnation, and
+          stg_order_events dedupes to the latest landing.
         columns:
           - name: event_id
             description: Source primary key from order_events (the outbox log).
-            tests: [unique, not_null]
+            tests: [not_null]
           - name: order_id
             tests: [not_null]
           - name: event_type
             tests:
               - not_null
               - accepted_values:
-                  values: [created, assigned, status]
+                  values: [created, assigned, status, paid]  # paid = the checkout seam (#164)
+              # NOTE: no unique-event_id test — the raw PK is (incarnation,
+              # event_id) by design (#76 incarnation-safe replays): the same
+              # event legitimately re-lands under a new deployment
+              # incarnation after a restart. Dedupe to the latest incarnation
+              # happens in stg_order_events.
           - name: schema_version
             tests:
               - accepted_values:
@@ -41,7 +49,9 @@ sources:
         description: Driver availability transitions, deduped by event_id.
         columns:
           - name: event_id
-            tests: [unique, not_null]
+            # unique is per (incarnation, event_id) — the DB's PK enforces it;
+            # a plain unique on event_id fails by design after any replay
+            tests: [not_null]
           - name: driver_id
             tests: [not_null]
           - name: event_type

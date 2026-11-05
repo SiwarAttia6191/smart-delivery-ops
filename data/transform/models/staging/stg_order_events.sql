@@ -13,6 +13,18 @@ with source as (
 
     select * from {{ source('raw', 'order_events') }}
 
+),
+
+-- Incarnation dedupe (#76 replays): the same event legitimately re-lands
+-- under a new deployment incarnation after a restart - without this, the
+-- marts DOUBLE-COUNT every replayed order. Keep the latest landing only.
+deduped as (
+
+    select
+        *,
+        row_number() over (partition by event_id order by ingested_at desc) as landing_rank
+    from source
+
 )
 
 select
@@ -48,5 +60,10 @@ select
     -- status events
     payload->>'from'                                   as status_from,
     payload->>'to'                                     as status_to
+    -- paid events (#164 checkout seam): the settled money
+    ,(payload->>'amount')::numeric                     as paid_amount
+    ,payload->>'provider'                              as payment_provider
+    ,payload->>'provider_ref'                          as payment_provider_ref
 
-from source
+from deduped
+where landing_rank = 1
