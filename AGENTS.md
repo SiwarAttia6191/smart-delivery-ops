@@ -41,6 +41,10 @@ have each cost a real debugging round — they are not style preferences.
 8. **Every milestone updates its representations:** README, repo
    description/topics, the landing + product pages, api.md, and LEARNING.md
    — the board, the repo, and the websites must tell the same story.
+   In the same pass, **re-score the feature-by-feature comparison table** in
+   `local/competitive-analysis-yoyumm.md` (the competitive re-score lives in
+   the dated re-score block and NEVER leaves `local/` — see rule 7): after
+   each work round, move the rows the work changed and date the snapshot.
 9. **Never commit on main directly** — branch first, even for "tiny"
    changes. (This has slipped seven times; the recovery is
    `git branch <name> <sha>` at the commit, `git reset --hard origin/main`,
