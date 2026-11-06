@@ -1,0 +1,40 @@
+{
+  "city": "madrid",
+  "label": "Madrid",
+  "business_timezone": "Europe/Madrid",
+  "map": { "center_lat": 40.4168, "center_lon": -3.7038, "zoom": 12 },
+  "benchmark_grid": { "center_lat": 40.4168, "center_lon": -3.7038, "spread_deg": 0.08 },
+  "backfill": { "base_rate": 2.4 },
+  "osrm": {
+    "extract_id": "madrid",
+    "download_url": "https://download.geofabrik.de/europe/spain/madrid-latest.osm.pbf"
+  },
+  "restaurants": [
+    { "name": "Casa Toni — Malasaña", "latitude": 40.4256, "longitude": -3.7043 },
+    { "name": "Taberna La Latina — Cava Baja", "latitude": 40.4089, "longitude": -3.7084 },
+    { "name": "Bodega de Sol — Puerta del Sol", "latitude": 40.4169, "longitude": -3.7035 },
+    { "name": "Trattoria Salamanca — Serrano", "latitude": 40.4289, "longitude": -3.684 },
+    { "name": "Chez Paco — Chueca", "latitude": 40.4212, "longitude": -3.6963 },
+    { "name": "Asador Arganzuela — Legazpi", "latitude": 40.3889, "longitude": -3.6965 },
+    { "name": "Ramen Moncloa — Moncloa", "latitude": 40.4342, "longitude": -3.7117 },
+    { "name": "Verde Veggie — Lavapiés", "latitude": 40.4085, "longitude": -3.7011 }
+  ],
+  "drivers": [
+    { "name": "Carlos", "vehicle": "motorcycle", "latitude": 40.42, "longitude": -3.7 },
+    { "name": "Lucía", "vehicle": "bicycle", "latitude": 40.415, "longitude": -3.705 },
+    { "name": "Miguel", "vehicle": "motorcycle", "latitude": 40.43, "longitude": -3.69 },
+    { "name": "Carmen", "vehicle": "car", "latitude": 40.44, "longitude": -3.68 },
+    { "name": "Pablo", "vehicle": "motorcycle", "latitude": 40.41, "longitude": -3.71 },
+    { "name": "Elena", "vehicle": "car", "latitude": 40.435, "longitude": -3.715 },
+    { "name": "Javier", "vehicle": "bicycle", "latitude": 40.405, "longitude": -3.7 },
+    { "name": "Sofía", "vehicle": "motorcycle", "latitude": 40.425, "longitude": -3.69 }
+  ],
+  "customers": [
+    { "name": "Lucía G.", "phone": "+34 600 000 001", "latitude": 40.43, "longitude": -3.69 },
+    { "name": "Mateo R.", "phone": "+34 600 000 002", "latitude": 40.41, "longitude": -3.703 },
+    { "name": "Sofía V.", "phone": "+34 600 000 003", "latitude": 40.425, "longitude": -3.68 },
+    { "name": "Diego M.", "phone": "+34 600 000 004", "latitude": 40.415, "longitude": -3.69 },
+    { "name": "Carmen L.", "phone": "+34 600 000 005", "latitude": 40.44, "longitude": -3.71 },
+    { "name": "Elena P.", "phone": "+34 600 000 006", "latitude": 40.405, "longitude": -3.71 }
+  ]
+}
