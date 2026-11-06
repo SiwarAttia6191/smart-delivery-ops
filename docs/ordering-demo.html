@@ -335,11 +335,13 @@
     async function placeOrder() {
       hideBanner();
       if (!state.customers.length) { showBanner("Load the catalog first (check the API)."); return; }
+      // channel attribution (#226): this page IS the first-party channel
       const payload = {
         customer_id: Number($("cust").value),
         restaurant_id: Number($("rest").value),
         dropoff_latitude: Number($("lat").value),
         dropoff_longitude: Number($("lon").value),
+        source: "storefront",
       };
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);
       // checkout redemption (#159 item 3): an accepted code discounts the
