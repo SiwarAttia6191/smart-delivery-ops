@@ -64,6 +64,7 @@ select
     ,(payload->>'amount')::numeric                     as paid_amount
     ,payload->>'provider'                              as payment_provider
     ,payload->>'provider_ref'                          as payment_provider_ref
+    ,payload->>'order_source'                          as order_source
 
 from deduped
 where landing_rank = 1

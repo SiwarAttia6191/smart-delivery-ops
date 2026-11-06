@@ -23,6 +23,16 @@ class OrderCreate(BaseModel):
             "honored for demos and tests."
         ),
     )
+    source: str | None = Field(
+        None,
+        max_length=30,
+        description=(
+            "Order-source attribution (#226): storefront / marketplace / phone "
+            "— rides the created event so the marts can split revenue per "
+            "channel (the data a restaurant needs to decide which orders to "
+            "keep on-platform)."
+        ),
+    )
     coupon_code: str | None = Field(
         None,
         max_length=60,

@@ -86,6 +86,7 @@ def create_order(
     dropoff_lon: float,
     demand_ratio: float | None = None,
     coupon_code: str | None = None,
+    source: str | None = None,
 ) -> Order:
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -166,6 +167,10 @@ def create_order(
                 "coupon_discount": round(discount, 2),
             }
         )
+    if source:
+        # channel attribution (#226): marketplace vs first-party revenue
+        # is the data the restaurant needs to decide which orders to keep
+        payload["order_source"] = source
     _event(session, order, "created", payload)
     session.add(order)
     session.commit()
