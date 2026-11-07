@@ -36,3 +36,21 @@ class PaymentError(DomainError):
 
     status_code = 409
     error_code = "payment_rejected"
+
+
+class GeocodeAddressError(DomainError):
+    """The geocoder could not resolve the address (#232). A 422 on the
+    request path: it is the caller's data problem, and an unresolvable
+    address must never silently become a wrong-coordinate delivery."""
+
+    status_code = 422
+    error_code = "address_unresolvable"
+
+
+class GeocoderUnavailableError(DomainError):
+    """The geocoder provider could not be reached (#232). A 503: the
+    caller should retry, or send dropoff coordinates directly — the
+    request path degrades loudly instead of guessing."""
+
+    status_code = 503
+    error_code = "geocoder_unavailable"

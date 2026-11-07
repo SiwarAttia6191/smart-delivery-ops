@@ -76,6 +76,8 @@ UI's dev credentials). Unknown user and wrong password return the same
 
 `demand_ratio` on order creation and quotes is optional: omit it and the API derives it live from the `demand_forecasts` table (observed vs forecast demand for the dropoff zone-hour, floored 0.5 / capped 2.5, neutral 1.0 when no forecast covers the hour).
 
+**Dropoff by address (#232):** both `POST /pricing/quote` and `POST /orders` accept `dropoff_address` **XOR** `dropoff_latitude/longitude` — a typed address resolves through Nominatim (OpenStreetMap's free geocoder) and is cached forever in `geocode_cache` (one row per normalized address, shared across tenants — coordinates are city facts, not tenant data). The quote echoes `dropoff_resolved` (what the text matched) and the order's `created` event carries the audit line (`dropoff_address`, `dropoff_resolved`). Failure shapes: an unresolvable address is **422** `address_unresolvable` (the caller's data problem — a wrong-coordinate delivery is never acceptable); an unreachable provider is **503** `geocoder_unavailable` (retry, or send coordinates). Bias the resolution to the deployment's country with `GEOCODER_COUNTRY_CODES` (e.g. `es` for the Madrid pack); `scripts/geocode_cache_clear.py` is the city-update path — clear the cache when the map data changes and the next lookup re-resolves.
+
 ## Coupons (promotions)
 
 Per-tenant discount codes, the mirror of the pricing engine (#159): the same code can exist in two tenants with different values, and cross-tenant use looks identical to an unknown code.
