@@ -58,3 +58,22 @@ async def import_entity(entity: str, request: Request, db: Session = Depends(get
         raise ImportRejectedError("the file contains no rows")
     # returned as the dict — FastAPI validates/serializes against ImportResult
     return import_service.import_rows(db, entity, rows)
+
+
+@router.post(
+    "/import/{entity}/preview",
+    dependencies=[Depends(require_writer)],
+)
+async def preview_entity(entity: str, request: Request, db: Session = Depends(get_db)):
+    """The wizard's map preview (#224): the import's validation + geocoding
+    pass with NOTHING committed — every row's fate and coordinates come
+    back so the client can fix flagged rows before importing."""
+    if entity not in ROW_MODELS:
+        raise NotFoundError(f"unknown import entity '{entity}' (valid: {', '.join(ROW_MODELS)})")
+    try:
+        rows = _parse_rows(await request.body(), request.headers.get("content-type", ""))
+    except (ValueError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ImportRejectedError(f"file could not be parsed: {exc}") from exc
+    if not rows:
+        raise ImportRejectedError("the file contains no rows")
+    return import_service.preview_rows(db, entity, rows)

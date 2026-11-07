@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Onboarding wizard — Smart Delivery Ops</title>
+  <meta name="description" content="Turn a client's files into a live tenant: upload, see every row geocoded on the map BEFORE importing, issue staff accounts, and read the readiness checklist." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    .wiz-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .wiz-lead { max-width: 64ch; color: var(--muted, #5b6472); }
+    .steps { display: grid; gap: 1.25rem; margin-top: 1.5rem; }
+    @media (min-width: 900px) { .steps { grid-template-columns: 1fr 1fr; } }
+    .step.wide { grid-column: 1 / -1; }
+    .step h2 { margin-top: 0; font-size: 1.05rem; }
+    .step .hint { font-size: .82rem; color: var(--muted, #5b6472); margin: .35rem 0 .75rem; }
+    .banner { display: none; margin: 1.25rem 0 0; padding: .7rem 1rem; border-radius: 10px;
+              background: #fdeceb; color: #8c2f28; border: 1px solid #f3c2be; font-size: .9rem; }
+    .banner.show { display: block; }
+    .banner.info { background: #eef4fd; color: #274b7a; border-color: #c4d8f2; }
+    .banner.okay { background: #e7f6ec; color: #1c7c46; border-color: #bfe6cd; }
+    textarea.paste { width: 100%; min-height: 9rem; font-family: ui-monospace, monospace; font-size: .85rem;
+                     padding: .6rem; border: 1px solid #d7dce6; border-radius: 8px; }
+    .row-actions { display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-top: .6rem; }
+    .row-actions select, .row-actions input { width: auto; }
+    #import-map { height: 320px; border-radius: 10px; margin-top: .9rem; display: none; }
+    .rep-table { width: 100%; border-collapse: collapse; margin-top: .9rem; font-size: .88rem; }
+    .rep-table th, .rep-table td { text-align: left; padding: .35rem .5rem; border-bottom: 1px dashed #e3e6ec; }
+    .rep-table td:last-child { font-variant-numeric: tabular-nums; }
+    .rep-table .failed { color: #8c2f28; }
+    .rep-table .imported { color: #1c7c46; }
+    .check-list { list-style: none; margin: .75rem 0 0; padding: 0; font-size: .95rem; }
+    .check-list li { padding: .45rem 0; border-bottom: 1px dashed #e3e6ec; display: flex; gap: .6rem; align-items: baseline; }
+    .check-list .mark { font-weight: 700; flex: 0 0 auto; }
+    .check-list .mark.yes { color: #1c7c46; }
+    .check-list .mark.no { color: #8c2f28; }
+    .check-list .detail { color: var(--muted, #5b6472); font-size: .85rem; }
+    code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; }
+    .who { font-size: .85rem; color: var(--muted, #5b6472); }
+    .pw-note { font-size: .82rem; color: #8a5a13; margin-top: .5rem; }
+  </style>
+</head>
+<body>
+  <main class="wiz-main">
+    <h1>🧭 Onboarding wizard</h1>
+    <p class="wiz-lead">Turn a client's files into a live tenant: paste or upload the CSV, see every row
+      geocoded <strong>on the map before anything commits</strong>, fix flagged rows, import, issue staff
+      accounts, and read the readiness checklist — the five things a client must see green on the sales call.</p>
+
+    <div class="banner" id="banner"></div>
+
+    <div class="steps">
+      <section class="card step" aria-labelledby="h-auth">
+        <h2 id="h-auth">1 · Sign in (writer)</h2>
+        <p class="hint">Imports and staff issuance are writes — the demo trio is <code>ops/ops</code>.
+          Everything below runs against YOUR tenant (the token carries it; RLS enforces it).</p>
+        <div class="row-actions">
+          <input id="user" type="text" value="ops" autocomplete="username" aria-label="Username" />
+          <input id="pass" type="password" value="ops" autocomplete="current-password" aria-label="Password" />
+          <button class="btn btn-primary btn-sm" id="btn-signin" type="button">Sign in</button>
+          <span class="who" id="who"></span>
+        </div>
+      </section>
+
+      <section class="card step" aria-labelledby="h-staff">
+        <h2 id="h-staff">4 · Issue staff accounts</h2>
+        <p class="hint">One per line: <code>username,role</code> — role is <code>ops</code> or
+          <code>viewer</code> (admins can mint admins too). Passwords are generated and shown ONCE.</p>
+        <textarea class="paste" id="staff-paste" placeholder="maria,ops&#10;pablo,viewer"></textarea>
+        <div class="row-actions">
+          <button class="btn btn-primary btn-sm" id="btn-staff" type="button">Issue staff</button>
+        </div>
+        <table class="rep-table" id="staff-result" hidden></table>
+        <p class="pw-note" id="pw-note" hidden>Copy the passwords now — they are not shown again.</p>
+      </section>
+
+      <section class="card step wide" aria-labelledby="h-import">
+        <h2 id="h-import">2 &amp; 3 · Upload → preview on the map → import</h2>
+        <p class="hint">The preview is the import's validation + geocoding pass with NOTHING committed:
+          green pins resolved, red pins failed-and-why. Fix the flagged rows in the text and preview again.
+          Import only unlocks when every row is green. Entities: <code>restaurants</code> (name,address),
+          <code>drivers</code> (name,vehicle,address), <code>customers</code> (name,phone,address),
+          <code>menu-items</code> (restaurant_id,name,price).</p>
+        <div class="row-actions">
+          <select id="entity" aria-label="Entity">
+            <option value="restaurants">restaurants</option>
+            <option value="drivers">drivers</option>
+            <option value="customers">customers</option>
+            <option value="menu-items">menu-items</option>
+          </select>
+          <input id="file" type="file" accept=".csv,.json,text/csv,application/json" aria-label="Import file" />
+          <button class="btn btn-sm" id="btn-preview" type="button">Preview on the map</button>
+          <button class="btn btn-primary btn-sm" id="btn-import" type="button" disabled>Import</button>
+        </div>
+        <textarea class="paste" id="paste" placeholder='name,address
+Casa Aurelio,"Calle Gran Vía 42, Madrid"
+Taberna Sol,"Plaza Mayor 1, Madrid"'></textarea>
+        <div id="import-map" aria-label="Preview map"></div>
+        <table class="rep-table" id="preview-table" hidden></table>
+      </section>
+
+      <section class="card step wide" aria-labelledby="h-ready">
+        <h2 id="h-ready">5 · Readiness checklist</h2>
+        <p class="hint">The five things that make this tenant tradeable — the sales-call script, served by
+          <code>GET /onboarding/readiness</code>.</p>
+        <div class="row-actions">
+          <button class="btn btn-sm" id="btn-ready" type="button">Refresh checklist</button>
+        </div>
+        <ul class="check-list" id="check-list"></ul>
+      </section>
+    </div>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    const $ = (id) => document.getElementById(id);
+    const state = { token: null, map: null, clean: false };
+
+    function banner(text, kind) {
+      const el = $("banner");
+      el.textContent = text;
+      el.className = "banner show" + (kind ? " " + kind : "");
+    }
+    function hideBanner() { $("banner").className = "banner"; }
+
+    async function api(path, opts = {}) {
+      const headers = { ...(opts.headers || {}) };
+      if (state.token) headers["Authorization"] = "Bearer " + state.token;
+      // JSON bodies only — a FormData body (the sign-in form) MUST keep the
+      // browser's multipart boundary; a forced application/json 422s it
+      if (typeof opts.body === "string" && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
+      const response = await fetch(path, { ...opts, headers });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = body && body.error ? (body.error.message || body.error.code) : response.status;
+        throw new Error(detail);
+      }
+      return body;
+    }
+
+    // ── 1 · sign in ────────────────────────────────────────────────────
+    $("btn-signin").addEventListener("click", async () => {
+      hideBanner();
+      const form = new FormData();
+      form.set("username", $("user").value);
+      form.set("password", $("pass").value);
+      try {
+        const body = await api("/auth/token", { method: "POST", body: form });
+        state.token = body.access_token;
+        $("who").textContent = "signed in";
+        await ensureMap();
+        await loadReadiness();
+      } catch (error) {
+        state.token = null;
+        $("who").textContent = "";
+        banner("Sign-in failed: " + error.message);
+      }
+    });
+
+    // ── the map (center from the deployment's city manifest) ──────────
+    async function ensureMap() {
+      if (state.map) return;
+      const config = await api("/config");
+      $("import-map").style.display = "block";
+      state.map = window.L.map("import-map").setView(config.map.center, config.map.zoom);
+      window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "© OpenStreetMap contributors",
+      }).addTo(state.map);
+    }
+
+    function renderReport(table, report) {
+      table.hidden = false;
+      const head = "<tr><th>Row</th><th>Status</th><th>Resolved address / reason</th><th>Lat, Lon</th></tr>";
+      const rows = report.map((r) => {
+        const cls = r.status === "failed" ? "failed" : "imported";
+        const what = r.status === "failed" ? (r.detail || "failed") : (r.resolved_address || "") +
+          (r.cached ? " · from cache" : " · geocoded live");
+        const coords = r.latitude != null ? r.latitude.toFixed(4) + ", " + r.longitude.toFixed(4) : "—";
+        return `<tr class="${cls}"><td>${r.row}</td><td>${r.status}</td><td>${what}</td><td>${coords}</td></tr>`;
+      });
+      table.innerHTML = head + rows.join("");
+    }
+
+    function drawPins(report) {
+      state.map.eachLayer((layer) => { if (layer instanceof window.L.Marker) state.map.removeLayer(layer); });
+      for (const r of report) {
+        if (r.latitude == null) continue;
+        const ok = r.status !== "failed";
+        window.L.circleMarker([r.latitude, r.longitude], {
+          radius: 8,
+          color: ok ? "#1c7c46" : "#8c2f28",
+          fillColor: ok ? "#2e9e5b" : "#b33",
+          fillOpacity: 0.85,
+        }).addTo(state.map).bindPopup(`row ${r.row}: ${r.status}` + (r.resolved_address ? " — " + r.resolved_address : ""));
+      }
+    }
+
+    function fileContent() {
+      const text = $("paste").value.trim();
+      if (!text) throw new Error("paste or upload the CSV first");
+      return text;
+    }
+
+    async function runPreview() {
+      try {
+        hideBanner();
+        await ensureMap();
+        const text = fileContent();
+        const preview = await api(`/import/${$("entity").value}/preview`, {
+          method: "POST",
+          headers: { "Content-Type": "text/csv" },
+          body: text,
+        });
+        renderReport($("preview-table"), preview.report);
+        drawPins(preview.report);
+        state.clean = preview.would_import === preview.report.length && preview.report.length > 0;
+        $("btn-import").disabled = !state.clean;
+        const failed = preview.report.length - preview.would_import;
+        banner(
+          `preview: ${preview.would_import} of ${preview.report.length} row(s) would import` +
+            (failed ? ` — ${failed} flagged in red; fix and preview again` : " — ready to import"),
+          failed ? "info" : "okay"
+        );
+      } catch (error) {
+        state.clean = false;
+        $("btn-import").disabled = true;
+        banner("Preview failed: " + error.message);
+      }
+    }
+
+    async function runImport() {
+      try {
+        hideBanner();
+        const text = fileContent();
+        const result = await api(`/import/${$("entity").value}`, {
+          method: "POST",
+          headers: { "Content-Type": "text/csv" },
+          body: text,
+        });
+        renderReport($("preview-table"), result.report);
+        drawPins(result.report);
+        $("btn-import").disabled = true;
+        state.clean = false;
+        banner(`imported ${result.imported} row(s) — the report shows what each resolved to`, "okay");
+        await loadReadiness();
+      } catch (error) {
+        banner("Import failed: " + error.message);
+      }
+    }
+
+    $("btn-preview").addEventListener("click", runPreview);
+    $("btn-import").addEventListener("click", runImport);
+    $("file").addEventListener("change", () => {
+      const file = $("file").files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { $("paste").value = String(reader.result || ""); };
+      reader.readAsText(file);
+    });
+    $("entity").addEventListener("change", () => {
+      state.clean = false;
+      $("btn-import").disabled = true;
+    });
+
+    // ── 4 · staff issuance ─────────────────────────────────────────────
+    $("btn-staff").addEventListener("click", async () => {
+      try {
+        hideBanner();
+        const members = $("staff-paste").value.trim().split("\n").filter((l) => l.trim()).map((line) => {
+          const [username, role] = line.split(",").map((p) => p.trim());
+          return { username, role: role || "ops" };
+        });
+        const result = await api("/onboarding/staff", {
+          method: "POST",
+          body: JSON.stringify({ users: members }),
+        });
+        const table = $("staff-result");
+        table.hidden = false;
+        table.innerHTML =
+          "<tr><th>User</th><th>Role</th><th>Status</th><th>Password (once)</th></tr>" +
+          result.issued
+            .map((r) => `<tr><td>${r.username}</td><td>${r.role}</td><td>${r.status}</td><td>${r.password || "—"}</td></tr>`)
+            .join("");
+        $("pw-note").hidden = !result.issued.some((r) => r.password);
+        await loadReadiness();
+      } catch (error) {
+        banner("Staff issuance failed: " + error.message);
+      }
+    });
+
+    // ── 5 · readiness checklist ────────────────────────────────────────
+    async function loadReadiness() {
+      try {
+        const readiness = await api("/onboarding/readiness");
+        $("check-list").innerHTML = readiness.sections
+          .map((s) => {
+            const mark = s.ok ? '<span class="mark yes">✓</span>' : '<span class="mark no">✗</span>';
+            return `<li>${mark}<span>${s.label}</span><span class="detail">${s.detail}</span></li>`;
+          })
+          .join("") +
+          (readiness.ready ? "" : '<li><span class="mark no">→</span><span>not ready yet — the ✗ rows are the work left</span></li>');
+      } catch (error) {
+        banner("Checklist failed: " + error.message);
+      }
+    }
+    $("btn-ready").addEventListener("click", loadReadiness);
+  </script>
+</body>
+</html>

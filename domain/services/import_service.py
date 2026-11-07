@@ -44,11 +44,13 @@ def _pace(after_live_call: bool) -> None:
         time.sleep(get_settings().import_geocode_pace_seconds)
 
 
-def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
-    """Validate + geocode + (all-or-nothing) import one entity's rows."""
-    if entity not in ROW_MODELS:
-        raise KeyError(entity)
-
+def _validate_and_geocode(
+    session: Session, entity: str, rows: list[dict]
+) -> tuple[list[tuple[int, Any, dict | None]], list[RowReport], bool]:
+    """Phase 1 shared by import and preview (#224): validate + geocode
+    every row, nothing entity-wise written. Returns (accepted, reports,
+    failed). Menu rows are additionally checked against the caller's
+    tenant here so preview flags them too."""
     row_model = ROW_MODELS[entity]
     reports: list[RowReport] = []
     # the row union is entity-dispatched: each branch below only touches
@@ -78,12 +80,6 @@ def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
                 continue
         accepted.append((row_no, row, resolved))
 
-    if failed:
-        raise ImportRejectedError(
-            "import rejected all-or-nothing: fix the failed rows and re-submit",
-            details={"entity": entity, "report": [r.model_dump() for r in reports]},
-        )
-
     # menu rows must reference a restaurant of the CALLER's tenant (the
     # same scoping the portal's writes enforce — another tenant's
     # restaurant reads as not found)
@@ -98,11 +94,51 @@ def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
                         detail=f"restaurant {row.restaurant_id} not found in your tenant",
                     )
                 )
-        if any(r.status == "failed" for r in reports):
-            raise ImportRejectedError(
-                "import rejected all-or-nothing: fix the failed rows and re-submit",
-                details={"entity": entity, "report": [r.model_dump() for r in reports]},
+                failed = True
+
+    return accepted, reports, failed
+
+
+def preview_rows(session: Session, entity: str, rows: list[dict]) -> dict:
+    """The wizard's map preview (#224): exactly the import's Phase 1, but
+    NOTHING is committed — EVERY row appears in the report (accepted rows
+    as `pending` with their resolved pin, failures with the reason), so
+    the client sees the full file's fate before deciding to import."""
+    accepted, reports, _ = _validate_and_geocode(session, entity, rows)
+    failed_rows = {r.row for r in reports}
+    for row_no, _row, resolved in accepted:
+        if row_no in failed_rows:
+            continue
+        reports.append(
+            RowReport(
+                row=row_no,
+                status="pending",
+                resolved_address=resolved["display_name"] if resolved else None,
+                latitude=resolved["lat"] if resolved else None,
+                longitude=resolved["lon"] if resolved else None,
+                cached=resolved["cached"] if resolved else None,
             )
+        )
+    reports.sort(key=lambda r: r.row)
+    return {
+        "entity": entity,
+        "would_import": len(accepted),
+        "report": [r.model_dump() for r in reports],
+    }
+
+
+def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
+    """Validate + geocode + (all-or-nothing) import one entity's rows."""
+    if entity not in ROW_MODELS:
+        raise KeyError(entity)
+
+    accepted, reports, failed = _validate_and_geocode(session, entity, rows)
+
+    if failed:
+        raise ImportRejectedError(
+            "import rejected all-or-nothing: fix the failed rows and re-submit",
+            details={"entity": entity, "report": [r.model_dump() for r in reports]},
+        )
 
     # Phase 2 — everything validated: build all rows, commit once
     tid = tenant_service.context_tenant_id(session)

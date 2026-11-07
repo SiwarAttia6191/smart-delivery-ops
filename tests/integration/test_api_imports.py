@@ -243,3 +243,36 @@ class TestScopingAndShape:
         assert response.status_code == 201
         drivers = authed_client.get("/drivers").json()
         assert any(d["name"] == "Carlos" for d in drivers)
+
+
+class TestPreview:
+    """The wizard's map preview (#224): Phase 1 only — the full file's
+    fate comes back (pending/failed), NOTHING entity-wise commits."""
+
+    def test_preview_reports_every_row_and_commits_nothing(self, authed_client):
+        before = len(authed_client.get("/restaurants").json())
+        csv_file = CSV_RESTAURANTS + "Casa Fantasma,qqzzz nowhere street 00000\n"
+        response = authed_client.post(
+            "/import/restaurants/preview",
+            content=csv_file.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        assert response.status_code == 200
+        body = response.json()
+        assert body["would_import"] == 2
+        statuses = {r["row"]: r["status"] for r in body["report"]}
+        assert statuses == {1: "pending", 2: "pending", 3: "failed"}
+        pending = [r for r in body["report"] if r["status"] == "pending"]
+        assert all(r["latitude"] is not None for r in pending)  # pins for the map
+
+        # NOTHING landed — the preview is not a silent import
+        assert len(authed_client.get("/restaurants").json()) == before
+
+    def test_menu_preview_flags_foreign_tenant_restaurant(self, authed_client):
+        response = authed_client.post(
+            "/import/menu-items/preview",
+            json=[{"restaurant_id": 424242, "name": "Fantasía", "price": 9.0}],
+        )
+        assert response.status_code == 200
+        assert response.json()["report"][0]["status"] == "failed"
+        assert "not found in your tenant" in response.json()["report"][0]["detail"]
