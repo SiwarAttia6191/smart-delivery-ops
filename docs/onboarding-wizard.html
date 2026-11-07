@@ -127,7 +127,11 @@ Taberna Sol,"Plaza Mayor 1, Madrid"'></textarea>
     async function api(path, opts = {}) {
       const headers = { ...(opts.headers || {}) };
       if (state.token) headers["Authorization"] = "Bearer " + state.token;
-      if (opts.body && !headers["Content-Type"]) headers["Content-Type"] = "application/json";
+      // JSON bodies only — a FormData body (the sign-in form) MUST keep the
+      // browser's multipart boundary; a forced application/json 422s it
+      if (typeof opts.body === "string" && !headers["Content-Type"]) {
+        headers["Content-Type"] = "application/json";
+      }
       const response = await fetch(path, { ...opts, headers });
       const body = await response.json().catch(() => ({}));
       if (!response.ok) {
