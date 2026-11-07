@@ -160,6 +160,15 @@ class Settings(BaseSettings):
     openai_api_key_file: str | None = None
     openai_api_key: str | None = None
 
+    # ── Stripe test-mode provider (#215) ───────────────────────
+    # PAYMENT_PROVIDER=stripe activates it; the TEST key arrives as a
+    # Docker secret (STRIPE_API_KEY_FILE) like every other credential.
+    # Test keys only: zero money moves, and the intent flow keeps card
+    # data away from this server entirely.
+    stripe_api_key_file: str | None = None
+    stripe_api_key: str | None = None
+    stripe_currency: str = "eur"
+
     # Connection pool sizing (#103 load findings): SQLAlchemy's default
     # (5 + 10 overflow) queues 50 concurrent writers into ~15 connections.
     db_pool_size: int = 10
@@ -196,6 +205,13 @@ class Settings(BaseSettings):
             self.auth_jwt_secret = Path(self.jwt_secret_file).read_text(encoding="utf-8").strip()
         if self.openai_api_key_file:
             self.openai_api_key = Path(self.openai_api_key_file).read_text(encoding="utf-8").strip()
+        if self.stripe_api_key_file:
+            self.stripe_api_key = Path(self.stripe_api_key_file).read_text(encoding="utf-8").strip()
+        if self.payment_provider == "stripe" and not self.stripe_api_key:
+            raise ValueError(
+                "PAYMENT_PROVIDER=stripe requires STRIPE_API_KEY (or STRIPE_API_KEY_FILE) — "
+                "test keys only (sk_test_…), never a live key"
+            )
         return self
 
 

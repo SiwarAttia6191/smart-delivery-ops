@@ -6,7 +6,14 @@ tenant-scoped, double-charging 409s, and the settlement lands in the
 order's event log where the warehouse will consume it.
 """
 
+import httpx
+import pytest
 from fastapi.testclient import TestClient
+
+from core.config import Settings, get_settings
+from core.exceptions import PaymentError
+from domain.models import OrderEvent
+from domain.services import payment_service
 
 CUSTOMER = {"name": "Aziza", "phone": "+216 20 000 000", "latitude": 36.8381, "longitude": 10.2385}
 RESTAURANT = {"name": "Chez Slah", "latitude": 36.8065, "longitude": 10.1815}
@@ -240,3 +247,108 @@ class TestCouponRedemptionAtCheckout:
         )
         coupon = authed_client.get("/coupons").json()[0]
         assert coupon["times_used"] == 0
+
+
+class TestStripeProvider:
+    """The Stripe TEST-mode provider (#215): the SAME seam with real-API
+    semantics, proven over a stubbed httpx transport — deterministic,
+    zero network, zero money. The live test-mode check is deferred to a
+    Stripe account (test mode itself needs no funding)."""
+
+    @pytest.fixture(autouse=True)
+    def _stripe_settings(self, monkeypatch):
+        monkeypatch.setattr(get_settings(), "payment_provider", "stripe")
+        monkeypatch.setattr(get_settings(), "stripe_api_key", "sk_test_5fakesecretkey")
+
+    @staticmethod
+    def _stripe_transport(handler) -> httpx.MockTransport:
+        return httpx.MockTransport(handler)
+
+    def test_pay_through_stripe_logs_a_pi_receipt(self, authed_client, db, monkeypatch):
+        calls = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            calls.append((request.method, request.url.path, request.read()))
+            if request.url.path.endswith("/payment_intents"):
+                return httpx.Response(
+                    200, json={"id": "pi_test_1234567890", "status": "requires_confirmation"}
+                )
+            assert "pm_card_visa" in calls[-1][2].decode()
+            return httpx.Response(200, json={"id": "pi_test_1234567890", "status": "succeeded"})
+
+        monkeypatch.setattr(
+            payment_service,
+            "resolve_provider",
+            lambda: payment_service.StripeProvider(transport=self._stripe_transport(handler)),
+        )
+        seeded = _seed(authed_client)
+        order = _place(authed_client, seeded)
+
+        paid = authed_client.post(f"/orders/{order['id']}/pay")
+        assert paid.status_code == 201, paid.text
+        body = paid.json()
+        assert body["provider"] == "stripe"
+        assert body["provider_ref"] == "pi_test_1234567890"  # the receipt IS the intent id
+        assert body["status"] == "paid"
+
+        # the intent was created for the fee in the SMALLEST currency unit
+        method, path, _ = calls[0]
+        assert (method, path) == ("POST", "/v1/payment_intents")
+        assert f"amount={int(round(order['delivery_fee'] * 100))}".encode() in calls[0][2]
+
+        # the acceptance: the pi_ receipt rides the order's event log
+        event = db.query(OrderEvent).filter_by(order_id=order["id"], event_type="paid").one()
+        assert event.payload["provider_ref"] == "pi_test_1234567890"
+
+    def test_declined_card_maps_to_payment_error_409(self, authed_client, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/confirm"):
+                return httpx.Response(
+                    402,
+                    json={"error": {"code": "card_declined", "decline_code": "insufficient_funds"}},
+                )
+            return httpx.Response(
+                200, json={"id": "pi_test_declined", "status": "requires_confirmation"}
+            )
+
+        monkeypatch.setattr(
+            payment_service,
+            "resolve_provider",
+            lambda: payment_service.StripeProvider(transport=self._stripe_transport(handler)),
+        )
+        seeded = _seed(authed_client)
+        order = _place(authed_client, seeded)
+
+        paid = authed_client.post(f"/orders/{order['id']}/pay")
+        assert paid.status_code == 409
+        assert paid.json()["error"]["code"] == "payment_rejected"
+        assert "insufficient_funds" in paid.json()["error"]["message"]
+        # nothing was recorded — a declined charge is not a payment
+        assert authed_client.get("/payments").json() == []
+
+    def test_stripe_outage_maps_to_payment_error(self, authed_client, monkeypatch):
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(500, json={"error": {"message": "upstream error"}})
+
+        monkeypatch.setattr(
+            payment_service,
+            "resolve_provider",
+            lambda: payment_service.StripeProvider(transport=self._stripe_transport(handler)),
+        )
+        seeded = _seed(authed_client)
+        order = _place(authed_client, seeded)
+        paid = authed_client.post(f"/orders/{order['id']}/pay")
+        assert paid.status_code == 409
+        assert paid.json()["error"]["code"] == "payment_rejected"
+
+    def test_provider_refuses_non_positive_amount(self, authed_client, monkeypatch):
+        monkeypatch.setattr(
+            payment_service, "resolve_provider", lambda: payment_service.StripeProvider()
+        )
+        with pytest.raises(PaymentError):
+            payment_service.StripeProvider().charge(0, reference="order-x")
+
+    def test_settings_refuse_stripe_without_a_key(self, monkeypatch):
+        monkeypatch.setattr(get_settings(), "stripe_api_key", None)
+        with pytest.raises(ValueError):
+            Settings(payment_provider="stripe", stripe_api_key=None)
