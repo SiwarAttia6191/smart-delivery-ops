@@ -30,6 +30,7 @@
     .rep-table td:last-child { font-variant-numeric: tabular-nums; }
     .rep-table .failed { color: #8c2f28; }
     .rep-table .imported { color: #1c7c46; }
+    .rep-table .unchanged { color: var(--muted, #5b6472); }
     .check-list { list-style: none; margin: .75rem 0 0; padding: 0; font-size: .95rem; }
     .check-list li { padding: .45rem 0; border-bottom: 1px dashed #e3e6ec; display: flex; gap: .6rem; align-items: baseline; }
     .check-list .mark { font-weight: 700; flex: 0 0 auto; }
@@ -89,6 +90,7 @@
             <option value="customers">customers</option>
             <option value="menu-items">menu-items</option>
           </select>
+          <a id="template-link" class="btn btn-sm" href="/import/restaurants/template" download>Download template</a>
           <input id="file" type="file" accept=".csv,.json,text/csv,application/json" aria-label="Import file" />
           <button class="btn btn-sm" id="btn-preview" type="button">Preview on the map</button>
           <button class="btn btn-primary btn-sm" id="btn-import" type="button" disabled>Import</button>
@@ -175,9 +177,11 @@ Taberna Sol,"Plaza Mayor 1, Madrid"'></textarea>
       table.hidden = false;
       const head = "<tr><th>Row</th><th>Status</th><th>Resolved address / reason</th><th>Lat, Lon</th></tr>";
       const rows = report.map((r) => {
-        const cls = r.status === "failed" ? "failed" : "imported";
-        const what = r.status === "failed" ? (r.detail || "failed") : (r.resolved_address || "") +
-          (r.cached ? " · from cache" : " · geocoded live");
+        const cls = r.status === "failed" ? "failed" : r.status === "unchanged" ? "unchanged" : "imported";
+        const what = r.status === "failed"
+          ? (r.detail || "failed")
+          : [r.detail, r.resolved_address, r.cached ? "· from cache" : r.cached === false ? "· geocoded live" : ""]
+              .filter(Boolean).join(" ");
         const coords = r.latitude != null ? r.latitude.toFixed(4) + ", " + r.longitude.toFixed(4) : "—";
         return `<tr class="${cls}"><td>${r.row}</td><td>${r.status}</td><td>${what}</td><td>${coords}</td></tr>`;
       });
@@ -244,7 +248,10 @@ Taberna Sol,"Plaza Mayor 1, Madrid"'></textarea>
         drawPins(result.report);
         $("btn-import").disabled = true;
         state.clean = false;
-        banner(`imported ${result.imported} row(s) — the report shows what each resolved to`, "okay");
+        banner(
+          `import done — ${result.created} created, ${result.updated} updated, ${result.unchanged} unchanged`,
+          "okay"
+        );
         await loadReadiness();
       } catch (error) {
         banner("Import failed: " + error.message);
@@ -263,6 +270,7 @@ Taberna Sol,"Plaza Mayor 1, Madrid"'></textarea>
     $("entity").addEventListener("change", () => {
       state.clean = false;
       $("btn-import").disabled = true;
+      $("template-link").href = "/import/" + $("entity").value + "/template";
     });
 
     // ── 4 · staff issuance ─────────────────────────────────────────────

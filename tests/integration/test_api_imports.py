@@ -21,6 +21,16 @@ NOMINATIM_MAP = {
     "calle gran vía 42, madrid": (40.4214, -3.7038, "Gran Vía, 42, Centro, Madrid, España"),
     "plaza mayor 1, madrid": (40.4150, -3.7066, "Plaza Mayor, Centro, Madrid, España"),
     "paseo del prado 8, madrid": (40.4131, -3.6938, "Paseo del Prado, 8, Madrid, España"),
+    "calle fuencarral 57, madrid": (
+        40.4242,
+        -3.7009,
+        "Mercado de San Ildefonso, 57, Calle de Fuencarral, Chueca, Madrid, España",
+    ),
+    "calle de la montera 5, madrid": (
+        40.4174,
+        -3.7031,
+        "5, Calle de la Montera, Sol, Centro, Madrid, 28013, España",
+    ),
 }
 
 
@@ -76,7 +86,8 @@ class TestHappyPath:
         assert response.status_code == 201
         body = response.json()
         assert body["imported"] == 2
-        assert all(r["status"] == "imported" for r in body["report"])
+        assert body["created"] == 2
+        assert all(r["status"] == "created" for r in body["report"])
         first = body["report"][0]
         assert first["latitude"] == 40.4214
         assert first["resolved_address"].startswith("Gran Vía")
@@ -276,3 +287,137 @@ class TestPreview:
         assert response.status_code == 200
         assert response.json()["report"][0]["status"] == "failed"
         assert "not found in your tenant" in response.json()["report"][0]["detail"]
+
+
+class TestIdempotentReimports:
+    """R3 (#225): a re-sent file UPDATES by natural key instead of
+    duplicating — the same file twice reports `unchanged`, a corrected
+    file reports `updated`, and only genuinely new rows are `created`."""
+
+    def test_same_file_twice_is_all_unchanged(self, authed_client, db):
+        first = authed_client.post(
+            "/import/restaurants",
+            content=CSV_RESTAURANTS.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        assert first.json()["created"] == 2
+        before = len(authed_client.get("/restaurants").json())
+
+        second = authed_client.post(
+            "/import/restaurants",
+            content=CSV_RESTAURANTS.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        assert second.status_code == 201
+        body = second.json()
+        assert body["created"] == 0
+        assert body["updated"] == 0
+        assert body["unchanged"] == 2
+        assert all(r["status"] == "unchanged" for r in body["report"])
+        # zero duplicates
+        assert len(authed_client.get("/restaurants").json()) == before
+
+    def test_corrected_file_updates_in_place(self, authed_client, db):
+        authed_client.post(
+            "/import/restaurants",
+            content=CSV_RESTAURANTS.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        # same NAMES (the natural key), corrected address + availability
+        corrected = (
+            "name,address,is_active\n"
+            'Casa Aurelio,"Calle Fuencarral 57, Madrid",false\n'
+            'Taberna Sol,"Plaza Mayor 1, Madrid",true\n'
+            'Nuevo Rincón,"Calle Gran Vía 42, Madrid",true\n'
+        )
+        response = authed_client.post(
+            "/import/restaurants",
+            content=corrected.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        body = response.json()
+        assert body["created"] == 1  # Nuevo Rincón
+        assert body["updated"] == 1  # Casa Aurelio (address + is_active changed)
+        assert body["unchanged"] == 1  # Taberna Sol (identical)
+        statuses = {r["row"]: r["status"] for r in body["report"]}
+        assert statuses == {1: "updated", 2: "unchanged", 3: "created"}
+
+        aurelio = next(
+            r for r in authed_client.get("/restaurants").json() if r["name"] == "Casa Aurelio"
+        )
+        assert aurelio["latitude"] == 40.4242  # the corrected address's coords
+        assert aurelio["is_active"] is False
+        # still exactly one Casa Aurelio — updated, not duplicated
+        names = [r["name"] for r in authed_client.get("/restaurants").json()]
+        assert names.count("Casa Aurelio") == 1
+
+    def test_preview_reports_the_upsert_plan(self, authed_client):
+        authed_client.post(
+            "/import/restaurants",
+            content=CSV_RESTAURANTS.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        corrected = (
+            "name,address,is_active\n"
+            'Casa Aurelio,"Calle Fuencarral 57, Madrid",true\n'
+            'Taberna Sol,"Plaza Mayor 1, Madrid",true\n'
+            'Marca Alfa,"Calle de la Montera 5, Madrid",true\n'
+        )
+        response = authed_client.post(
+            "/import/restaurants/preview",
+            content=corrected.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        assert response.status_code == 200
+        details = {r["row"]: r.get("detail") for r in response.json()["report"]}
+        assert details[1] == "exists — will update"
+        assert details[2] == "exists — no change needed"
+        assert details[3] is None  # a genuinely new row
+
+    def test_menu_reimport_updates_by_restaurant_and_name(self, authed_client):
+        authed_client.post(
+            "/import/restaurants",
+            content=CSV_RESTAURANTS.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        rid = authed_client.get("/restaurants").json()[0]["id"]
+        rows = [{"restaurant_id": rid, "name": "Croqueta", "price": 4.5}]
+        authed_client.post("/import/menu-items", json=rows)
+
+        repriced = [{**rows[0], "price": 5.0}]
+        second = authed_client.post("/import/menu-items", json=repriced)
+        assert second.json()["updated"] == 1
+        items = authed_client.get(f"/restaurants/{rid}/menu-items").json()
+        assert len(items) == 1  # updated, not duplicated
+        assert items[0]["price"] == 5.0
+
+
+class TestTemplates:
+    def test_template_per_entity(self, authed_client):
+        response = authed_client.get("/import/restaurants/template")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/csv")
+        assert "attachment" in response.headers["content-disposition"]
+        header = response.text.splitlines()[0]
+        assert header == "name,address,is_active"
+
+        drivers = authed_client.get("/import/drivers/template")
+        assert drivers.text.splitlines()[0] == "name,vehicle,address"
+
+        items = authed_client.get("/import/menu-items/template")
+        assert items.text.splitlines()[0] == "restaurant_id,name,description,price,is_available"
+
+    def test_template_of_unknown_entity_404s(self, authed_client):
+        assert authed_client.get("/import/ufo/template").status_code == 404
+
+    def test_template_rows_round_trip_through_the_import(self, authed_client):
+        """The template's own example row is a valid file: download it,
+        import it verbatim — the contract can't drift."""
+        template = authed_client.get("/import/drivers/template").text
+        response = authed_client.post(
+            "/import/drivers",
+            content=template.encode("utf-8"),
+            headers={"Content-Type": "text/csv"},
+        )
+        assert response.status_code == 201
+        assert response.json()["created"] == 1

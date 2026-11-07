@@ -141,6 +141,17 @@ The client has ADDRESSES, not coordinates: geo rows (restaurants/drivers/custome
 
 **All-or-nothing per file with a per-row report.** Every row is validated and geocoded first; if ANY row fails, NOTHING is imported and the response is `422 import_rejected` with `error.details.report` naming each failed row and why (bad field → the validation message; unresolvable address → `address not found: …`). A happy file returns `201` with `{"entity", "imported", "report": [{"row", "status", "resolved_address", "latitude", "longitude", "cached"}, …]}`. An unreachable geocoder is `503 geocoder_unavailable` (retry — it is not the client's data).
 
+**Preview before commit (#224):** `POST /import/{entity}/preview` runs the identical validation + geocoding pass with NOTHING committed — the report carries **every row** (accepted as `pending` with its resolved pin, failures with the reason). The **onboarding wizard** (`/storefront/onboarding-wizard.html`) draws it on a map: green pins resolved, red pins failed-and-why, Import unlocks only when every row is green.
+
+## Onboarding wizard
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/onboarding/staff` | Batch-issue staff users for the caller's tenant (writer): `{"users": [{"username", "role", "password?"}]}` — writers mint `ops`/`viewer`, only an admin mints `admin`; generated passwords are echoed exactly once; a re-issued username reads as `"exists"` |
+| GET | `/onboarding/readiness` | The tenant-readiness checklist: restaurants live, drivers dispatchable, menu coverage per restaurant, the copilot's knowledge corpus, staff accounts — `{"ready": bool, "sections": [{"key", "label", "ok", "detail"}]}` |
+
+The wizard page itself is served by the API at `/storefront/onboarding-wizard.html` — upload/paste → map preview → fix flagged rows → import → staff issuance → checklist.
+
 ## Analytics
 
 | Method | Path | Description |

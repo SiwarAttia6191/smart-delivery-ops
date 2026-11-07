@@ -26,7 +26,7 @@ same file pay only for genuinely new addresses.
 """
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -99,20 +99,112 @@ def _validate_and_geocode(
     return accepted, reports, failed
 
 
+def _find_existing(session: Session, entity: str, row: Any):
+    """The row's natural key within the caller's tenant (#225): restaurants/
+    drivers/customers key on NAME, menu items on (restaurant_id, name).
+    A re-sent file with the same keys UPDATES instead of duplicating.
+    Duplicates can pre-exist (files imported before this rule) — the
+    OLDEST row wins deterministically instead of erroring."""
+    tid = tenant_service.context_tenant_id(session)
+    if entity == "restaurants":
+        return (
+            session.query(Restaurant)
+            .filter(Restaurant.tenant_id == tid, Restaurant.name == row.name)
+            .order_by(Restaurant.id)
+            .first()
+        )
+    if entity == "drivers":
+        return (
+            session.query(Driver)
+            .filter(Driver.tenant_id == tid, Driver.name == row.name)
+            .order_by(Driver.id)
+            .first()
+        )
+    if entity == "customers":
+        return (
+            session.query(Customer)
+            .filter(Customer.tenant_id == tid, Customer.name == row.name)
+            .order_by(Customer.id)
+            .first()
+        )
+    return (
+        session.query(MenuItem)
+        .filter(
+            MenuItem.tenant_id == tid,
+            MenuItem.restaurant_id == row.restaurant_id,
+            MenuItem.name == row.name,
+        )
+        .order_by(MenuItem.id)
+        .first()
+    )
+
+
+def _row_values(entity: str, row: Any, resolved: dict | None) -> dict:
+    """The row's writable fields (the diff surface for idempotency)."""
+    if entity == "restaurants":
+        assert resolved is not None
+        return {
+            "name": row.name,
+            "latitude": resolved["lat"],
+            "longitude": resolved["lon"],
+            "is_active": row.is_active,
+        }
+    if entity == "drivers":
+        assert resolved is not None
+        return {
+            "name": row.name,
+            "vehicle": row.vehicle,
+            "latitude": resolved["lat"],
+            "longitude": resolved["lon"],
+        }
+    if entity == "customers":
+        assert resolved is not None
+        return {
+            "name": row.name,
+            "phone": row.phone,
+            "latitude": resolved["lat"],
+            "longitude": resolved["lon"],
+        }
+    return {
+        "restaurant_id": row.restaurant_id,
+        "name": row.name,
+        "description": row.description,
+        "price": row.price,
+        "is_available": row.is_available,
+    }
+
+
+def _classify(existing, values: dict) -> Literal["updated", "unchanged"]:
+    """`unchanged` when every field already matches, else `updated`."""
+    for field, value in values.items():
+        if getattr(existing, field) != value:
+            return "updated"
+    return "unchanged"
+
+
 def preview_rows(session: Session, entity: str, rows: list[dict]) -> dict:
-    """The wizard's map preview (#224): exactly the import's Phase 1, but
-    NOTHING is committed — EVERY row appears in the report (accepted rows
-    as `pending` with their resolved pin, failures with the reason), so
-    the client sees the full file's fate before deciding to import."""
+    """The wizard's map preview (#224): exactly the import's validation +
+    geocoding + KEY RESOLUTION, but NOTHING is committed — EVERY row
+    appears in the report (new rows as `pending`, existing keys noted in
+    the detail as will-update/no-change), so the client sees the full
+    file's fate before deciding to import."""
     accepted, reports, _ = _validate_and_geocode(session, entity, rows)
     failed_rows = {r.row for r in reports}
-    for row_no, _row, resolved in accepted:
+    for row_no, row, resolved in accepted:
         if row_no in failed_rows:
             continue
+        detail = None
+        existing = _find_existing(session, entity, row)
+        if existing is not None:
+            outcome = _classify(existing, _row_values(entity, row, resolved))
+            detail = (
+                "exists — no change needed" if outcome == "unchanged" else "exists — will update"
+            )
         reports.append(
             RowReport(
                 row=row_no,
                 status="pending",
+                detail=detail,
                 resolved_address=resolved["display_name"] if resolved else None,
                 latitude=resolved["lat"] if resolved else None,
                 longitude=resolved["lon"] if resolved else None,
@@ -128,7 +220,9 @@ def preview_rows(session: Session, entity: str, rows: list[dict]) -> dict:
 
 
 def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
-    """Validate + geocode + (all-or-nothing) import one entity's rows."""
+    """Validate + geocode + (all-or-nothing, idempotent) import one
+    entity's rows (#225): a natural-key match UPDATES in place (or reads
+    `unchanged` when identical) instead of duplicating."""
     if entity not in ROW_MODELS:
         raise KeyError(entity)
 
@@ -140,57 +234,32 @@ def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
             details={"entity": entity, "report": [r.model_dump() for r in reports]},
         )
 
-    # Phase 2 — everything validated: build all rows, commit once
+    # Phase 2 — everything validated: upsert by natural key, commit once
+    model = {
+        "restaurants": Restaurant,
+        "drivers": Driver,
+        "customers": Customer,
+        "menu-items": MenuItem,
+    }[entity]
     tid = tenant_service.context_tenant_id(session)
+    counts = {"created": 0, "updated": 0, "unchanged": 0}
     for row_no, row, resolved in accepted:
-        if entity == "restaurants":
-            assert resolved is not None  # geo rows always resolved in Phase 1
-            session.add(
-                Restaurant(
-                    tenant_id=tid,
-                    name=row.name,
-                    latitude=resolved["lat"],
-                    longitude=resolved["lon"],
-                    is_active=row.is_active,
-                )
-            )
-        elif entity == "drivers":
-            assert resolved is not None  # geo rows always resolved in Phase 1
-            session.add(
-                Driver(
-                    tenant_id=tid,
-                    name=row.name,
-                    vehicle=row.vehicle,
-                    latitude=resolved["lat"],
-                    longitude=resolved["lon"],
-                )
-            )
-        elif entity == "customers":
-            assert resolved is not None  # geo rows always resolved in Phase 1
-            session.add(
-                Customer(
-                    tenant_id=tid,
-                    name=row.name,
-                    phone=row.phone,
-                    latitude=resolved["lat"],
-                    longitude=resolved["lon"],
-                )
-            )
-        elif entity == "menu-items":
-            session.add(
-                MenuItem(
-                    tenant_id=tid,
-                    restaurant_id=row.restaurant_id,
-                    name=row.name,
-                    description=row.description,
-                    price=row.price,
-                    is_available=row.is_available,
-                )
-            )
+        values = _row_values(entity, row, resolved)
+        existing = _find_existing(session, entity, row)
+        outcome: Literal["created", "updated", "unchanged"]
+        if existing is None:
+            session.add(model(**values, tenant_id=tid))
+            outcome = "created"
+        else:
+            outcome = _classify(existing, values)
+            if outcome == "updated":
+                for field, value in values.items():
+                    setattr(existing, field, value)
+        counts[outcome] += 1
         reports.append(
             RowReport(
                 row=row_no,
-                status="imported",
+                status=outcome,
                 resolved_address=resolved["display_name"] if resolved else None,
                 latitude=resolved["lat"] if resolved else None,
                 longitude=resolved["lon"] if resolved else None,
@@ -202,5 +271,21 @@ def import_rows(session: Session, entity: str, rows: list[dict]) -> dict:
     return {
         "entity": entity,
         "imported": len(accepted),
+        "created": counts["created"],
+        "updated": counts["updated"],
+        "unchanged": counts["unchanged"],
         "report": [r.model_dump() for r in reports],
     }
+
+
+# CSV templates (#225): one downloadable header + example row per entity —
+# the client's starting point, served by GET /import/{entity}/template
+TEMPLATES: dict[str, str] = {
+    "restaurants": ('name,address,is_active\nCasa Aurelio,"Calle Gran Vía 42, Madrid",true\n'),
+    "drivers": ('name,vehicle,address\nCarlos,motorcycle,"Plaza Mayor 1, Madrid"\n'),
+    "customers": ('name,phone,address\nAna,+34 600 000 001,"Plaza Mayor 1, Madrid"\n'),
+    "menu-items": (
+        "restaurant_id,name,description,price,is_available\n"
+        "1,Croqueta,Homemade ham croquette,4.5,true\n"
+    ),
+}
