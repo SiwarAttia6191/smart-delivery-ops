@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     # ── Geocoder (#221 follow-up): Nominatim = OSM's free geocoder ──
     geocoder_base_url: str = "https://nominatim.openstreetmap.org/search"
     geocoder_country_codes: str = ""  # e.g. "es" for a Madrid deployment
+    # Bulk-import pacing (#223): sleep after each LIVE geocode call so a
+    # file respects Nominatim's ~1 req/s fair-use policy (cache hits are free)
+    import_geocode_pace_seconds: float = 1.05
 
     # ── Eval sink (#157): mlflow | langsmith | both ────────────
     eval_sink: str = "mlflow"

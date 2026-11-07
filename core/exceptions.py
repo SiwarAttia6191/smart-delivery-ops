@@ -7,6 +7,10 @@ class DomainError(Exception):
     status_code = 400
     error_code = "domain_error"
 
+    # Optional structured payload (e.g. a per-row import report) — the API
+    # handler includes it on the error body when present.
+    details: dict | None = None
+
 
 class NotFoundError(DomainError):
     status_code = 404
@@ -49,8 +53,22 @@ class GeocodeAddressError(DomainError):
 
 class GeocoderUnavailableError(DomainError):
     """The geocoder provider could not be reached (#232). A 503: the
-    caller should retry, or send dropoff coordinates directly — the
+    caller should retry, or send dropoff coordinates instead — the
     request path degrades loudly instead of guessing."""
 
     status_code = 503
     error_code = "geocoder_unavailable"
+
+
+class ImportRejectedError(DomainError):
+    """A bulk-import file was rejected all-or-nothing (#223): at least one
+    row failed validation or geocoding, so NOTHING was imported. The
+    per-row report rides on `details` — the client fixes exactly the rows
+    named and re-submits."""
+
+    status_code = 422
+    error_code = "import_rejected"
+
+    def __init__(self, message: str, details: dict | None = None) -> None:
+        super().__init__(message)
+        self.details = details

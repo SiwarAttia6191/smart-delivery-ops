@@ -21,6 +21,7 @@ from apps.api.routes import (
     customers,
     drivers,
     health,
+    imports,
     knowledge,
     menu,
     orders,
@@ -88,10 +89,11 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"error": {"code": exc.error_code, "message": str(exc)}},
-        )
+        body: dict = {"code": exc.error_code, "message": str(exc)}
+        if exc.details is not None:
+            # structured payload (e.g. the per-row bulk-import report, #223)
+            body["details"] = exc.details
+        return JSONResponse(status_code=exc.status_code, content={"error": body})
 
     for router in (
         health.router,
@@ -100,6 +102,7 @@ def create_app() -> FastAPI:
         customers.router,
         restaurants.router,
         drivers.router,
+        imports.router,
         orders.router,
         payments.router,
         payments.receipts,
