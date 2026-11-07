@@ -273,6 +273,13 @@ def main() -> None:
     out = REPORT_DIR / f"eta_benchmark_{datetime.now(UTC).strftime('%Y%m%d_%H%M%S')}.md"
     out.write_text(report + "\n", encoding="utf-8")
     print(f"report saved: {out}")
+    # The rendered comparison rides the run in MLflow (#234): the on-disk
+    # .md is gitignored run telemetry now, so the full human-readable
+    # report must live in the system of record, not only on this disk.
+    with mlflow.start_run(run_name="eta_report"):
+        mlflow.set_tag("city", os.environ.get("CITY", "tunis"))
+        mlflow.set_tag("git_sha", snapshot["git_sha"])
+        mlflow.log_artifact(str(out))
 
 
 class TempModelArtifact:
