@@ -11,7 +11,7 @@ import csv
 import io
 import json
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
 from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db, require_writer
@@ -77,3 +77,17 @@ async def preview_entity(entity: str, request: Request, db: Session = Depends(ge
     if not rows:
         raise ImportRejectedError("the file contains no rows")
     return import_service.preview_rows(db, entity, rows)
+
+
+@router.get("/import/{entity}/template")
+def download_template(entity: str) -> Response:
+    """The client's starting point (#225): a one-row CSV template per
+    entity — header = the row fields, example = a Madrid-shaped row.
+    Static content, no auth (it carries no tenant data)."""
+    if entity not in ROW_MODELS:
+        raise NotFoundError(f"unknown import entity '{entity}' (valid: {', '.join(ROW_MODELS)})")
+    return Response(
+        content=import_service.TEMPLATES[entity],
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{entity}-template.csv"'},
+    )

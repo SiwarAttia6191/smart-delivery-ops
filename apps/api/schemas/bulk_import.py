@@ -51,11 +51,12 @@ class RowReport(BaseModel):
     """One line of the per-row import report.
 
     Status: `failed` (validation/geocode/tenancy), `pending` (preview:
-    validated and geocoded, NOT yet imported — the wizard's map state) or
-    `imported` (the import's Phase 2 committed it)."""
+    what WOULD happen — the wizard's map state), `created` (inserted),
+    `updated` (natural key matched, fields differed → updated in place),
+    or `unchanged` (natural key matched, identical → no write)."""
 
     row: int  # 1-based position in the submitted file
-    status: Literal["imported", "failed", "pending"]
+    status: Literal["imported", "failed", "pending", "created", "updated", "unchanged"]
     detail: str | None = None  # the failure reason, row-specific
     resolved_address: str | None = None  # geocoder display name (geo rows)
     latitude: float | None = None
@@ -65,5 +66,8 @@ class RowReport(BaseModel):
 
 class ImportResult(BaseModel):
     entity: str
-    imported: int
+    imported: int  # rows processed: created + updated + unchanged
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
     report: list[RowReport]
