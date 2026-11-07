@@ -71,16 +71,28 @@ with DAG(
 
     # Mart freshness (#181): the source-freshness step covers RAW only —
     # the audit caught five silent days precisely because nothing checked
-    # the MARTS. Fails the DAG when the production summary mart is older
-    # than 26h (traffic-based: orders flow daily on the seeded volume).
+    # the MARTS. The check is mart-vs-raw LAG: the production summary
+    # mart's max order_date must be within 2 days of the raw layer's max
+    # ingested_at. A silently-wrong schema (analytics_draft instead of
+    # analytics) or a failed build shows up as a growing lag; a missing
+    # table/column shows up as an SQL error — empty psql output fails the
+    # numeric test and the else branch exits 1. Both failure shapes fail
+    # the DAG instead of reporting success, which is the whole point.
     marts_freshness = BashOperator(
         task_id="marts_freshness",
         bash_command=(
-            'if [ "$(psql -h postgres -U smartops -d smart_delivery_ops -tAc '
-            "'SELECT COALESCE(EXTRACT(EPOCH FROM (now() - max(source_created_at)))::int, 999999) "
-            "FROM analytics.mart_daily_order_summary')\" -lt 93600 ]; then "
-            "echo 'marts fresh'; else "
-            "echo 'production marts STALE: analytics.mart_daily_order_summary older than 26h (#181)'; exit 1; fi"
+            # same secret-read convention as dbt_env: the scheduler has no
+            # ambient PGPASSWORD, only the mounted Docker secret; EXPORT it
+            # — the psql call below runs inside $() and unexported vars
+            # don't cross into command substitutions
+            'export PGPASSWORD=$(cat /run/secrets/db_password | tr -d "\r"); '
+            "LAG_DAYS=$(psql -h postgres -U smartops -d smart_delivery_warehouse -tAc "
+            '"SELECT COALESCE((SELECT max(ingested_at)::date FROM raw.order_events) '
+            '- (SELECT max(order_date) FROM analytics.mart_daily_order_summary), 999)"); '
+            'if [[ "$LAG_DAYS" =~ ^-?[0-9]+$ ]] && [ "$LAG_DAYS" -le 2 ]; then '
+            'echo "marts fresh (lag ${LAG_DAYS}d)"; else '
+            'echo "production marts STALE: analytics.mart_daily_order_summary lags raw '
+            'by ${LAG_DAYS:-?} days (#181)"; exit 1; fi'
         ),
     )
 
