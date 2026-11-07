@@ -19,6 +19,7 @@ docs/*
 !docs/decisions/*.md
 !docs/ordering-demo.html
 !docs/restaurant-portal.html
+!docs/onboarding-wizard.html
 !docs/demos.html
 !docs/styles.css
 tests
