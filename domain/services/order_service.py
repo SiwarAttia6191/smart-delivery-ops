@@ -28,6 +28,7 @@ from domain.services import (
     driver_matching_service,
     eta_model_service,
     eta_service,
+    geocoder,
     pricing_service,
     promotion_service,
     route_service,
@@ -82,11 +83,12 @@ def create_order(
     session: Session,
     customer_id: int,
     restaurant_id: int,
-    dropoff_lat: float,
-    dropoff_lon: float,
+    dropoff_lat: float | None,
+    dropoff_lon: float | None,
     demand_ratio: float | None = None,
     coupon_code: str | None = None,
     source: str | None = None,
+    dropoff_address: str | None = None,
 ) -> Order:
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -94,6 +96,21 @@ def create_order(
     restaurant = session.get(Restaurant, restaurant_id)
     if restaurant is None:
         raise NotFoundError(f"restaurant {restaurant_id} not found")
+
+    # Address seam (#232): plain text in, coordinates out — geocoded (and
+    # then cached forever) before any pricing math. The schema validator
+    # already enforces address-XOR-coordinates; this guard is defense in
+    # depth for direct service callers.
+    geocode_note: dict[str, Any] = {}
+    if dropoff_address:
+        resolved = geocoder.geocode(session, dropoff_address)
+        dropoff_lat, dropoff_lon = resolved["lat"], resolved["lon"]
+        geocode_note = {
+            "dropoff_address": dropoff_address.strip(),
+            "dropoff_resolved": resolved["display_name"],
+        }
+    if dropoff_lat is None or dropoff_lon is None:
+        raise NotFoundError("dropoff requires coordinates or a resolvable address")
 
     if demand_ratio is None:
         demand_ratio = demand_service.derive_demand_ratio(session, dropoff_lat, dropoff_lon)
@@ -167,6 +184,11 @@ def create_order(
                 "coupon_discount": round(discount, 2),
             }
         )
+    if geocode_note:
+        # the address audit trail (#232): what the customer typed and what
+        # the geocoder resolved it to — the warehouse can later measure
+        # geocoding precision against the coordinates actually used
+        payload.update(geocode_note)
     if source:
         # channel attribution (#226): marketplace vs first-party revenue
         # is the data the restaurant needs to decide which orders to keep

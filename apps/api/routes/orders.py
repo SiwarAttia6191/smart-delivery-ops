@@ -31,6 +31,7 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         demand_ratio=payload.demand_ratio,
         coupon_code=payload.coupon_code,
         source=payload.source,
+        dropoff_address=payload.dropoff_address,
     )
 
 

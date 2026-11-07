@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from apps.api.schemas.common import ORMModel
 from domain.models import OrderStatus
@@ -11,8 +11,16 @@ from domain.models import OrderStatus
 class OrderCreate(BaseModel):
     customer_id: int
     restaurant_id: int
-    dropoff_latitude: float = Field(..., ge=-90, le=90)
-    dropoff_longitude: float = Field(..., ge=-180, le=180)
+    dropoff_latitude: float | None = Field(None, ge=-90, le=90)
+    dropoff_longitude: float | None = Field(None, ge=-180, le=180)
+    dropoff_address: str | None = Field(
+        None,
+        max_length=300,
+        description=(
+            "Address text — geocoded to the dropoff coordinates (#221 "
+            "follow-up). Provide address OR coordinates, not both."
+        ),
+    )
     demand_ratio: float | None = Field(
         None,
         ge=0,
@@ -33,6 +41,14 @@ class OrderCreate(BaseModel):
             "keep on-platform)."
         ),
     )
+
+    @model_validator(mode="after")
+    def check_dropoff(self) -> "OrderCreate":
+        has_coords = self.dropoff_latitude is not None and self.dropoff_longitude is not None
+        if has_coords == (self.dropoff_address is not None):
+            raise ValueError("provide exactly one of dropoff coordinates or dropoff_address")
+        return self
+
     coupon_code: str | None = Field(
         None,
         max_length=60,

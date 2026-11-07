@@ -1,7 +1,10 @@
 """Integration tests: the order flow over HTTP, as a client would drive it."""
 
+import json
+import urllib.request
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 
 from domain.models import DriverEvent, DriverRelayDeadLetter
@@ -381,3 +384,105 @@ class TestAnalytics:
 
         metrics = authed_client.get("/analytics/metrics").text
         assert 'sdo_orders_total{status="delivered"} 1' in metrics
+
+
+class TestAddressSeam:
+    """Order + quote by typed address (#232): the geocoder resolves (and
+    caches) the text before pricing; the provider is monkeypatched — the
+    suite never touches the network."""
+
+    @pytest.fixture(autouse=True)
+    def _fake_provider(self, monkeypatch):
+        payload = [
+            {"lat": "36.83988", "lon": "10.18789", "display_name": "Avenue Habib Bourguiba, Tunis"}
+        ]
+
+        class _Response:
+            def read(self):
+                return json.dumps(payload).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        self.calls = 0
+
+        def fake_urlopen(request, timeout=None):
+            self.calls += 1
+            return _Response()
+
+        monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+
+    def test_quote_and_order_by_address_share_one_geocode(self, authed_client):
+        ids = _seed(authed_client)
+        address = "Avenue Habib Bourguiba, Tunis"
+
+        quote = authed_client.post(
+            "/pricing/quote",
+            json={"restaurant_id": ids["restaurant"]["id"], "dropoff_address": address},
+        )
+        assert quote.status_code == 200
+        assert quote.json()["dropoff_resolved"] == "Avenue Habib Bourguiba, Tunis"
+        assert self.calls == 1  # miss → provider
+
+        created = authed_client.post(
+            "/orders",
+            json={
+                "customer_id": ids["customer"]["id"],
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_address": address,
+            },
+        )
+        assert created.status_code == 201
+        assert self.calls == 1  # the order reused the quote's cache row — zero new calls
+        assert created.json()["dropoff_latitude"] == 36.83988
+        assert created.json()["dropoff_longitude"] == 10.18789
+
+    def test_address_and_coordinates_are_mutually_exclusive(self, authed_client):
+        ids = _seed(authed_client)
+        both = authed_client.post(
+            "/pricing/quote",
+            json={
+                "restaurant_id": ids["restaurant"]["id"],
+                "dropoff_address": "somewhere",
+                "dropoff_latitude": 36.8,
+                "dropoff_longitude": 10.1,
+            },
+        )
+        assert both.status_code == 422
+
+        neither = authed_client.post("/orders", json={"customer_id": 1, "restaurant_id": 1})
+        assert neither.status_code == 422
+
+    def test_unresolvable_address_maps_to_422(self, authed_client):
+        ids = _seed(authed_client)
+        payload: list[dict[str, str]] = []
+        self.calls = 0
+
+        class _Response:
+            def read(self):
+                return json.dumps(payload).encode("utf-8")
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        # re-patch with an empty result set (module-level fixture already set)
+        import unittest.mock
+
+        with unittest.mock.patch(
+            "urllib.request.urlopen", lambda request, timeout=None: _Response()
+        ):
+            response = authed_client.post(
+                "/pricing/quote",
+                json={
+                    "restaurant_id": ids["restaurant"]["id"],
+                    "dropoff_address": "no such place",
+                },
+            )
+        assert response.status_code == 422
+        assert response.json()["error"]["code"] == "address_unresolvable"

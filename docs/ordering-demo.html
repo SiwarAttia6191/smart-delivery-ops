@@ -90,6 +90,10 @@
           code becomes an auditable discount line. Omitting demand lets the API derive it live from
           the demand forecasts.</p>
         <div class="field-grid two">
+          <div class="field" style="grid-column: 1 / -1;">
+            <label for="addr"><span>Dropoff address (optional — a typed address wins over the coordinates)</span></label>
+            <input id="addr" type="text" placeholder="e.g. Plaza Mayor 1, Madrid" />
+          </div>
           <div class="field">
             <label for="lat"><span>Dropoff latitude</span></label>
             <input id="lat" type="number" step="0.0001" />
@@ -269,12 +273,16 @@
       }
     }
 
+    function dropoffFields() {
+      // address seam (#232): a typed address wins over the coordinate
+      // inputs — the geocoder resolves (and caches) it server-side
+      const addr = $("addr").value.trim();
+      if (addr) return { dropoff_address: addr };
+      return { dropoff_latitude: Number($("lat").value), dropoff_longitude: Number($("lon").value) };
+    }
+
     function quotePayload() {
-      const payload = {
-        restaurant_id: Number($("rest").value),
-        dropoff_latitude: Number($("lat").value),
-        dropoff_longitude: Number($("lon").value),
-      };
+      const payload = { restaurant_id: Number($("rest").value), ...dropoffFields() };
       if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);
       return payload;
@@ -289,6 +297,9 @@
         ["Surge multiplier", "×" + quote.surge_multiplier.toFixed(2)],
         ["Total fee", quote.total.toFixed(2)],
       ];
+      if (quote.dropoff_resolved) {
+        rows.unshift(["Address resolved to", quote.dropoff_resolved]);
+      }
       let html = rows.map(([k, v]) => "<tr><td>" + k + "</td><td>" + v + "</td></tr>").join("");
       if (quote.coupon_code) {
         html += '<tr class="disc"><td>Coupon ' + quote.coupon_code + "</td><td>−" +
@@ -339,8 +350,7 @@
       const payload = {
         customer_id: Number($("cust").value),
         restaurant_id: Number($("rest").value),
-        dropoff_latitude: Number($("lat").value),
-        dropoff_longitude: Number($("lon").value),
+        ...dropoffFields(),
         source: "storefront",
       };
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);

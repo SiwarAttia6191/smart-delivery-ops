@@ -8,7 +8,13 @@ from apps.api.deps import get_db, require_writer
 from apps.api.schemas.pricing import QuoteRequest, QuoteResponse
 from core.exceptions import NotFoundError
 from domain.models import Restaurant, Tenant
-from domain.services import demand_service, pricing_service, promotion_service, tenant_service
+from domain.services import (
+    demand_service,
+    geocoder,
+    pricing_service,
+    promotion_service,
+    tenant_service,
+)
 
 router = APIRouter(prefix="/pricing", tags=["pricing"])
 
@@ -30,16 +36,26 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         pickup_lat = payload.pickup_latitude
         pickup_lon = payload.pickup_longitude
 
+    # Address seam (#232): a typed dropoff resolves (and caches) before the
+    # math. Unresolvable → 422, provider down → 503 (DomainError mapping).
+    resolved_name: str | None = None
+    dropoff_lat, dropoff_lon = payload.dropoff_latitude, payload.dropoff_longitude
+    if payload.dropoff_address:
+        resolved = geocoder.geocode(db, payload.dropoff_address)
+        dropoff_lat, dropoff_lon = resolved["lat"], resolved["lon"]
+        resolved_name = resolved["display_name"]
+    # the schema validator guarantees address-XOR-coordinates — one of the
+    # two branches above always sets both (same guarantee as the pickup assert)
+    assert dropoff_lat is not None and dropoff_lon is not None
+
     demand_ratio = payload.demand_ratio
     if demand_ratio is None:
-        demand_ratio = demand_service.derive_demand_ratio(
-            db, payload.dropoff_latitude, payload.dropoff_longitude
-        )
+        demand_ratio = demand_service.derive_demand_ratio(db, dropoff_lat, dropoff_lon)
     quote = pricing_service.quote_delivery(
         pickup_lat,
         pickup_lon,
-        payload.dropoff_latitude,
-        payload.dropoff_longitude,
+        dropoff_lat,
+        dropoff_lon,
         demand_ratio,
         settings=tenant_service.effective_settings(db),
     )
@@ -64,6 +80,7 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         discount=discount,
         coupon_code=applied_code,
         final_total=round(quote.breakdown.total - discount, 2) if applied_code else None,
+        dropoff_resolved=resolved_name,
     )
 
 

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # ── Copilot conversation memory (#155) ─────────────────────
     copilot_memory_turns: int = 6  # last-k messages replayed into the graph
 
+    # ── Geocoder (#221 follow-up): Nominatim = OSM's free geocoder ──
+    geocoder_base_url: str = "https://nominatim.openstreetmap.org/search"
+    geocoder_country_codes: str = ""  # e.g. "es" for a Madrid deployment
+
     # ── Eval sink (#157): mlflow | langsmith | both ────────────
     eval_sink: str = "mlflow"
 
