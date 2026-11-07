@@ -52,3 +52,11 @@ data/osrm/
 
 # Local-only business notes (planning/competitive research) — never committed
 local/
+
+# Benchmark run reports (data/benchmarks/*_TIMESTAMP.md) are DAG run
+# telemetry — MLflow is the system of record for every run (metrics,
+# plots, per-bucket tables). Reports are NOT committed per run; when a
+# milestone round cites a benchmark (champion switch, README number),
+# it commits that specific report with `git add -f` as evidence.
+# drift_baselines.json is state, not a run — it stays tracked.
+data/benchmarks/*.md
