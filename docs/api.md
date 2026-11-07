@@ -131,6 +131,16 @@ The customer version of the knowledge bridge (#154): a tenant uploads markdown d
 | GET | `/routes/demo` | Return the saved Tunis demo route as a GeoJSON FeatureCollection |
 | GET | `/orders/{id}/route` | The order's captured road geometry (GeoJSON LineString, cached per pickup→dropoff pair); 404 if OSRM was unavailable at creation |
 
+## Bulk import (onboarding R1)
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/import/{entity}` | Bulk-import rows for `restaurants`, `drivers`, `customers` or `menu-items` (writer). CSV (`text/csv`, columns = the row fields, quote fields containing commas) or JSON (a list of row objects) |
+
+The client has ADDRESSES, not coordinates: geo rows (restaurants/drivers/customers) carry an `address` column that the geocoder resolves (Nominatim + the permanent cache — re-imports pay only for new addresses; live calls are paced to the provider's ~1 req/s fair-use policy). Menu rows reference a `restaurant_id` of the caller's tenant.
+
+**All-or-nothing per file with a per-row report.** Every row is validated and geocoded first; if ANY row fails, NOTHING is imported and the response is `422 import_rejected` with `error.details.report` naming each failed row and why (bad field → the validation message; unresolvable address → `address not found: …`). A happy file returns `201` with `{"entity", "imported", "report": [{"row", "status", "resolved_address", "latitude", "longitude", "cached"}, …]}`. An unreachable geocoder is `503 geocoder_unavailable` (retry — it is not the client's data).
+
 ## Analytics
 
 | Method | Path | Description |
