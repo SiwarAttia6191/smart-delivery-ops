@@ -102,25 +102,30 @@ def _validate_and_geocode(
 def _find_existing(session: Session, entity: str, row: Any):
     """The row's natural key within the caller's tenant (#225): restaurants/
     drivers/customers key on NAME, menu items on (restaurant_id, name).
-    A re-sent file with the same keys UPDATES instead of duplicating."""
+    A re-sent file with the same keys UPDATES instead of duplicating.
+    Duplicates can pre-exist (files imported before this rule) — the
+    OLDEST row wins deterministically instead of erroring."""
     tid = tenant_service.context_tenant_id(session)
     if entity == "restaurants":
         return (
             session.query(Restaurant)
             .filter(Restaurant.tenant_id == tid, Restaurant.name == row.name)
-            .one_or_none()
+            .order_by(Restaurant.id)
+            .first()
         )
     if entity == "drivers":
         return (
             session.query(Driver)
             .filter(Driver.tenant_id == tid, Driver.name == row.name)
-            .one_or_none()
+            .order_by(Driver.id)
+            .first()
         )
     if entity == "customers":
         return (
             session.query(Customer)
             .filter(Customer.tenant_id == tid, Customer.name == row.name)
-            .one_or_none()
+            .order_by(Customer.id)
+            .first()
         )
     return (
         session.query(MenuItem)
@@ -129,7 +134,8 @@ def _find_existing(session: Session, entity: str, row: Any):
             MenuItem.restaurant_id == row.restaurant_id,
             MenuItem.name == row.name,
         )
-        .one_or_none()
+        .order_by(MenuItem.id)
+        .first()
     )
 
 
