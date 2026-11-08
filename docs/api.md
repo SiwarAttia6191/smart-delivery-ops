@@ -92,7 +92,9 @@ Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an au
 
 ## Payments
 
-The checkout seam (#159 item 2): the pricing engine produces the amount, a payment provider settles it. The configured provider is the **sandbox** (`PAYMENT_PROVIDER=sandbox` — instant, deterministic, every receipt prefixed `sbx_`, no money moves); a real gateway is a config flip plus one class implementing the same `charge(amount, reference)` seam.
+The checkout seam (#159 item 2): the pricing engine produces the amount, a payment provider settles it. The configured provider is the **sandbox** (`PAYMENT_PROVIDER=sandbox` — instant, deterministic, every receipt prefixed `sbx_`, no money moves).
+
+**Stripe TEST-mode (#215):** `PAYMENT_PROVIDER=stripe` + `STRIPE_API_KEY` (or the `STRIPE_API_KEY_FILE` Docker secret) activates `StripeProvider` — the SAME `charge(amount, reference)` seam with real API calls: a **PaymentIntent is created** for the fee (amount in the smallest currency unit, `currency` from `STRIPE_CURRENCY`, the order id in the metadata) and **confirmed** with a Stripe test payment method. The receipt becomes the intent's **`pi_…` id**, fully auditable in the event log and `GET /payments`. Declines (Stripe's 402 `card_error`) map to the existing `409 payment_rejected` with the decline code in the message; transport/5xx failures surface as `payment_rejected` too — a failed charge is a failed charge, retry. **Card data never touches this server** (the intent flow means the client tokenizes with Stripe directly), **test keys only** (`sk_test_…` — the settings validator refuses the provider without a key, and no live key is accepted by convention). Live test-mode verification is deferred to a Stripe account — test mode itself needs no funding.
 
 | Method | Path | Description |
 |---|---|---|
