@@ -97,3 +97,23 @@ class OrderResponse(ORMModel):
     delivered_at: datetime | None
     delivery_minutes: float | None = None
     events: list[OrderEventResponse] = []
+
+
+class ReviewCreate(BaseModel):
+    rating: int = Field(..., ge=1, le=5)
+    comment: str | None = Field(None, max_length=500)
+
+
+class ReviewOut(ORMModel):
+    id: int
+    order_id: str
+    rating: int
+    comment: str | None
+    created_at: datetime
+
+
+class RestaurantReviews(BaseModel):
+    restaurant_id: int
+    review_count: int
+    rating_average: float | None
+    reviews: list[ReviewOut]

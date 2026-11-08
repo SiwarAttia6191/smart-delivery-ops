@@ -25,6 +25,7 @@
     .menu-form { display: grid; gap: .6rem; margin-top: 1rem; }
     @media (min-width: 640px) { .menu-form { grid-template-columns: 2fr 1fr auto; } }
     .order-card { border: 1px solid #e3e6ec33; border-radius: 10px; padding: .7rem .9rem; margin-bottom: .6rem; }
+    .review-comment { color: var(--muted, #5b6472); font-size: .88rem; margin-top: .3rem; }
     .order-card .oid { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--muted, #5b6472); }
     .order-card .sum { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .9rem; margin-top: .2rem; }
     .badge-new { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem;
@@ -96,6 +97,14 @@
         <div class="stats-strip" id="sales-strip" hidden></div>
         <div id="orders-empty" class="empty">No pending orders right now.</div>
         <div id="orders"></div>
+      </section>
+
+      <section class="card">
+        <h2>Reviews <span class="badge-new" id="reviews-avg"></span></h2>
+        <p class="hint">What customers said about DELIVERED orders of this restaurant — newest
+          first, from <code>GET /restaurants/{id}/reviews</code> (tenant-scoped).</p>
+        <div id="reviews-empty" class="empty">No reviews yet — deliveries rated on the storefront land here.</div>
+        <div id="reviews"></div>
       </section>
     </div>
   </main>
@@ -262,11 +271,36 @@
       }
     }
 
+    // the restaurant's reviews (#216): newest first with the running average
+    async function loadReviews() {
+      try {
+        const body = await api("/restaurants/" + state.restId + "/reviews");
+        $("reviews-avg").textContent = body.rating_average == null
+          ? "no ratings"
+          : "avg ★ " + body.rating_average.toFixed(1);
+        $("reviews-empty").hidden = body.reviews.length > 0;
+        $("reviews").innerHTML = body.reviews
+          .map((r) => {
+            const stars = "★".repeat(r.rating) + "☆".repeat(5 - r.rating);
+            const when = new Date(r.created_at).toLocaleDateString();
+            return '<div class="order-card"><div class="sum"><span>' + stars +
+              '</span><span>' + when + '</span></div>' +
+              (r.comment ? '<div class="review-comment">"' + r.comment + '"</div>' : "") +
+              "</div>";
+          })
+          .join("");
+      } catch {
+        $("reviews-empty").hidden = false;
+        $("reviews").innerHTML = "";
+      }
+    }
+
     $("btn-signin").addEventListener("click", signin);
     $("rest").addEventListener("change", async () => {
       state.restId = Number($("rest").value);
       await loadMenu();
       await loadOrders();
+      await loadReviews();
     });
   </script>
 </body>
