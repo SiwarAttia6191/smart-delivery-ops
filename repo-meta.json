@@ -1,0 +1,26 @@
+{
+  "description": "Delivery-ops platform, demoable in one click: a storefront where customers type an address, dispatch, demand-based pricing with coupons, Stripe test-mode payments, one-file onboarding — Kafka → dbt marts (Airflow), benchmarked ML (MLflow), a LangGraph copilot on your own docs; tenant data isolated in Postgres (RLS)",
+  "homepage": "https://siwarattia6191.github.io/smart-delivery-ops/",
+  "topics": [
+    "airflow",
+    "data-engineering",
+    "data-warehouse",
+    "dbt",
+    "docker",
+    "dynamic-pricing",
+    "event-streaming",
+    "fastapi",
+    "geocoding",
+    "geospatial",
+    "kafka",
+    "langgraph",
+    "medallion-architecture",
+    "mlflow",
+    "multi-tenancy",
+    "osrm",
+    "postgresql",
+    "sqlalchemy",
+    "stripe",
+    "analytics"
+  ]
+}
