@@ -173,7 +173,7 @@
   <script type="module">
     const params = new URLSearchParams(location.search);
     const apiInput = document.getElementById("api-base");
-    apiInput.value = params.get("api") || "http://localhost:8010";
+    apiInput.value = params.get("api") || "";  // same origin - the API serves this page
 
     const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null };
 

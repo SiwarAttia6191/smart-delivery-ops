@@ -108,7 +108,11 @@
   </p>
 
   <script type="module">
-    const apiBase = "http://localhost:8010";
+    // Same origin: the portal is SERVED by the API, so relative URLs are
+    // correct on every deployment. A hardcoded http://localhost:8010 here
+    // made the demo-unit portal (:8011) and any hosted deployment call the
+    // WRONG API — caught by the #219 live drive.
+    const apiBase = "";
     const state = { token: null, role: null, restaurants: [], restId: null, timer: null };
 
     const $ = (id) => document.getElementById(id);
