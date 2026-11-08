@@ -25,9 +25,9 @@ def main() -> int:
         assert health["database"] == "up", f"database down: {health}"
         print(f"[ok] health — {health['app']} v{health['version']}")
 
-        token = c.post(
-            "/auth/token", data={"username": "ops", "password": "ops"}
-        ).json()["access_token"]
+        token = c.post("/auth/token", data={"username": "ops", "password": "ops"}).json()[
+            "access_token"
+        ]
         c.headers["Authorization"] = f"Bearer {token}"
         print("[ok] signed in as ops (writer)")
 

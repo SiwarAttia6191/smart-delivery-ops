@@ -211,7 +211,6 @@ def chat_stream(
 
     caller_role = (claims or {}).get("role", "viewer")
     providers = _build_providers()
-    provider = providers[0]
 
     def event_stream():
         # the role is pinned INSIDE the generator: a StreamingResponse's
@@ -255,9 +254,7 @@ def _event_stream_inner(db, question, conversation, history, providers):
             "pending_tool_calls": [],
         }
         # stream_mode="updates" yields one {node: delta} dict per hop
-        for update in graph.stream(
-            initial, config={"recursion_limit": 25}, stream_mode="updates"
-        ):
+        for update in graph.stream(initial, config={"recursion_limit": 25}, stream_mode="updates"):
             for node, delta in update.items():
                 final.update(delta)
                 yield _sse("node", {"node": node})

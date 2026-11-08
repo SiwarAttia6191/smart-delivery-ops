@@ -102,7 +102,6 @@ class TestApprovalGate:
         assert _menu_item(db, 1).is_available is False
         assert _approval_granted.get() is False  # reset is total
 
-
     def test_viewer_role_is_refused_even_when_approved(self, db):
         """The bug-hunt guarantee (#260): the resume endpoint used to set the
         approval flag for ANY role, so a viewer — rejected by require_writer
@@ -119,7 +118,6 @@ class TestApprovalGate:
             _caller_role.reset(role_token)
         assert result.startswith("refused:")
         assert _menu_item(db, 1).is_available is True  # nothing executed
-
 
     def test_remember_fact_is_writer_only(self, db):
         from apps.copilot.tools import _remember_fact

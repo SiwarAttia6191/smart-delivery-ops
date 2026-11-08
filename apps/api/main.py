@@ -5,11 +5,10 @@ Run locally (repo root):
 Interactive docs: http://127.0.0.1:8000/docs  (Swagger)  /  /redoc
 """
 
-from contextlib import asynccontextmanager
-from pathlib import Path
-
 import json
 import logging
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
