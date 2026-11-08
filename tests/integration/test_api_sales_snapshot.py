@@ -100,3 +100,18 @@ def test_snapshot_is_tenant_scoped(client: TestClient, authed_client: TestClient
     response = client.get(f"/restaurants/{restaurant['id']}/sales-snapshot", headers=acme_headers)
     assert response.status_code == 404  # another tenant's restaurant: uniform not-found
     assert "not found" in response.json()["error"]["message"]
+
+
+class TestFrontDoor:
+    """The bare host greets with the demos hub (#258) — a blank 404 at
+    / was the last member of the hardcoded-host/missing-door class."""
+
+    def test_root_redirects_to_the_demos_hub(self, client):
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 307  # FastAPI's RedirectResponse
+        assert response.headers["location"] == "/storefront/demos.html"
+
+    def test_the_hub_actually_serves_after_the_redirect(self, client):
+        followed = client.get("/", follow_redirects=True)
+        assert followed.status_code == 200
+        assert "demos" in followed.text.lower()

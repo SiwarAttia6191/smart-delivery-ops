@@ -10,7 +10,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.api.routes import (
@@ -127,6 +127,14 @@ def create_app() -> FastAPI:
     # (.dockerignore), so the demo page and its stylesheet are added there.
     docs_dir = Path(__file__).resolve().parents[2] / "docs"
     app.mount("/storefront", StaticFiles(directory=str(docs_dir)), name="storefront")
+
+    # The front door (#258): the API's surfaces live under /storefront/* and
+    # /docs, so a bare host used to return a blank 404 — the last member of
+    # the hardcoded-host/missing-door class the #219 live drive exposed.
+    # A bare host now greets with the demos hub, on every deployment.
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse(url="/storefront/demos.html")
 
     return app
 
