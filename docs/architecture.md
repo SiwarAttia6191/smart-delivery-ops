@@ -71,6 +71,41 @@ core/                     config (env), engine/session, logging, exceptions
 - **Metrics endpoint early.** `/analytics/metrics` already exposes Prometheus
   text format so observability lands with the product, not after it.
 
+## The two geo engines (both read OpenStreetMap — different jobs)
+
+A customer types an address; the platform needs coordinates AND the road
+between two points. These are two different computations over the SAME free
+OpenStreetMap data, done by two different engines:
+
+```
+"Calle Gran Vía 42, Madrid"
+        │
+        ▼
+   Nominatim (geocoder)          text → coordinates
+        │  40.4214, -3.7038
+        ▼
+   OSRM (routing engine)         coordinates → road path
+        │  1757 m, 345 s, turn-by-turn geometry
+        ▼
+   pricing · ETA · dispatch · route geometry
+```
+
+- **Nominatim** searches the map's indexed place and address names:
+  *text in, coordinates out*. It cannot route — it has no notion of roads
+  between points. Served free via its public API, paced to its ~1 req/s
+  fair-use policy, and cached forever in `geocode_cache` (#232).
+- **OSRM** precomputes a routable graph from the same OpenStreetMap extract
+  (the `osrm-prepare` step builds an MLD partition per city). *Coordinates
+  in, road path out*: real road distance, travel time, and the LineString
+  geometry stored per order (`GET /orders/{id}/route`). Self-hosted in
+  Docker — one deployment = one city's graph. Without it the platform
+  falls back to straight-line (haversine) distance, which is exactly the
+  champion-vs-shadow comparison the distance migration review reads.
+
+Short version: **Nominatim answers WHERE; OSRM answers HOW FAR and HOW LONG
+along real streets.** The geocoder landing did not replace routing — it
+removed the need for anyone to know coordinates at all.
+
 ## The AI layer (Phase 5)
 
 The copilot is an agent OVER the governed API, not beside it: a LangGraph
