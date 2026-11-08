@@ -3,6 +3,10 @@
 Start the API first (make api), then:
     python scripts/smoke_test.py
     BASE_URL=http://localhost:8010 python scripts/smoke_test.py
+
+Signs in with the documented demo trio (ops/ops) — every write endpoint
+is writer-gated (#28), so an unauthenticated run 401s on the first POST
+and the smoke never reaches the interesting assertions.
 """
 
 import os
@@ -20,6 +24,12 @@ def main() -> int:
         health = c.get("/health").json()
         assert health["database"] == "up", f"database down: {health}"
         print(f"[ok] health — {health['app']} v{health['version']}")
+
+        token = c.post(
+            "/auth/token", data={"username": "ops", "password": "ops"}
+        ).json()["access_token"]
+        c.headers["Authorization"] = f"Bearer {token}"
+        print("[ok] signed in as ops (writer)")
 
         customer = c.post(
             "/customers",
