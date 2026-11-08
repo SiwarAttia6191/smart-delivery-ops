@@ -219,7 +219,7 @@ def chat_stream(
         # reset before any tool ever ran
         role_token = _caller_role.set(caller_role)
         try:
-            yield from _event_stream_inner(db, question, conversation, history, provider)
+            yield from _event_stream_inner(db, question, conversation, history, providers)
         finally:
             try:
                 _caller_role.reset(role_token)
@@ -233,16 +233,16 @@ def chat_stream(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
-def _event_stream_inner(db, question, conversation, history, provider):
+def _event_stream_inner(db, question, conversation, history, providers):
     """The streaming body, split from the route so the caller's role can be
     pinned INSIDE the generator: a StreamingResponse's body executes after
     the route returns, so an outer ContextVar pin would be reset before any
     tool ever ran."""
-    yield _sse("context", {"conversation_id": conversation.id, "provider": provider.name})
+    yield _sse("context", {"conversation_id": conversation.id, "provider": providers[0].name})
     final: dict[str, Any] = {}
     try:
         bind_session(db)
-        graph = build_graph(provider, _registry)
+        graph = build_graph(providers[0], _registry)
         initial = {
             "messages": [
                 {"role": "system", "content": _SYSTEM_PROMPT},
@@ -270,7 +270,7 @@ def _event_stream_inner(db, question, conversation, history, provider):
             "answer": final.get("answer"),
             "tool_calls_used": final.get("tool_calls_used", 0),
             "usage_total": final.get("total_tokens") or None,
-            "provider": provider.name,
+            "provider": providers[0].name,
             "degraded": False,
             "degraded_reason": None,
             "prompt_version": PROMPT_VERSION,
