@@ -106,7 +106,11 @@ def apply(meta: dict) -> None:
     if now == meta:
         print("metadata already in sync — nothing to apply")
         return
-    _api("", method="PATCH", payload={"description": meta["description"], "homepage": meta["homepage"]})
+    _api(
+        "",
+        method="PATCH",
+        payload={"description": meta["description"], "homepage": meta["homepage"]},
+    )
     _api("/topics", method="PUT", payload={"names": meta["topics"]})
     print("applied: description via PATCH /repos, topics via PUT /topics")
 
@@ -121,7 +125,9 @@ def main() -> None:
 
     meta = load_meta()
     errors = validate(meta)
-    print(f"description: {len(meta['description'])}/{DESCRIPTION_MAX} chars · topics: {len(meta['topics'])}/{TOPICS_MAX}")
+    print(
+        f"description: {len(meta['description'])}/{DESCRIPTION_MAX} chars · topics: {len(meta['topics'])}/{TOPICS_MAX}"
+    )
     if errors:
         for error in errors:
             print(f"INVALID: {error}", file=sys.stderr)
