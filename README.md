@@ -56,6 +56,8 @@ in plain language and narrates incidents when something breaks.
 
 ## 🚀 Quickstart
 
+> 🗺️ **Every clickable surface and how to reach it** lives in the [surface directory](docs/links.md) — storefront, portal, onboarding wizard, dashboard, Swagger, MLflow, Airflow, Grafana, both deployments.
+
 ```bash
 git clone https://github.com/SiwarAttia6191/smart-delivery-ops.git
 cd smart-delivery-ops
