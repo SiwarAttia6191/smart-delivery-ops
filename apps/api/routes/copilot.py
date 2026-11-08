@@ -121,14 +121,16 @@ def chat_resume(
     """Approve a proposed mutating action (#121): re-asks the SAME question
     with the approval flag pinned, so the gated tool executes inside the
     RLS-scoped session and the exchange lands in the thread's history."""
-    from apps.copilot.tools import _approval_granted
+    from apps.copilot.tools import _approval_granted, _caller_role
 
     conversation, history = _conversation_context(payload.conversation_id, db)
     token = _approval_granted.set(True)
+    role_token = _caller_role.set((claims or {}).get("role", "viewer"))
     try:
         result = run_copilot(_build_providers(), _registry, db, payload.question, history=history)
     finally:
         _approval_granted.reset(token)
+        _caller_role.reset(role_token)
     _persist_exchange(db, conversation, payload.question, result["answer"] or "")
     return ChatResponse(
         conversation_id=conversation.id,
@@ -161,11 +163,16 @@ def chat(
     except ValueError as exc:
         raise HTTPException(http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
-    conversation, history = _conversation_context(payload.conversation_id, db)
+    from apps.copilot.tools import _caller_role
 
-    result = run_copilot(
-        _build_providers(), _registry, db, question, history=history, thread_id=conversation.id
-    )
+    conversation, history = _conversation_context(payload.conversation_id, db)
+    role_token = _caller_role.set((claims or {}).get("role", "viewer"))
+    try:
+        result = run_copilot(
+            _build_providers(), _registry, db, question, history=history, thread_id=conversation.id
+        )
+    finally:
+        _caller_role.reset(role_token)
     _persist_exchange(db, conversation, question, result["answer"] or "")
     return ChatResponse(
         conversation_id=conversation.id,
@@ -200,60 +207,85 @@ def chat_stream(
         raise HTTPException(http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
 
     conversation, history = _conversation_context(payload.conversation_id, db)
+    from apps.copilot.tools import _caller_role
+
+    caller_role = (claims or {}).get("role", "viewer")
     providers = _build_providers()
     provider = providers[0]
 
     def event_stream():
-        yield _sse("context", {"conversation_id": conversation.id, "provider": provider.name})
-        final: dict[str, Any] = {}
+        # the role is pinned INSIDE the generator: a StreamingResponse's
+        # body executes after the route returns, so an outer pin would be
+        # reset before any tool ever ran
+        role_token = _caller_role.set(caller_role)
         try:
-            bind_session(db)
-            graph = build_graph(provider, _registry)
-            initial = {
-                "messages": [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    *history,
-                    {"role": "user", "content": question},
-                ],
-                "tool_calls_used": 0,
-                "total_tokens": 0,
-                "answer": None,
-                "pending_tool_calls": [],
-            }
-            # stream_mode="updates" yields one {node: delta} dict per hop
-            for update in graph.stream(
-                initial, config={"recursion_limit": 25}, stream_mode="updates"
-            ):
-                for node, delta in update.items():
-                    final.update(delta)
-                    yield _sse("node", {"node": node})
-        except Exception as exc:  # noqa: BLE001 - degrade into the fallback chain
-            yield _sse("degraded", {"reason": f"{type(exc).__name__}: {exc}"[:180]})
-        if not final.get("answer"):
-            result = run_copilot(providers, _registry, db, question, history=history)
-        else:
-            result = {
-                "answer": final.get("answer"),
-                "tool_calls_used": final.get("tool_calls_used", 0),
-                "usage_total": final.get("total_tokens") or None,
-                "provider": provider.name,
-                "degraded": False,
-                "degraded_reason": None,
-                "prompt_version": PROMPT_VERSION,
-            }
-        _persist_exchange(db, conversation, question, result["answer"] or "")
-        yield _sse(
-            "answer",
-            ChatResponse(
-                conversation_id=conversation.id,
-                answer=result["answer"],
-                tool_calls_used=result["tool_calls_used"],
-                provider=result["provider"],
-                degraded=result["degraded"],
-                degraded_reason=result.get("degraded_reason"),
-                prompt_version=result["prompt_version"],
-                usage_total=result.get("usage_total"),
-            ).model_dump(),
-        )
+            yield from _event_stream_inner(db, question, conversation, history, provider)
+        finally:
+            try:
+                _caller_role.reset(role_token)
+            except ValueError:
+                # a generator resumption can land in a different Context
+                # under ASGI — force the least-privileged default back so
+                # the role never leaks into the next request; every route
+                # re-pins its own caller's role at request start anyway
+                _caller_role.set("viewer")
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+def _event_stream_inner(db, question, conversation, history, provider):
+    """The streaming body, split from the route so the caller's role can be
+    pinned INSIDE the generator: a StreamingResponse's body executes after
+    the route returns, so an outer ContextVar pin would be reset before any
+    tool ever ran."""
+    yield _sse("context", {"conversation_id": conversation.id, "provider": provider.name})
+    final: dict[str, Any] = {}
+    try:
+        bind_session(db)
+        graph = build_graph(provider, _registry)
+        initial = {
+            "messages": [
+                {"role": "system", "content": _SYSTEM_PROMPT},
+                *history,
+                {"role": "user", "content": question},
+            ],
+            "tool_calls_used": 0,
+            "total_tokens": 0,
+            "answer": None,
+            "pending_tool_calls": [],
+        }
+        # stream_mode="updates" yields one {node: delta} dict per hop
+        for update in graph.stream(
+            initial, config={"recursion_limit": 25}, stream_mode="updates"
+        ):
+            for node, delta in update.items():
+                final.update(delta)
+                yield _sse("node", {"node": node})
+    except Exception as exc:  # noqa: BLE001 - degrade into the fallback chain
+        yield _sse("degraded", {"reason": f"{type(exc).__name__}: {exc}"[:180]})
+    if not final.get("answer"):
+        result = run_copilot(providers, _registry, db, question, history=history)
+    else:
+        result = {
+            "answer": final.get("answer"),
+            "tool_calls_used": final.get("tool_calls_used", 0),
+            "usage_total": final.get("total_tokens") or None,
+            "provider": provider.name,
+            "degraded": False,
+            "degraded_reason": None,
+            "prompt_version": PROMPT_VERSION,
+        }
+    _persist_exchange(db, conversation, question, result["answer"] or "")
+    yield _sse(
+        "answer",
+        ChatResponse(
+            conversation_id=conversation.id,
+            answer=result["answer"],
+            tool_calls_used=result["tool_calls_used"],
+            provider=result["provider"],
+            degraded=result["degraded"],
+            degraded_reason=result.get("degraded_reason"),
+            prompt_version=result["prompt_version"],
+            usage_total=result.get("usage_total"),
+        ).model_dump(),
+    )
