@@ -13,7 +13,50 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Path classifier (#246): the heavy jobs only prove what a change CAN
+  # affect. A docs-only PR runs lint + this classifier (~2 min) instead of
+  # the full battery (~15 job-minutes across 6 jobs). Fail-safe by design:
+  # any uncertainty (empty diff, unknown base, classifier failure) sets
+  # code=true so the FULL battery runs — skipping is an optimization, never
+  # a way to dodge a check. The umbrella (ci-ok) refuses to pass unless
+  # this job itself succeeded, so a broken classifier blocks merges
+  # instead of green-lighting them.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Classify changed paths
+        id: filter
+        run: |
+          set -e
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="${{ github.event.before }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              BASE="HEAD~1"
+            fi
+          fi
+          CHANGED="$(git diff --name-only "$BASE"...HEAD 2>/dev/null || true)"
+          if [ -z "$CHANGED" ]; then
+            echo "could not classify - running everything (fail-safe)"
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "$CHANGED" | head -60
+          if echo "$CHANGED" | grep -qE '^(\.github/workflows/|apps/|core/|domain/|scripts/|migrations/|dags/|ml/|data/transform/|infra/|tests/|Makefile$|requirements.*\.txt$|pyproject\.toml$|alembic\.ini$|\.dockerignore$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
   lint:
+    needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -32,6 +75,8 @@ jobs:
         run: python scripts/check_inline_js.py
 
   typecheck:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -47,6 +92,8 @@ jobs:
 
   audit:
     name: dependency audit
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -61,6 +108,8 @@ jobs:
         run: pip-audit -r requirements.txt --progress-spinner off
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
@@ -92,6 +141,8 @@ jobs:
   # codepath → raw layer — then a full dbt build over the throwaway
   # warehouse (parse alone cannot catch SQL breakage; PR #48's N1 proved it).
   data-plane-smoke:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 8
     services:
@@ -140,14 +191,21 @@ jobs:
 
   # Aggregate gate: single required check for the branch ruleset —
   # every job above must pass (docker-build runs on main pushes only).
+  # Skipped jobs count as success (path-aware skipping, #246) — but the
+  # classifier itself must have SUCCEEDED: a failed/uncertain classifier
+  # fails this gate instead of green-lighting an unproven change.
   ci-ok:
     if: always()
-    needs: [lint, typecheck, audit, test, data-plane-smoke, docker-build]
+    needs: [changes, lint, typecheck, audit, test, data-plane-smoke, docker-build]
     runs-on: ubuntu-latest
     timeout-minutes: 3
     steps:
       - name: All checks passed
         run: |
+          if [ "${{ needs.changes.result }}" != "success" ]; then
+            echo "the path classifier did not succeed — cannot prove what this change affects"
+            exit 1
+          fi
           if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
             echo "One or more required jobs failed"
             exit 1
