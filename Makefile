@@ -62,6 +62,9 @@ gates:           ## ALL pre-push gates unmasked: ruff, format, inline-JS, mypy, 
 audit:           ## dependency vulnerability audit (production requirements)
 	.venv/Scripts/python -m pip_audit -r requirements.txt
 
+repo-meta:       ## validate repo-meta.json against GitHub's caps (offline)
+	.venv/Scripts/python scripts/repo_meta.py --check
+
 smoke:           ## end-to-end smoke test against a running API (make api first)
 	.venv/Scripts/python scripts/smoke_test.py
 

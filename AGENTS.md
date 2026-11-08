@@ -41,6 +41,10 @@ have each cost a real debugging round — they are not style preferences.
 8. **Every milestone updates its representations:** README, repo
    description/topics, the landing + product pages, api.md, and LEARNING.md
    — the board, the repo, and the websites must tell the same story.
+   The description/topics are EDITED IN `repo-meta.json` and applied with
+   `python scripts/repo_meta.py --apply` (always `--check` first) — the
+   server silently rejects the whole update past its caps (350 chars /
+   20 topics), so the caps are validated locally before any write.
    The same duty covers **`docs/links.md`** (the surface directory): when a
    round adds, renames or re-ports a surface, that file updates in the same
    commit as the work. In the same pass, **re-score the feature-by-feature
