@@ -33,6 +33,10 @@
     .btn-xs { padding: .15rem .55rem; font-size: .78rem; }
     .who { font-size: .85rem; color: var(--muted, #5b6472); }
     .empty { color: var(--muted, #5b6472); font-size: .85rem; }
+    .stats-strip { margin: .75rem 0 1rem; padding: .6rem .9rem; border-radius: 10px;
+                   background: #eef7f0; border: 1px solid #cde8d5; font-size: .92rem; }
+    .stats-strip[hidden] { display: none; }
+    .stats-strip strong { font-variant-numeric: tabular-nums; }
     .portal-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
     .portal-foot code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; }
     .portal-foot a { color: #8ab4ff; }
@@ -89,6 +93,7 @@
         <h2>Incoming orders <span class="badge-new" id="orders-live">live</span></h2>
         <p class="hint">Pending orders for this restaurant — the dispatcher assigns the driver;
           this is where the kitchen sees demand land.</p>
+        <div class="stats-strip" id="sales-strip" hidden></div>
         <div id="orders-empty" class="empty">No pending orders right now.</div>
         <div id="orders"></div>
       </section>
@@ -231,6 +236,26 @@
             "<span>drop " + order.dropoff_latitude.toFixed(4) + ", " + order.dropoff_longitude.toFixed(4) + "</span></div></div>";
         })
         .join("");
+      await loadSales();
+    }
+
+    // the restaurant's OWN numbers for today (#219): a live ops-slice,
+    // refreshed with the same poll as the order feed
+    async function loadSales() {
+      try {
+        const snap = await api("/restaurants/" + state.restId + "/sales-snapshot");
+        const strip = $("sales-strip");
+        strip.hidden = false;
+        strip.innerHTML = snap.delivered_orders === 0
+          ? "Today (" + snap.business_date + "): no deliveries yet"
+          : "Today (" + snap.business_date + "): <strong>" + snap.delivered_orders +
+            "</strong> delivered · <strong>" + snap.revenue.toFixed(2) +
+            "</strong> revenue · <strong>" + snap.avg_delivery_minutes +
+            "</strong> min avg delivery" +
+            (snap.rating_average == null ? "" : " · ★ " + snap.rating_average.toFixed(1));
+      } catch {
+        $("sales-strip").hidden = true;  // a snapshot hiccup never breaks the order feed
+      }
     }
 
     $("btn-signin").addEventListener("click", signin);
