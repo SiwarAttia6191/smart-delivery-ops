@@ -26,6 +26,10 @@
     @media (min-width: 640px) { .menu-form { grid-template-columns: 2fr 1fr auto; } }
     .order-card { border: 1px solid #e3e6ec33; border-radius: 10px; padding: .7rem .9rem; margin-bottom: .6rem; }
     .review-comment { color: var(--muted, #5b6472); font-size: .88rem; margin-top: .3rem; }
+    #toast { position: fixed; right: 1.25rem; bottom: 1.25rem; padding: .7rem 1rem; border-radius: 10px;
+             background: #262b36; color: #d7dce6; border: 1px solid #7c6cff; font-size: .9rem;
+             box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; z-index: 50; }
+    #toast.show { display: block; }
     .order-card .oid { font-family: ui-monospace, monospace; font-size: .8rem; color: var(--muted, #5b6472); }
     .order-card .sum { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .9rem; margin-top: .2rem; }
     .badge-new { display: inline-block; padding: .05rem .5rem; border-radius: 999px; font-size: .72rem;
@@ -109,6 +113,8 @@
     </div>
   </main>
 
+  <div id="toast"></div>
+
   <p class="portal-foot">
     Needs the stack running: <code>docker compose up -d</code> · sign in with the demo trio
     (<code>ops/ops</code>) · <a href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md">api.md</a> ·
@@ -122,7 +128,7 @@
     // made the demo-unit portal (:8011) and any hosted deployment call the
     // WRONG API — caught by the #219 live drive.
     const apiBase = "";
-    const state = { token: null, role: null, restaurants: [], restId: null, timer: null };
+    const state = { token: null, role: null, restaurants: [], restId: null, timer: null, knownPending: new Set() };
 
     const $ = (id) => document.getElementById(id);
     function showBanner(message) {
@@ -235,9 +241,26 @@
       }
     });
 
+    // new-pending toast (#218): the poll detects arrivals; the FIRST fill
+    // (page load) never toasts — only genuinely new orders after that
+    function toast(text) {
+      const el = $("toast");
+      el.textContent = text;
+      el.classList.add("show");
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.remove("show"), 4000);
+    }
+
     async function loadOrders() {
       const orders = await api("/orders?status=pending&limit=50");
       const mine = orders.filter((o) => o.restaurant_id === state.restId);
+      const known = state.knownPending;
+      const fresh = mine.filter((o) => !known.has(o.id));
+      if (known.size > 0 && fresh.length > 0) {
+        toast("🔔 " + fresh.length + " new pending order" + (fresh.length > 1 ? "s" : "") +
+              " — order " + fresh[0].id.slice(0, 8) + "…");
+      }
+      fresh.forEach((o) => known.add(o.id));
       $("orders-empty").hidden = mine.length > 0;
       $("orders").innerHTML = mine
         .map((order) => {
