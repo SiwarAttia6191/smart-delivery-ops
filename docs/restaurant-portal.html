@@ -269,6 +269,7 @@
       } catch {
         $("sales-strip").hidden = true;  // a snapshot hiccup never breaks the order feed
       }
+      await loadReviews();
     }
 
     // the restaurant's reviews (#216): newest first with the running average
