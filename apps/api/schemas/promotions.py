@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class CouponCreate(BaseModel):
     code: str = Field(min_length=3, max_length=60)
-    discount_kind: Literal["percent", "amount"]
+    discount_kind: Literal["percent", "amount", "points"]
     discount_value: float = Field(gt=0)
     expires_at: datetime | None = None
     max_redemptions: int | None = Field(default=None, ge=1)
