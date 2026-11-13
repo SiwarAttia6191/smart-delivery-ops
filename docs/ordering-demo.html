@@ -192,7 +192,7 @@
     const apiInput = document.getElementById("api-base");
     apiInput.value = params.get("api") || "";  // same origin - the API serves this page
 
-    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null };
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null };
 
     const $ = (id) => document.getElementById(id);
     const banner = $("banner");
@@ -377,6 +377,12 @@
       if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
       try {
         const order = await api("/orders", { method: "POST", json: payload });
+        // the permission prompt is requested HERE — after the user placed an
+        // order, never on page load (#218 acceptance)
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+        state.lastStatus = null;  // the first render of the new order never notifies
         showOrder(order);
         $("place-note").hidden = false;
         $("place-note").textContent = "Order " + order.id + " placed — fee " + order.delivery_fee.toFixed(2) +
@@ -420,6 +426,7 @@
         (order.delivery_minutes != null ? " · delivered in " + order.delivery_minutes + " min" : "");
       renderReceipt(order);
       renderEvents(order);
+      maybeNotify(order);
       const writable = state.role === "ops" || state.role === "admin";
       $("btn-pay").disabled = !writable || order.status !== "pending" || state.receipt !== null;
       $("btn-assign").disabled = !writable || order.status !== "pending";
@@ -492,6 +499,30 @@
     function renderReceipt(order) {
       const paid = order.events.find((event) => event.event_type === "paid");
       if (paid) state.receipt = paid.payload?.provider_ref || "sbx_?";
+    }
+
+    // Live notifications (#218): the 4s poll already detects transitions —
+    // the browser Notification fires on REAL status changes only (the first
+    // render of an existing order never notifies). V1 needs no backend;
+    // the SSE upgrade path (#156) is /copilot/chat/stream's pattern — the
+    // same events pushed instead of polled, when a use case outgrows 4s.
+    const NOTIFY_MESSAGES = {
+      assigned: "🛵 Driver on the way!",
+      in_transit: "🚴 Your order is moving",
+      delivered: "🎉 Enjoy! Your order is delivered",
+    };
+
+    function maybeNotify(order) {
+      const previous = state.lastStatus;
+      state.lastStatus = order.status;
+      if (previous === null || previous === order.status) return;
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const body = NOTIFY_MESSAGES[order.status];
+      if (body) {
+        try {
+          new Notification("Smart Delivery Ops — order " + order.id.slice(0, 8), { body });
+        } catch { /* a blocked notification never breaks tracking */ }
+      }
     }
 
     function showOrder(order) {
