@@ -62,6 +62,7 @@ def list_customers(
             phone=None,
             latitude=r.latitude,
             longitude=r.longitude,
+            loyalty_points=r.loyalty_points,
             created_at=r.created_at,
         )
         for r in rows
@@ -85,5 +86,6 @@ def get_customer(
         phone=None,
         latitude=customer.latitude,
         longitude=customer.longitude,
+        loyalty_points=customer.loyalty_points,
         created_at=customer.created_at,
     )
