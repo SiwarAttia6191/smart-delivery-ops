@@ -105,6 +105,7 @@
           <div class="field">
             <label for="coupon"><span>Coupon code (optional)</span></label>
             <input id="coupon" type="text" placeholder="e.g. WELCOME10" />
+            <p class="hint" id="loyalty" hidden></p>
           </div>
           <div class="field">
             <label for="demand"><span>Demand ratio (optional)</span></label>
@@ -270,6 +271,7 @@
       state.restaurants = restaurants.filter((r) => r.is_active);
       fillSelect($("cust"), state.customers.slice(0, PICKER_LIMIT), "Customer");
       fillSelect($("rest"), state.restaurants, "Restaurant");
+      await refreshLoyalty();
       prefillDropoff();
       await loadMenuPreview();
     }
@@ -428,7 +430,23 @@
     }
 
     // the post-purchase rating (#216): a DELIVERED order can be rated once
+    // loyalty balance (#217): 1 point per currency unit delivered,
+    // redeemable through points-funded coupons — refreshed on customer
+    // change and after every delivery (the accrual)
+    async function refreshLoyalty() {
+      const hint = $("loyalty");
+      const custId = Number($("cust").value);
+      if (!custId) { hint.hidden = true; return; }
+      try {
+        const customer = await api("/customers/" + custId);
+        hint.hidden = false;
+        hint.textContent = "Loyalty points: " + customer.loyalty_points +
+          " (1 point per unit delivered — points coupons spend them)";
+      } catch { hint.hidden = true; }
+    }
+
     async function renderReviewBox(order) {
+      if (order.status === "delivered") await refreshLoyalty();
       const box = $("review-box");
       if (order.status !== "delivered") { box.hidden = true; return; }
       box.hidden = false;

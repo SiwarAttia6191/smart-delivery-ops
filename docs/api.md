@@ -86,11 +86,11 @@ Per-tenant discount codes, the mirror of the pricing engine (#159): the same cod
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/coupons` | Create a code for the caller's tenant (writer). `discount_kind` `percent` (≤100) or `amount`; optional `expires_at` and `max_redemptions` |
+| POST | `/coupons` | Create a code for the caller's tenant (writer). `discount_kind` `percent` (≤100), `amount` — or `points`, a **loyalty-funded coupon** (#217): redemption debits the customer's balance (1 point = 1 currency unit of discount) at checkout, and an unaffordable balance is the same uniform 422; optional `expires_at` and `max_redemptions` |
 | GET | `/coupons` | List the caller's tenant's codes (open GET, tenant-scoped) |
 | DELETE | `/coupons/{id}` | Deactivate (soft — the code stays for auditing) (writer) |
 
-Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an auditable line: `total` stays the fee before the discount, `discount` is the applied amount (capped at the fee — never a payout), `final_total` is what the order would pay. Every rejection — unknown, inactive, expired, budget spent — is the same 422, so codes cannot be probed for existence. A quote is a preview: pass `coupon_code` on `POST /orders` instead and the code REDEEMS — the fee is discounted, the `created` event carries the audit line (`list_fee`, `coupon_code`, `coupon_discount`), and `times_used` ticks.
+Pass `coupon_code` on `POST /pricing/quote` and an accepted coupon becomes an auditable line: `total` stays the fee before the discount, `discount` is the applied amount (capped at the fee — never a payout), `final_total` is what the order would pay. Every rejection — unknown, inactive, expired, budget spent, **insufficient points balance** — is the same 422, so codes cannot be probed for existence. Loyalty (#217): customers accrue 1 point per currency unit of the fee on DELIVERY (ticked in the delivery transition), the balance rides `GET /customers/{id}` (`loyalty_points`), and a points coupon debits it at checkout in the same transaction — the balance can never go negative. A quote is a preview: pass `coupon_code` on `POST /orders` instead and the code REDEEMS — the fee is discounted, the `created` event carries the audit line (`list_fee`, `coupon_code`, `coupon_discount`), and `times_used` ticks.
 
 ## Payments
 

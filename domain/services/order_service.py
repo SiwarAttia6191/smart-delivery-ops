@@ -133,6 +133,14 @@ def create_order(
         if coupon is None:
             raise CouponInvalidError("coupon code is not valid")
         discount = promotion_service.apply_discount(coupon, quote.breakdown.total)
+        # loyalty redemption (#217): a points-funded coupon debits the
+        # customer's balance in the SAME transaction as the redemption tick.
+        # A balance that cannot cover it is the same uniform coupon rejection
+        # (#159) - codes cannot be probed for existence or worth.
+        if coupon.discount_kind == "points":
+            if customer.loyalty_points < discount:
+                raise CouponInvalidError("coupon code is not valid")
+            customer.loyalty_points -= int(discount)
         coupon.times_used += 1
 
     order = Order(
@@ -258,6 +266,11 @@ def transition(session: Session, order_id: str, new_status: OrderStatus) -> Orde
 
         order.delivered_at = datetime.now(UTC)
         _free_driver(session, order, "order_delivered")
+        # loyalty accrual (#217): 1 point per currency unit of the fee the
+        # customer actually paid (post-coupon), ticked in the SAME
+        # transaction as the delivery - an accrual that can desync from the
+        # delivery is a marketing lie with a database behind it
+        order.customer.loyalty_points += int(order.delivery_fee)
     elif new_status is OrderStatus.cancelled:
         _free_driver(session, order, "order_cancelled")
 

@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Float, ForeignKey, String
+from sqlalchemy import Float, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from domain.models.base import Base
@@ -21,6 +21,9 @@ class Customer(Base):
     phone: Mapped[str | None] = mapped_column(String(30))
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
+    # loyalty (#217): 1 point per currency unit of the fee, ticked in the
+    # delivery transition; redeemed through points-funded coupons at checkout
+    loyalty_points: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

@@ -18,6 +18,7 @@ class CustomerResponse(ORMModel):
     phone: str | None
     latitude: float
     longitude: float
+    loyalty_points: int = 0
     created_at: datetime
 
 
