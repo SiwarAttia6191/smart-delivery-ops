@@ -1,0 +1,50 @@
+{
+  "mined_at_experiment": "copilot",
+  "degraded_runs": 6,
+  "candidates": [
+    {
+      "failure_class": "RateLimitError",
+      "count": 6,
+      "suggested_review": "read the questions; keep the ones a golden case should cover; promote with --promote <run_id> --tools <tools that SHOULD have served>",
+      "runs": [
+        {
+          "run_id": "7bd2f38bd83c416a93272f53e41b757b",
+          "question": "How are we doing today — total orders, revenue, delivery times?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        },
+        {
+          "run_id": "5e03dc92b5f744e0924d2587f89d4564",
+          "question": "how many orders do we have?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        },
+        {
+          "run_id": "23dacaa1297f40d3bf7bb0fab83fe6f9",
+          "question": "how many orders do we have?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        },
+        {
+          "run_id": "c4cc417fc72241ada9709f61be2cc9c2",
+          "question": "How did we do today?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        },
+        {
+          "run_id": "254d707dde9d4cd29d6f46522ebcd051",
+          "question": "hello what can yo do ?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        },
+        {
+          "run_id": "90ec5044451d4b81a19c0ca74dae05a4",
+          "question": "What is the current driver availability?",
+          "degraded_reason": "openai:gpt-4o-mini failed: RateLimitError: Error code: 429 - You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.",
+          "tools_used": []
+        }
+      ]
+    }
+  ],
+  "note": "REVIEW FILE — not a golden set. Promote reviewed candidates with --promote."
+}

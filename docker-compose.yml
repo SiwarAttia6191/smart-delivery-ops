@@ -77,6 +77,8 @@ services:
       COPILOT_MODEL: ${COPILOT_MODEL:-gpt-4o-mini}
       COPILOT_MODEL_MINI: ${COPILOT_MODEL_MINI:-gpt-4o-mini}
       # MLflow Tracing for the copilot (#120): one run per conversation.
+      # MLFLOW_TRACKING_URI (below, with the ETA serving block) points at
+      # the mlflow service — verify it resolves before blaming the flag.
       SDO_TRACING: "1"
       # ETA serving swap (#69): load the registry-promoted eta_model; if the
       # mlflow container is down the API logs the failure and serves the

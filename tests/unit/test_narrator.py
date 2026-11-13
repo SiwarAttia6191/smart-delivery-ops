@@ -1,6 +1,10 @@
 """The incident narrator (#122 Phase C): deterministic narration, the
 fail-open contract, and the live-provider handoff — all offline."""
 
+import json
+
+import pytest
+
 from apps.copilot import narrator
 from apps.copilot.narrator import _scripted_narration, attach_narration, gather_evidence, narrate
 
@@ -118,3 +122,78 @@ def test_live_provider_reads_the_secret_file(monkeypatch, tmp_path):
     text = narrate({"alert": _ALERT})
     assert "Incident" in text
     assert key_file.read_text(encoding="utf-8").startswith("sk-")
+
+
+class TestMineDegradations:
+    """The improvement loop's pure functions (#213): the cluster key and
+    the promote surgery. The MLflow reads are integration-verified against
+    the real experiment (6 degraded runs mined live)."""
+
+    def test_exception_key_groups_by_failure_class(self):
+        from ml.evals.mine_degradations import exception_key
+
+        assert (
+            exception_key("openai:gpt-4o-mini failed: RateLimitError: Error code: 429")
+            == "RateLimitError"
+        )
+        assert (
+            exception_key("openai failed: APITimeoutError: request timed out") == "APITimeoutError"
+        )
+        assert exception_key("") == "unknown"
+
+    def test_promote_bumps_the_version_and_appends(self, tmp_path, monkeypatch):
+        import ml.evals.mine_degradations as miner
+
+        eval_set = {
+            "version": "1.0.0",
+            "cases": [{"id": "existing", "question": "q", "expected_tools": ["analytics_summary"]}],
+        }
+        path = tmp_path / "copilot_eval_set.json"
+        path.write_text(json.dumps(eval_set), encoding="utf-8")
+        candidates = tmp_path / "mined_candidates.json"
+        candidates.write_text(
+            json.dumps(
+                {
+                    "candidates": [
+                        {
+                            "runs": [
+                                {
+                                    "run_id": "abc123",
+                                    "question": "how many orders do we have?",
+                                    "degraded_reason": "x",
+                                    "tools_used": [],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+        monkeypatch.setattr(miner, "EVAL_SET_PATH", path)
+        monkeypatch.setattr(miner, "CANDIDATES_PATH", candidates)
+
+        miner.promote("abc123", ["analytics_summary"], "mined_case", "Right now: 17984 orders.")
+
+        bumped = json.loads(path.read_text(encoding="utf-8"))
+        assert bumped["version"] == "1.1.0"
+        assert len(bumped["cases"]) == 2
+        mined_case = bumped["cases"][-1]
+        assert mined_case["id"] == "mined_case"
+        assert mined_case["question"] == "how many orders do we have?"  # from the review file
+        assert mined_case["mined_from"] == "abc123"  # provenance
+
+    def test_promote_rejects_duplicate_ids(self, tmp_path, monkeypatch):
+        import ml.evals.mine_degradations as miner
+
+        path = tmp_path / "copilot_eval_set.json"
+        path.write_text(
+            json.dumps({"version": "1.0.0", "cases": [{"id": "dup", "question": "q"}]}),
+            encoding="utf-8",
+        )
+        (tmp_path / "mined_candidates.json").write_text("{}", encoding="utf-8")
+        monkeypatch.setattr(miner, "EVAL_SET_PATH", path)
+        monkeypatch.setattr(miner, "CANDIDATES_PATH", tmp_path / "mined_candidates.json")
+
+        with pytest.raises(SystemExit):
+            miner.promote("any", ["analytics_summary"], "dup", "answer")
