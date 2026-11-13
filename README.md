@@ -24,7 +24,7 @@ in plain language and narrates incidents when something breaks.
 
 | Domain | What it does |
 |---|---|
-| 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order |
+| 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order; after delivery the customer **rates the order** (1–5 stars + comment, one per order — database-enforced) and the restaurant sees its reviews and running average in the portal |
 | 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-incarnation primary-key dedupe (a rebuilt ops database can never collide with an older incarnation's ids) — at-least-once end to end |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability; per-tenant **coupon codes** (`POST /coupons`) redeem at checkout — the fee is discounted, the counter ticks, the audit line rides the order event; dropoff can be a **typed address** (`dropoff_address` on quote and order — Nominatim resolves it, `geocode_cache` remembers it forever, city facts shared across tenants; unresolvable = 422, provider down = 503) |
