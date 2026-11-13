@@ -158,6 +158,22 @@
             <button class="btn btn-ghost btn-sm" id="btn-cancel" type="button">Cancel</button>
           </div>
           <ul class="events" id="events"></ul>
+          <div id="review-box" hidden>
+            <p class="hint" style="margin-top: .8rem;">How was it? Rate the delivery — the restaurant sees
+              it on its portal card. One review per order.</p>
+            <div class="flow-actions">
+              <select id="review-rating" aria-label="Rating">
+                <option value="5">★★★★★ loved it</option>
+                <option value="4">★★★★ good</option>
+                <option value="3">★★★ okay</option>
+                <option value="2">★★ meh</option>
+                <option value="1">★ bad</option>
+              </select>
+              <input id="review-comment" type="text" placeholder="Optional comment" maxlength="500" />
+              <button class="btn btn-primary btn-sm" id="btn-review" type="button">Send review</button>
+            </div>
+            <p class="hint" id="review-note" hidden></p>
+          </div>
         </div>
       </section>
     </div>
@@ -408,7 +424,52 @@
       $("btn-transit").disabled = !writable || order.status !== "assigned";
       $("btn-deliver").disabled = !writable || order.status !== "in_transit";
       $("btn-cancel").disabled = !writable || !["pending", "assigned", "in_transit"].includes(order.status);
+      renderReviewBox(order);
     }
+
+    // the post-purchase rating (#216): a DELIVERED order can be rated once
+    async function renderReviewBox(order) {
+      const box = $("review-box");
+      if (order.status !== "delivered") { box.hidden = true; return; }
+      box.hidden = false;
+      const note = $("review-note");
+      try {
+        const reviews = await api("/restaurants/" + order.restaurant_id + "/reviews");
+        const mine = reviews.reviews.find((r) => r.order_id === order.id);
+        if (mine) {
+          $("btn-review").disabled = true;
+          note.hidden = false;
+          note.textContent = "Already rated: " + "★".repeat(mine.rating) +
+            (mine.comment ? ' — "' + mine.comment + '"' : "");
+        } else {
+          $("btn-review").disabled = false;
+          note.hidden = true;
+        }
+      } catch {
+        $("btn-review").disabled = true;  // a review lookup hiccup never breaks tracking
+      }
+    }
+
+    $("btn-review").addEventListener("click", async () => {
+      hideBanner();
+      try {
+        const review = await api("/orders/" + state.order.id + "/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: Number($("review-rating").value),
+            comment: $("review-comment").value.trim() || null,
+          }),
+        });
+        $("btn-review").disabled = true;
+        const note = $("review-note");
+        note.hidden = false;
+        note.textContent = "Thank you — " + "★".repeat(review.rating) + " recorded.";
+        $("review-comment").value = "";
+      } catch (error) {
+        showBanner("Review failed: " + error.message);
+      }
+    });
 
     function renderReceipt(order) {
       const paid = order.events.find((event) => event.event_type === "paid");

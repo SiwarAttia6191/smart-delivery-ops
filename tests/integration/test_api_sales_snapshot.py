@@ -68,8 +68,15 @@ def test_delivered_only_revenue_math(authed_client: TestClient, db):
     assert snap["revenue"] == orders[0]["delivery_fee"]  # cancelled fee excluded
     # the test lifecycle completes in milliseconds — 0.0 min is honest
     assert snap["avg_delivery_minutes"] is not None and snap["avg_delivery_minutes"] >= 0
-    assert snap["rating_average"] is None  # rides null until #216
-    assert snap["business_date"] == datetime.now(UTC).date().isoformat()
+    assert snap["rating_average"] is None  # rides null until reviews exist
+    # the business date is the BUSINESS timezone's date, not UTC's — after
+    # 23:00 UTC they legitimately differ (this flaked at the boundary once)
+    from zoneinfo import ZoneInfo
+
+    from core.config import get_settings
+
+    tz = ZoneInfo(get_settings().business_timezone)
+    assert snap["business_date"] == datetime.now(tz).date().isoformat()
 
 
 def test_empty_state_is_zeros_not_an_error(authed_client: TestClient):
