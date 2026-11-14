@@ -18,7 +18,8 @@ in plain language and narrates incidents when something breaks.
 
 ---
 
-**Landing page:** https://siwarattia6191.github.io/smart-delivery-ops/ (GitHub Pages, served from `docs/`)
+**For clients** — the product, tiers and pricing: https://siwarattia6191.github.io/smart-delivery-ops/product.html  
+**For engineers & recruiters** — the full portfolio walkthrough: https://siwarattia6191.github.io/smart-delivery-ops/ (GitHub Pages, served from `docs/`)
 
 ## ✨ Features
 

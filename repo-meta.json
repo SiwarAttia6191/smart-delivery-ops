@@ -1,5 +1,5 @@
 {
-  "description": "Delivery-ops platform, demoable in one click: a storefront where customers type an address, dispatch, demand-based pricing with coupons, Stripe test-mode payments, one-file onboarding — Kafka → dbt marts (Airflow), benchmarked ML (MLflow), a LangGraph copilot on your own docs; tenant data isolated in Postgres (RLS)",
+  "description": "Delivery-ops platform, demoable in one click: storefront with geocoded addresses, dispatch, pricing with coupons, Stripe test-mode payments, one-file onboarding — Kafka → dbt marts, benchmarked ML, LangGraph copilot on your own docs; Postgres RLS isolation. Client pricing & tiers: https://siwarattia6191.github.io/smart-delivery-ops/product.html",
   "homepage": "https://siwarattia6191.github.io/smart-delivery-ops/",
   "topics": [
     "airflow",
