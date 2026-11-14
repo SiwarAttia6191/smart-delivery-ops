@@ -254,6 +254,15 @@ services:
       DBT_HOST: postgres
       BUSINESS_TIMEZONE: ${BUSINESS_TIMEZONE:-Africa/Tunis}  # #78 local business grains
       DBT_PORT: "5432"
+      # LangSmith (#214): the eval sink's second destination. The key comes
+      # from the deployment's .env (compose interpolates ${VAR} from it) -
+      # the DAG reads it from this process env at parse time. The endpoint
+      # defaults to the EU host per the registered agent.
+      LANGSMITH_API_KEY: ${LANGSMITH_API_KEY:-}
+      LANGSMITH_ENDPOINT: ${LANGSMITH_ENDPOINT:-https://eu.api.smith.langchain.com}
+      LANGSMITH_AGENT_ID: ${LANGSMITH_AGENT_ID:-smart-delivery-copilot}
+      LANGSMITH_AGENT_ENVIRONMENT: ${LANGSMITH_AGENT_ENVIRONMENT:-local}
+      EVAL_SINK: ${EVAL_SINK:-both}
       # #54: the caller's DBT_SCHEMA flows through (make maps the branch to
       # analytics/analytics_draft); the safe default is the draft schema.
       DBT_SCHEMA: ${DBT_SCHEMA:-analytics_draft}
