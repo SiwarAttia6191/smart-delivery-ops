@@ -271,6 +271,13 @@
       state.restaurants = restaurants.filter((r) => r.is_active);
       fillSelect($("cust"), state.customers.slice(0, PICKER_LIMIT), "Customer");
       fillSelect($("rest"), state.restaurants, "Restaurant");
+      // the shareable link (#230): /storefront/ordering-demo.html?restaurant=<id>&source=direct
+      // preselects the restaurant and tags the orders' channel attribution
+      const wanted = Number(params.get("restaurant"));
+      if (wanted && state.restaurants.some((r) => r.id === wanted)) {
+        $("rest").value = String(wanted);
+      }
+      state.source = params.get("source") || "storefront";
       await refreshLoyalty();
       prefillDropoff();
       await loadMenuPreview();
@@ -369,7 +376,7 @@
         customer_id: Number($("cust").value),
         restaurant_id: Number($("rest").value),
         ...dropoffFields(),
-        source: "storefront",
+        source: state.source || "storefront",
       };
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);
       // checkout redemption (#159 item 3): an accepted code discounts the

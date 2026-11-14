@@ -26,6 +26,10 @@
     @media (min-width: 640px) { .menu-form { grid-template-columns: 2fr 1fr auto; } }
     .order-card { border: 1px solid #e3e6ec33; border-radius: 10px; padding: .7rem .9rem; margin-bottom: .6rem; }
     .review-comment { color: var(--muted, #5b6472); font-size: .88rem; margin-top: .3rem; }
+    .qr-row { display: flex; gap: 1.25rem; align-items: flex-start; margin-top: .75rem; flex-wrap: wrap; }
+    .qr-row img { border: 6px solid #fff; border-radius: 8px; background: #fff; }
+    .qr-row code { font-size: .8rem; word-break: break-all; display: block; margin-bottom: .6rem; }
+    .row-actions { display: flex; gap: .5rem; margin: .4rem 0; }
     #toast { position: fixed; right: 1.25rem; bottom: 1.25rem; padding: .7rem 1rem; border-radius: 10px;
              background: #262b36; color: #d7dce6; border: 1px solid #7c6cff; font-size: .9rem;
              box-shadow: 0 8px 24px rgba(0,0,0,.4); display: none; z-index: 50; }
@@ -109,6 +113,25 @@
           first, from <code>GET /restaurants/{id}/reviews</code> (tenant-scoped).</p>
         <div id="reviews-empty" class="empty">No reviews yet — deliveries rated on the storefront land here.</div>
         <div id="reviews"></div>
+      </section>
+
+      <section class="card">
+        <h2>Your ordering link <span class="badge-new">print me</span></h2>
+        <p class="hint">The direct channel (#230): this link opens the storefront with YOUR restaurant
+          preselected — put the QR on tables, receipts, packaging or your Instagram bio. Every order
+          through it carries the <code>direct</code> channel tag, so the marts attribute it.</p>
+        <div class="qr-row">
+          <img id="qr-img" alt="Your ordering QR code" width="180" height="180" />
+          <div>
+            <code id="qr-link"></code>
+            <div class="row-actions">
+              <button class="btn btn-sm" id="btn-copy-link" type="button">Copy the link</button>
+              <button class="btn btn-sm" id="btn-open-link" type="button" onclick="window.open(document.getElementById('qr-link').textContent, '_blank')">Open it</button>
+            </div>
+            <p class="hint" id="qr-note">Print this QR: it is a self-contained SVG — right-click → save, or screenshot
+              it into a flyer. Zero commission on every order it brings.</p>
+          </div>
+        </div>
       </section>
     </div>
   </main>
@@ -319,13 +342,32 @@
       }
     }
 
+    $("btn-copy-link").addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText($("qr-link").textContent);
+        $("btn-copy-link").textContent = "Copied ✓";
+        setTimeout(() => { $("btn-copy-link").textContent = "Copy the link"; }, 1500);
+      } catch {
+        $("btn-copy-link").textContent = "Select it manually";
+        setTimeout(() => { $("btn-copy-link").textContent = "Copy the link"; }, 1500);
+      }
+    });
+
     $("btn-signin").addEventListener("click", signin);
     $("rest").addEventListener("change", async () => {
       state.restId = Number($("rest").value);
       await loadMenu();
       await loadOrders();
       await loadReviews();
+      loadQr();
     });
+
+    function loadQr() {
+      const link = location.origin + "/storefront/ordering-demo.html?restaurant=" +
+        state.restId + "&source=direct";
+      $("qr-link").textContent = link;
+      $("qr-img").src = "/restaurants/" + state.restId + "/qr?url=" + encodeURIComponent(link);
+    }
   </script>
 </body>
 </html>

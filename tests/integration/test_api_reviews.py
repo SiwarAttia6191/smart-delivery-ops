@@ -145,3 +145,46 @@ def test_rating_bounds_are_enforced(authed_client: TestClient):
     # an unrated delivered order left no review rows behind
     reviews = authed_client.get(f"/restaurants/{restaurant['id']}/reviews").json()
     assert reviews["review_count"] == 0
+
+
+class TestQrCode:
+    """The shareable link's QR endpoint (#230): an SVG the portal embeds."""
+
+    def test_qr_endpoint_renders_svg(self, authed_client):
+        restaurant = authed_client.post("/restaurants", json=RESTAURANT).json()
+        url = "http://localhost:8010/storefront/ordering-demo.html?restaurant=1&source=direct"
+        response = authed_client.get(f"/restaurants/{restaurant['id']}/qr?url={url}")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/svg+xml"
+        assert b"<svg" in response.content
+        assert b"<path" in response.content  # the module shapes
+
+    def test_qr_endpoint_is_tenant_scoped(self, client: TestClient, authed_client: TestClient, db):
+        from core.security import hash_password
+        from domain.models import Tenant, User
+
+        restaurant = authed_client.post("/restaurants", json=RESTAURANT).json()
+        db.add(Tenant(slug="acme5", name="Acme5"))
+        db.commit()
+        acme = db.query(Tenant).filter_by(slug="acme5").one()
+        db.add(
+            User(
+                username="acme5ops",
+                password_hash=hash_password("pw"),
+                role="ops",
+                tenant_id=acme.id,
+            )
+        )
+        db.commit()
+        from tests.integration.test_api_promotions import _headers, _token
+
+        response = client.get(
+            f"/restaurants/{restaurant['id']}/qr?url=http://localhost/x",
+            headers=_headers(_token(client, "acme5ops", "pw")),
+        )
+        assert response.status_code == 404  # another tenant's restaurant: uniform not-found
+
+    def test_qr_rejects_non_http_targets(self, authed_client):
+        restaurant = authed_client.post("/restaurants", json=RESTAURANT).json()
+        response = authed_client.get(f"/restaurants/{restaurant['id']}/qr?url=javascript:alert(1)")
+        assert response.status_code == 404  # not an http(s) absolute URL
