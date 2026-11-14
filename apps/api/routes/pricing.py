@@ -6,10 +6,13 @@ from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db, require_writer
 from apps.api.schemas.pricing import QuoteRequest, QuoteResponse
+from core.config import get_settings
 from core.exceptions import NotFoundError
+from domain.city_config import load_city_config
 from domain.models import Restaurant, Tenant
 from domain.services import (
     demand_service,
+    fuel_service,
     geocoder,
     pricing_service,
     promotion_service,
@@ -71,6 +74,11 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
             )
         discount = promotion_service.apply_discount(coupon, quote.breakdown.total)
         applied_code = coupon.code
+    # the self-deliverer's margin view (#user idea via the competitive scan):
+    # what fuel THIS delivery would burn on the deployment's dominant vehicle
+    config = load_city_config(get_settings().city)
+    fuel = fuel_service.estimate(config, quote.distance_km)
+
     return QuoteResponse(
         distance_km=quote.distance_km,
         base_fee=quote.breakdown.base_fee,
@@ -81,6 +89,7 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         coupon_code=applied_code,
         final_total=round(quote.breakdown.total - discount, 2) if applied_code else None,
         dropoff_resolved=resolved_name,
+        fuel_estimate=fuel,
     )
 
 

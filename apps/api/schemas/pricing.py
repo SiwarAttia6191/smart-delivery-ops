@@ -45,3 +45,7 @@ class QuoteResponse(BaseModel):
     # the geocoder's display name when the quote was priced by address
     # (#232) — the customer sees what their text resolved to
     dropoff_resolved: str | None = None
+    # the self-deliverer's fuel estimate (user idea): liters, cost and CO2
+    # for the deployment's dominant vehicle — absent when the manifest
+    # declares no fuel economics
+    fuel_estimate: dict | None = None

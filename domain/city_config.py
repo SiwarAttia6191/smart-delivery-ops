@@ -62,6 +62,22 @@ class BackfillProfile(BaseModel):
     base_rate: float
 
 
+class FuelProfile(BaseModel):
+    # The deployment's real fuel economics (#217-adjacent, the self-deliverer's
+    # margin view): the OFFICIAL price for this city (state-set in Tunisia;
+    # the ecology ministry's daily average in Spain) with provenance, and the
+    # fleet's consumption per vehicle kind. Station-level "closest cheapest"
+    # is a V2 country-integration; this constant IS the real price where
+    # prices are state-fixed, and the honest daily average where they are not.
+    price_per_liter: float = Field(gt=0)
+    currency: str = Field(min_length=1, max_length=8)
+    source: str = Field(min_length=1)
+    consumption_l_per_100km: dict[str, float] = Field(
+        description="vehicle kind -> liters per 100 km (bicycle entries mean zero fuel)"
+    )
+    co2_kg_per_liter: float = 2.31  # gasoline combustion factor
+
+
 class OsrmExtract(BaseModel):
     # Local file convention: <extract_id>-latest.osm.pbf inside the data
     # dir, exactly how Geofabrik names its downloads.
@@ -77,6 +93,7 @@ class CityConfig(BaseModel):
     benchmark_grid: BenchmarkGrid
     backfill: BackfillProfile
     osrm: OsrmExtract
+    fuel: FuelProfile | None = None  # absent = the deployment declares no fuel economics
     restaurants: list[RestaurantSeed]
     drivers: list[DriverSeed]
     customers: list[CustomerSeed]

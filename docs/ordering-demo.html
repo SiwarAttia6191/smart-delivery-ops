@@ -322,6 +322,15 @@
         ["Surge multiplier", "×" + quote.surge_multiplier.toFixed(2)],
         ["Total fee", quote.total.toFixed(2)],
       ];
+      // the self-deliverer's margin view (#217-adjacent): what fuel THIS
+      // delivery would burn — the city manifest's official price
+      if (quote.fuel_estimate) {
+        const f = quote.fuel_estimate;
+        rows.push([
+          "Est. fuel (" + f.vehicle + ")",
+          f.cost + " " + f.currency + " · " + f.liters + " L · " + f.co2_kg + " kg CO₂",
+        ]);
+      }
       if (quote.dropoff_resolved) {
         rows.unshift(["Address resolved to", quote.dropoff_resolved]);
       }
