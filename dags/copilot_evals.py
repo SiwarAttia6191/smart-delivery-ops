@@ -67,3 +67,18 @@ with DAG(
             f"--eval-set data/evals/copilot_eval_set.json --min-pass-rate 0.8"
         ),
     )
+
+    # Copilot health (#212): the degradation digest over the copilot
+    # experiment. Crossing the threshold FAILS the task - and this DAG's
+    # on_failure_callback is the alert (ml_alerts posts it with narration),
+    # so a copilot degradation pages like any other regression. The miner
+    # (#213) turns the same degraded runs into golden cases.
+    copilot_health = BashOperator(
+        task_id="copilot_health",
+        bash_command=(
+            f"cd {ML_HOME} && {_GIT_SHA} {_EVAL_ENV} "
+            f"{PYTHON} ml/evals/copilot_health.py --days 7 --threshold 0.34"
+        ),
+    )
+
+    copilot_eval >> copilot_health

@@ -301,7 +301,9 @@ services:
       # Failure-alert surface for the warehouse DAG: set to a webhook URL to
       # enable POSTs on task failure. Empty = log-only (the DAG's fallback
       # logs loudly so the gap stays discoverable).
-      AIRFLOW_ALERT_WEBHOOK: ""
+      # #205 wired: the alert-echo sink is the visible default destination
+      # (its LOG is the proof - swap the URL for Slack/email to page for real)
+      AIRFLOW_ALERT_WEBHOOK: http://alert-echo:9094
       # ML loop (scheduled retraining): the DAG tasks read these to grain
       # themselves and reach the tracking server / the city manifest.
       MLFLOW_TRACKING_URI: http://mlflow:5100
