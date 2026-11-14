@@ -41,8 +41,11 @@ def reset() -> None:
             )
             for table in ("checkpoint_writes", "checkpoint_blobs", "checkpoints"):
                 conn.execute(text(stale.format(table=table)))
-        except Exception:  # noqa: BLE001 - checkpoint tables may not exist yet
-            pass
+        except Exception as exc:  # noqa: BLE001 - checkpoint tables may not exist yet
+            # fail-open WITH a trace (bug-hunt #260): a silent skip here
+            # would balloon the checkpoint tables exactly like the 2026
+            # postmortem — a permission error must be findable
+            print(f"[warn] checkpoint retention skipped: {exc}")
     print("demo activity wiped (orders, events, payments; coupon counters zeroed)")
 
     from scripts.seed_demo import main as seed_demo

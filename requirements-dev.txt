@@ -5,3 +5,4 @@ ruff>=0.17.3
 mypy>=2.4.0
 pandas-stubs>=2.2  # type-check the ETA model serving feature frame
 pip-audit>=2.7
+qrcode>=7.4

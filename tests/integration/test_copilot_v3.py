@@ -74,7 +74,7 @@ class TestStreaming:
 
         events = [line[7:] for line in body.splitlines() if line.startswith("event: ")]
         assert "context" in events
-        assert "node" in events  # the graph's hops are visible
+        assert "node" in events, body[:400]  # hops visible; body shows any degraded reason
         assert events[-1] == "answer"
         answer = json.loads(body.split("event: answer\ndata: ")[-1].split("\n\n")[0])
         assert answer["answer"]

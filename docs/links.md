@@ -68,6 +68,20 @@ Stop it with
 `docker compose -p madrid-demo -f docker-compose.demo.yml down`. The port
 shift is what lets both deployments run side by side.
 
+## The shareable restaurant link (#230)
+
+Each restaurant has a stable direct-ordering URL the owner prints on
+tables, receipts, packaging or Instagram:
+
+```
+<origin>/storefront/ordering-demo.html?restaurant=<id>&source=direct
+```
+
+The link preselects the restaurant on the storefront and tags every
+order with the `direct` channel for the marts. The portal renders it as
+a printable QR (`GET /restaurants/<id>/qr?url=…` — a self-contained
+SVG).
+
 ## Endpoint quick reference
 
 The full contract lives in [`api.md`](api.md) and live at `/docs`; the

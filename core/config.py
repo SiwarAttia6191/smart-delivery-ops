@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     # fake reference (no money moves); a real gateway is a config flip.
     payment_provider: str = "sandbox"
 
+    # ── HTTP posture (bug-hunt #260: the env promises are now REAL) ──
+    # Comma-separated allowed origins; "*" keeps the demo posture. The
+    # demo compose sets CORS_ORIGINS=https://$DEMO_DOMAIN — the "no
+    # wildcard CORS on a TLS box" comment finally has a consumer.
+    cors_origins: str = "*"
+    # Crash visibility (#194): when set, unhandled 500s fire-and-forget a
+    # short-timeout POST with the failure summary — the demo api's only
+    # alert path (it has no Airflow/Prometheus).
+    alert_webhook: str | None = None
+
     # ── Copilot embeddings (#153) ──────────────────────────────
     # "hash" = the deterministic keyless embedder (default); "openai" =
     # text-embedding-3-large via the same secret as the chat provider.

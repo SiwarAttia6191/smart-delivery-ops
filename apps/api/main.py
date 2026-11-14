@@ -5,12 +5,14 @@ Run locally (repo root):
 Interactive docs: http://127.0.0.1:8000/docs  (Swagger)  /  /redoc
 """
 
+import json
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 from apps.api.routes import (
@@ -80,7 +82,10 @@ def create_app() -> FastAPI:
     )
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # tighten per-environment in Phase 5
+        # comma-separated CORS_ORIGINS (bug-hunt #260: the demo compose
+        # promised "no wildcard CORS on a TLS box" — the env now has a
+        # consumer); "*" keeps the local demo posture
+        allow_origins=[o.strip() for o in settings.cors_origins.split(",") if o.strip()],
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -128,7 +133,40 @@ def create_app() -> FastAPI:
     docs_dir = Path(__file__).resolve().parents[2] / "docs"
     app.mount("/storefront", StaticFiles(directory=str(docs_dir)), name="storefront")
 
+    # The front door (#258): the API's surfaces live under /storefront/* and
+    # /docs, so a bare host used to return a blank 404 — the last member of
+    # the hardcoded-host/missing-door class the #219 live drive exposed.
+    # A bare host now greets with the demos hub, on every deployment.
+    @app.get("/", include_in_schema=False)
+    def root() -> RedirectResponse:
+        return RedirectResponse(url="/storefront/demos.html")
+
+    # Crash visibility (#194, wired by bug-hunt #260): on the demo/VPS
+    # deployment ALERT_WEBHOOK is the ONLY alert path (no Prometheus there).
+    # Fire-and-forget with a short timeout — a webhook outage must never
+    # add latency or break the error response itself.
+    @app.exception_handler(Exception)
+    async def unhandled_with_webhook(request: Request, exc: Exception) -> JSONResponse:
+        logger.exception("unhandled error on %s", request.url.path)
+        webhook = settings.alert_webhook
+        if webhook:
+            payload = json.dumps(
+                {"text": f"500 {request.url.path}: {type(exc).__name__}: {exc}"[:300]}
+            ).encode("utf-8")
+            try:
+                import urllib.request
+
+                webhook_request = urllib.request.Request(
+                    webhook, data=payload, headers={"Content-Type": "application/json"}
+                )
+                urllib.request.urlopen(webhook_request, timeout=2)
+            except Exception:  # noqa: BLE001 - the alert path never breaks the API
+                logger.warning("alert webhook unreachable")
+        return JSONResponse(status_code=500, content={"detail": "Internal Server Error"})
+
     return app
 
+
+logger = logging.getLogger(__name__)
 
 app = create_app()

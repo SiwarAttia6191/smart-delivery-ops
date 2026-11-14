@@ -68,8 +68,15 @@ def test_delivered_only_revenue_math(authed_client: TestClient, db):
     assert snap["revenue"] == orders[0]["delivery_fee"]  # cancelled fee excluded
     # the test lifecycle completes in milliseconds — 0.0 min is honest
     assert snap["avg_delivery_minutes"] is not None and snap["avg_delivery_minutes"] >= 0
-    assert snap["rating_average"] is None  # rides null until #216
-    assert snap["business_date"] == datetime.now(UTC).date().isoformat()
+    assert snap["rating_average"] is None  # rides null until reviews exist
+    # the business date is the BUSINESS timezone's date, not UTC's — after
+    # 23:00 UTC they legitimately differ (this flaked at the boundary once)
+    from zoneinfo import ZoneInfo
+
+    from core.config import get_settings
+
+    tz = ZoneInfo(get_settings().business_timezone)
+    assert snap["business_date"] == datetime.now(tz).date().isoformat()
 
 
 def test_empty_state_is_zeros_not_an_error(authed_client: TestClient):
@@ -100,3 +107,18 @@ def test_snapshot_is_tenant_scoped(client: TestClient, authed_client: TestClient
     response = client.get(f"/restaurants/{restaurant['id']}/sales-snapshot", headers=acme_headers)
     assert response.status_code == 404  # another tenant's restaurant: uniform not-found
     assert "not found" in response.json()["error"]["message"]
+
+
+class TestFrontDoor:
+    """The bare host greets with the demos hub (#258) — a blank 404 at
+    / was the last member of the hardcoded-host/missing-door class."""
+
+    def test_root_redirects_to_the_demos_hub(self, client):
+        response = client.get("/", follow_redirects=False)
+        assert response.status_code == 307  # FastAPI's RedirectResponse
+        assert response.headers["location"] == "/storefront/demos.html"
+
+    def test_the_hub_actually_serves_after_the_redirect(self, client):
+        followed = client.get("/", follow_redirects=True)
+        assert followed.status_code == 200
+        assert "demos" in followed.text.lower()

@@ -18,7 +18,9 @@ USER airflow
 # prophet wheels bundle the compiled CmdStan model, so no compiler needed.
 # The copilot eval (#123) shares the graph + provider factory, so its
 # import closure (langgraph, openai, fastapi routes, pydantic-settings)
-# rides in the same venv — versions mirror requirements.txt.
+# rides in the same venv — versions mirror requirements.txt. pyjwt rides
+# with them (#212): core.security imports it, and the eval harness's
+# tool path touches the auth machinery.
 RUN python -m venv /home/airflow/ml-venv \
     && /home/airflow/ml-venv/bin/pip install --no-cache-dir \
     "mlflow==2.19.*" \
@@ -27,10 +29,13 @@ RUN python -m venv /home/airflow/ml-venv \
     "pandas>=2.2" \
     "sqlalchemy>=2.0,<2.1" \
     "psycopg2-binary>=2.9" \
+    "psycopg[binary]>=3.1" \
     httpx \
     "langgraph>=0.4" \
     "langchain-core>=0.3" \
     "openai>=1.40" \
+    "pyjwt>=2.8" \
+    "bcrypt>=4.0" \
     "fastapi>=0.159.1" \
     "pydantic-settings>=2.16.1"
 

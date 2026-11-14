@@ -238,8 +238,11 @@ def run_copilot(
                         "content": "What the operator asked you to remember: " + " | ".join(facts),
                     }
                 )
-        except Exception:  # noqa: BLE001 - memory is an enhancement
-            pass
+        except Exception as exc:  # noqa: BLE001 - memory is an enhancement
+            # fail-open WITH a trace (bug-hunt #260): silent degradation is
+            # indistinguishable from "nothing remembered" — a broken lookup
+            # must be findable in the logs
+            logger.warning("memory injection skipped: %s", exc)
         initial = {
             "messages": [
                 *opening,

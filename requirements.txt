@@ -40,3 +40,4 @@ openai>=1.40
 # dbt-core+dbt-postgres  # Phase 2 — warehouse transformations (needs Python ≤3.12)
 langsmith>=0.4
 langgraph-checkpoint-postgres>=2.0
+qrcode>=8.0

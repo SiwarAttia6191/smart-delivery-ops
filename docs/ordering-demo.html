@@ -58,7 +58,11 @@
         event log the warehouse consumes.
       </p>
       <div class="api-bar">
-        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL" />
+        <!-- the API-base override: HIDDEN unless ?api= is passed (#230 live
+             drive). Same origin is always correct — the field existed for a
+             cross-origin demo case and read as a broken empty bar. -->
+        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL"
+               placeholder="API base — same origin (leave as is)" hidden />
         <span class="status-dot" id="api-dot" role="img" aria-label="API status"></span>
         <span class="status-hint" id="api-hint">checking…</span>
       </div>
@@ -105,6 +109,7 @@
           <div class="field">
             <label for="coupon"><span>Coupon code (optional)</span></label>
             <input id="coupon" type="text" placeholder="e.g. WELCOME10" />
+            <p class="hint" id="loyalty" hidden></p>
           </div>
           <div class="field">
             <label for="demand"><span>Demand ratio (optional)</span></label>
@@ -158,6 +163,22 @@
             <button class="btn btn-ghost btn-sm" id="btn-cancel" type="button">Cancel</button>
           </div>
           <ul class="events" id="events"></ul>
+          <div id="review-box" hidden>
+            <p class="hint" style="margin-top: .8rem;">How was it? Rate the delivery — the restaurant sees
+              it on its portal card. One review per order.</p>
+            <div class="flow-actions">
+              <select id="review-rating" aria-label="Rating">
+                <option value="5">★★★★★ loved it</option>
+                <option value="4">★★★★ good</option>
+                <option value="3">★★★ okay</option>
+                <option value="2">★★ meh</option>
+                <option value="1">★ bad</option>
+              </select>
+              <input id="review-comment" type="text" placeholder="Optional comment" maxlength="500" />
+              <button class="btn btn-primary btn-sm" id="btn-review" type="button">Send review</button>
+            </div>
+            <p class="hint" id="review-note" hidden></p>
+          </div>
         </div>
       </section>
     </div>
@@ -174,8 +195,11 @@
     const params = new URLSearchParams(location.search);
     const apiInput = document.getElementById("api-base");
     apiInput.value = params.get("api") || "";  // same origin - the API serves this page
+    // the override field only EXISTS when the caller asked for it (#230
+    // live drive): an empty same-origin input read as a broken white bar
+    if (params.get("api")) apiInput.hidden = false;
 
-    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null };
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null };
 
     const $ = (id) => document.getElementById(id);
     const banner = $("banner");
@@ -254,6 +278,14 @@
       state.restaurants = restaurants.filter((r) => r.is_active);
       fillSelect($("cust"), state.customers.slice(0, PICKER_LIMIT), "Customer");
       fillSelect($("rest"), state.restaurants, "Restaurant");
+      // the shareable link (#230): /storefront/ordering-demo.html?restaurant=<id>&source=direct
+      // preselects the restaurant and tags the orders' channel attribution
+      const wanted = Number(params.get("restaurant"));
+      if (wanted && state.restaurants.some((r) => r.id === wanted)) {
+        $("rest").value = String(wanted);
+      }
+      state.source = params.get("source") || "storefront";
+      await refreshLoyalty();
       prefillDropoff();
       await loadMenuPreview();
     }
@@ -351,7 +383,7 @@
         customer_id: Number($("cust").value),
         restaurant_id: Number($("rest").value),
         ...dropoffFields(),
-        source: "storefront",
+        source: state.source || "storefront",
       };
       if ($("demand").value) payload.demand_ratio = Number($("demand").value);
       // checkout redemption (#159 item 3): an accepted code discounts the
@@ -359,6 +391,12 @@
       if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
       try {
         const order = await api("/orders", { method: "POST", json: payload });
+        // the permission prompt is requested HERE — after the user placed an
+        // order, never on page load (#218 acceptance)
+        if ("Notification" in window && Notification.permission === "default") {
+          Notification.requestPermission();
+        }
+        state.lastStatus = null;  // the first render of the new order never notifies
         showOrder(order);
         $("place-note").hidden = false;
         $("place-note").textContent = "Order " + order.id + " placed — fee " + order.delivery_fee.toFixed(2) +
@@ -402,17 +440,103 @@
         (order.delivery_minutes != null ? " · delivered in " + order.delivery_minutes + " min" : "");
       renderReceipt(order);
       renderEvents(order);
+      maybeNotify(order);
       const writable = state.role === "ops" || state.role === "admin";
       $("btn-pay").disabled = !writable || order.status !== "pending" || state.receipt !== null;
       $("btn-assign").disabled = !writable || order.status !== "pending";
       $("btn-transit").disabled = !writable || order.status !== "assigned";
       $("btn-deliver").disabled = !writable || order.status !== "in_transit";
       $("btn-cancel").disabled = !writable || !["pending", "assigned", "in_transit"].includes(order.status);
+      renderReviewBox(order);
     }
+
+    // the post-purchase rating (#216): a DELIVERED order can be rated once
+    // loyalty balance (#217): 1 point per currency unit delivered,
+    // redeemable through points-funded coupons — refreshed on customer
+    // change and after every delivery (the accrual)
+    async function refreshLoyalty() {
+      const hint = $("loyalty");
+      const custId = Number($("cust").value);
+      if (!custId) { hint.hidden = true; return; }
+      try {
+        const customer = await api("/customers/" + custId);
+        hint.hidden = false;
+        hint.textContent = "Loyalty points: " + customer.loyalty_points +
+          " (1 point per unit delivered — points coupons spend them)";
+      } catch { hint.hidden = true; }
+    }
+
+    async function renderReviewBox(order) {
+      if (order.status === "delivered") await refreshLoyalty();
+      const box = $("review-box");
+      if (order.status !== "delivered") { box.hidden = true; return; }
+      box.hidden = false;
+      const note = $("review-note");
+      try {
+        const reviews = await api("/restaurants/" + order.restaurant_id + "/reviews");
+        const mine = reviews.reviews.find((r) => r.order_id === order.id);
+        if (mine) {
+          $("btn-review").disabled = true;
+          note.hidden = false;
+          note.textContent = "Already rated: " + "★".repeat(mine.rating) +
+            (mine.comment ? ' — "' + mine.comment + '"' : "");
+        } else {
+          $("btn-review").disabled = false;
+          note.hidden = true;
+        }
+      } catch {
+        $("btn-review").disabled = true;  // a review lookup hiccup never breaks tracking
+      }
+    }
+
+    $("btn-review").addEventListener("click", async () => {
+      hideBanner();
+      try {
+        const review = await api("/orders/" + state.order.id + "/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: Number($("review-rating").value),
+            comment: $("review-comment").value.trim() || null,
+          }),
+        });
+        $("btn-review").disabled = true;
+        const note = $("review-note");
+        note.hidden = false;
+        note.textContent = "Thank you — " + "★".repeat(review.rating) + " recorded.";
+        $("review-comment").value = "";
+      } catch (error) {
+        showBanner("Review failed: " + error.message);
+      }
+    });
 
     function renderReceipt(order) {
       const paid = order.events.find((event) => event.event_type === "paid");
       if (paid) state.receipt = paid.payload?.provider_ref || "sbx_?";
+    }
+
+    // Live notifications (#218): the 4s poll already detects transitions —
+    // the browser Notification fires on REAL status changes only (the first
+    // render of an existing order never notifies). V1 needs no backend;
+    // the SSE upgrade path (#156) is /copilot/chat/stream's pattern — the
+    // same events pushed instead of polled, when a use case outgrows 4s.
+    const NOTIFY_MESSAGES = {
+      assigned: "🛵 Driver on the way!",
+      in_transit: "🚴 Your order is moving",
+      delivered: "🎉 Enjoy! Your order is delivered",
+    };
+
+    function maybeNotify(order) {
+      const previous = state.lastStatus;
+      state.lastStatus = order.status;
+      if (previous === null || previous === order.status) return;
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
+      const body = NOTIFY_MESSAGES[order.status];
+      if (body) {
+        try {
+          new Notification("Smart Delivery Ops — order " + order.id.slice(0, 8), { body });
+        } catch { /* a blocked notification never breaks tracking */ }
+      }
     }
 
     function showOrder(order) {

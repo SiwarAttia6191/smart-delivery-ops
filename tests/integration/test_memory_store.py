@@ -4,7 +4,7 @@ The guarantees: a remembered fact is the uploading tenant's alone (RLS +
 explicit filter), the copilot's context injection carries it for future
 answers, and the tool never stores empty content."""
 
-from apps.copilot.tools import _remember_fact
+from apps.copilot.tools import _caller_role, _remember_fact
 from core.security import hash_password
 from core.tenancy import reset_request_tenant, set_request_tenant
 from domain.models import Tenant, User
@@ -33,16 +33,28 @@ class TestMemoryLayer:
         # the scripted provider never calls the memory tool — the chat path
         # stays empty; the TOOL is what stores (driven directly below)
         assert recent_facts(db) == []
-        result = _remember_fact(db, "we always deliver pizza first")
+        role_token = _caller_role.set("ops")
+        try:
+            result = _remember_fact(db, "we always deliver pizza first")
+        finally:
+            _caller_role.reset(role_token)
         assert result.startswith("remembered:")
         assert recent_facts(db) == ["we always deliver pizza first"]
 
     def test_empty_fact_is_rejected_by_the_tool(self, db):
-        assert "empty" in _remember_fact(db, "   ")
+        role_token = _caller_role.set("ops")
+        try:
+            assert "empty" in _remember_fact(db, "   ")
+        finally:
+            _caller_role.reset(role_token)
         assert recent_facts(db) == []
 
     def test_memories_are_tenant_scoped(self, client, authed_client, db):
-        _remember_fact(db, "tenant 1 fact")
+        role_token = _caller_role.set("ops")
+        try:
+            _remember_fact(db, "tenant 1 fact")
+        finally:
+            _caller_role.reset(role_token)
         acme = _seed_second_tenant(client, db)
 
         # tenant 1's list shows its fact; tenant 2's shows none
@@ -61,7 +73,11 @@ class TestMemoryLayer:
         # the middleware uses), so the fact lands in tenant 2's scope
         reset = set_request_tenant(2)
         try:
-            scoped_fact = _remember_fact(db, "acme fact")
+            role_token = _caller_role.set("ops")
+            try:
+                scoped_fact = _remember_fact(db, "acme fact")
+            finally:
+                _caller_role.reset(role_token)
             assert scoped_fact.startswith("remembered:")
             acme_facts = recent_facts(db)
         finally:

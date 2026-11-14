@@ -32,13 +32,13 @@
         stack running (<code>docker compose up -d</code>), they are all live at once.
       </p>
       <p class="demos-lead" id="env-note" hidden
-         style="margin-top:1rem; padding:.7rem 1rem; border-radius:10px; background:#eef4fd; color:#9cc0f5; border:1px solid #c4d8f2; font-size:.9rem"></p>
+         style="margin-top:1rem; padding:.7rem 1rem; border-radius:10px; background:#eef4fd; color:#274b7a; border:1px solid #c4d8f2; font-size:.9rem"></p>
     </div>
   </header>
 
   <main class="demos-main" style="padding-top:0">
     <div class="demos-grid">
-      <section class="card">
+      <section class="card" data-needs="dashboard">
         <span class="role">For the operator</span>
         <h2>Operations dashboard</h2>
         <ul>
@@ -50,7 +50,7 @@
         </div>
       </section>
 
-      <section class="card">
+      <section class="card" data-needs="dashboard">
         <span class="role">For the operator who asks</span>
         <h2>AI copilot chat</h2>
         <ul>
@@ -80,9 +80,35 @@
         <ul>
           <li>Keep the menu true: prices, sold-out flips, new items — CRUD over the live API</li>
           <li>Watch incoming orders land in real time, polled from the same feed dispatch reads</li>
+          <li>Today's numbers, customer reviews, and a printable QR for the direct channel</li>
         </ul>
         <div class="flow-actions">
           <a class="btn btn-primary btn-sm" href="restaurant-portal.html">Open the portal</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="role">For onboarding a client</span>
+        <h2>Onboarding wizard</h2>
+        <ul>
+          <li>Paste the client's CSV and watch every address resolve on a map — before anything commits</li>
+          <li>Import, issue staff accounts, and read the tenant-readiness checklist</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="onboarding-wizard.html">Open the wizard</a>
+        </div>
+      </section>
+
+      <section class="card">
+        <span class="role">For the engineer</span>
+        <h2>Every endpoint, live</h2>
+        <ul>
+          <li>The OpenAPI contract with click-to-try requests — the same endpoints the pages above call</li>
+          <li>api.md documents each one; links.md maps every surface in the repo</li>
+        </ul>
+        <div class="flow-actions">
+          <a class="btn btn-primary btn-sm" href="/docs">Open Swagger</a>
+          <a class="btn btn-sm" href="https://github.com/SiwarAttia6191/smart-delivery-ops/blob/main/docs/api.md">api.md</a>
         </div>
       </section>
     </div>
@@ -107,6 +133,30 @@
         "need the stack running locally: docker compose up -d, then " +
         "python scripts/create_user.py --demo. On a guided call it runs on our screen, not a slide.";
       note.hidden = false;
+    }
+
+    // the dashboard lives in the MAIN stack only — the demo unit (the other
+    // deployment) and the VPS do not run it. Probe once: unreachable means
+    // the two dashboard cards disable with an honest hint instead of dead links.
+    if (local) {
+      fetch("http://localhost:8501/", { mode: "no-cors" })
+        .then(() => { /* the dashboard is up — the links stay */ })
+        .catch(() => {
+          for (const card of document.querySelectorAll('[data-needs="dashboard"]')) {
+            const link = card.querySelector("a.btn-primary");
+            if (link) {
+              link.classList.remove("btn-primary");
+              link.setAttribute("aria-disabled", "true");
+              link.style.opacity = ".45";
+            }
+            const hint = document.createElement("p");
+            hint.className = "hint";
+            hint.style.margin = ".4rem 0 0";
+            hint.textContent = "Not running here — the dashboard lives in the main stack " +
+              "(docker compose up -d dashboard).";
+            card.querySelector(".flow-actions").appendChild(hint);
+          }
+        });
     }
   </script>
 </body>

@@ -75,15 +75,33 @@ def _search_docs(db: Session, query: str, source_prefix: str | None = None) -> l
 
 
 _approval_granted: ContextVar[bool] = ContextVar("approval_granted", default=False)
+# The caller's role, pinned by the copilot routes from the JWT claims
+# (bug-hunt #260): the mutating tools enforce the SAME role policy the
+# REST surface would — a viewer is rejected by require_writer on every
+# menu write, so the copilot path must not become a role bypass.
+_caller_role: ContextVar[str] = ContextVar("caller_role", default="viewer")
+
+
+def _caller_can_write() -> bool:
+    from core.security import role_can_write
+
+    return role_can_write(_caller_role.get())
 
 
 def _mark_item_sold_out(db: Session, item_id: int) -> str:
     """The first MUTATING copilot tool (#121, confirm-before-write). The
     approval gate is a ContextVar set ONLY by the resume endpoint: without
     it the tool RETURNS a proposal instead of executing — prompt injection
-    cannot flip it, because the flag never comes from the conversation."""
+    cannot flip it, because the flag never comes from the conversation.
+    The role gate is checked FIRST: a viewer never gets a proposal that
+    could be approved, because the REST surface would 403 them."""
     from domain.models import MenuItem
 
+    if not _caller_can_write():
+        return (
+            f"refused: your role ({_caller_role.get()}) cannot modify the menu — "
+            "menu writes need an ops or admin user"
+        )
     item = db.get(MenuItem, item_id)
     if item is None:
         return f"menu item {item_id} not found"
@@ -101,9 +119,16 @@ def _remember_fact(db: Session, fact: str) -> str:
     from domain.services import tenant_service
 
     """The long-term memory tool (#208): store the operator's fact
-    verbatim, tenant-scoped, injected into every future answer."""
+    verbatim, tenant-scoped, injected into every future answer. Writer
+    role required (#260) — memories shape every future answer, which is
+    a mutation of the tenant's shared context."""
     from domain.models import Memory
 
+    if not _caller_can_write():
+        return (
+            f"refused: your role ({_caller_role.get()}) cannot store memories — "
+            "memory writes need an ops or admin user"
+        )
     fact = fact.strip()
     if not fact:
         return "nothing to remember — the fact was empty"
