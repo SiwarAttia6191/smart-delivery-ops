@@ -1,14 +1,15 @@
 """Restaurant endpoints."""
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db, require_writer
+from apps.api.schemas.order import RestaurantReviews
 from apps.api.schemas.restaurant import RestaurantCreate, RestaurantResponse, SalesSnapshot
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
-from domain.services import sales_service, tenant_service
+from domain.services import review_service, sales_service, tenant_service
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
@@ -62,3 +63,53 @@ def get_sales_snapshot(restaurant_id: int, db: Session = Depends(get_db)) -> Sal
     if restaurant is None:
         raise NotFoundError(f"restaurant {restaurant_id} not found")
     return SalesSnapshot(**sales_service.snapshot(db, restaurant))
+
+
+@router.get("/{restaurant_id}/qr")
+def restaurant_qr(restaurant_id: int, url: str = Query(...), db: Session = Depends(get_db)):
+    """The restaurant's shareable link as a QR code (#230): an SVG the
+    portal embeds for print and screens. The ``url`` is the caller's own
+    public ordering link (the portal builds it from its own origin) —
+    validated to an http(s) absolute URL, tenant-scoped like every read."""
+    tid = tenant_service.context_tenant_id(db)
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.tenant_id == tid)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise NotFoundError(f"restaurant {restaurant_id} not found")
+    if not url.startswith(("http://", "https://")):
+        raise NotFoundError("the qr target must be an absolute http(s) URL")
+    import io
+
+    # the qrcode library ships no type stubs
+    import qrcode  # type: ignore[import-untyped]
+    import qrcode.image.svg  # type: ignore[import-untyped]
+
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=2)
+    qr.add_data(url)
+    qr.make(fit=True)
+    buffer = io.BytesIO()
+    qr.make_image(image_factory=qrcode.image.svg.SvgPathImage).save(buffer)
+    return Response(
+        content=buffer.getvalue(),
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@router.get("/{restaurant_id}/reviews", response_model=RestaurantReviews)
+def list_restaurant_reviews(restaurant_id: int, db: Session = Depends(get_db)) -> RestaurantReviews:
+    """The restaurant's reviews (#216): newest first with the running
+    average — open GET, tenant-scoped like every read (another tenant's
+    restaurant is the uniform 404)."""
+    tid = tenant_service.context_tenant_id(db)
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.tenant_id == tid)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise NotFoundError(f"restaurant {restaurant_id} not found")
+    return RestaurantReviews(**review_service.list_for_restaurant(db, restaurant))

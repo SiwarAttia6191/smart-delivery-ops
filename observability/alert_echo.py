@@ -23,13 +23,19 @@ class AlertEcho(BaseHTTPRequestHandler):
         except ValueError:
             payload = {"unparseable": True}
         alerts = payload.get("alerts", [])
-        for alert in alerts:
-            logging.warning(
-                "ALERT DELIVERED status=%s %s %s",
-                payload.get("status"),
-                alert.get("labels"),
-                str(alert.get("annotations"))[:400],
-            )
+        if alerts:
+            for alert in alerts:
+                logging.warning(
+                    "ALERT DELIVERED status=%s %s %s",
+                    payload.get("status"),
+                    alert.get("labels"),
+                    str(alert.get("annotations"))[:400],
+                )
+        else:
+            # generic JSON payloads (the DAG tasks' alert_on_failure shape:
+            # {dag, task, run_id, exception} + narration) log whole, so a
+            # pipeline failure is as visible as a Prometheus alert
+            logging.warning("ALERT DELIVERED (raw) %s", str(payload)[:400])
         self.send_response(200)
         self.end_headers()
 
