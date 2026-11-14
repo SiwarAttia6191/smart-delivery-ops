@@ -13,7 +13,7 @@ alembic>=1.20.1
 httpx>=0.28.1
 
 # Event pipeline (Phase 2): outbox relay publishes order events to Kafka
-confluent-kafka>=2.7
+confluent-kafka>=2.16.1
 
 # ── ETA model serving (Phase 3, #69): loads models:/eta_model/Production
 # from the MLflow registry at startup; heuristic fallback on any failure
