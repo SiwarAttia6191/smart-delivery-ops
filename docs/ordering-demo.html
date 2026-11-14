@@ -58,7 +58,11 @@
         event log the warehouse consumes.
       </p>
       <div class="api-bar">
-        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL" />
+        <!-- the API-base override: HIDDEN unless ?api= is passed (#230 live
+             drive). Same origin is always correct — the field existed for a
+             cross-origin demo case and read as a broken empty bar. -->
+        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL"
+               placeholder="API base — same origin (leave as is)" hidden />
         <span class="status-dot" id="api-dot" role="img" aria-label="API status"></span>
         <span class="status-hint" id="api-hint">checking…</span>
       </div>
@@ -191,6 +195,9 @@
     const params = new URLSearchParams(location.search);
     const apiInput = document.getElementById("api-base");
     apiInput.value = params.get("api") || "";  // same origin - the API serves this page
+    // the override field only EXISTS when the caller asked for it (#230
+    // live drive): an empty same-origin input read as a broken white bar
+    if (params.get("api")) apiInput.hidden = false;
 
     const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null };
 
