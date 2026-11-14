@@ -31,6 +31,15 @@ _EVAL_ENV = (
     f"COPILOT_PROVIDER={os.environ.get('COPILOT_PROVIDER', 'scripted')} "
     f"COPILOT_MODEL={os.environ.get('COPILOT_MODEL', 'gpt-4o-mini')} "
     f"COPILOT_MODEL_MINI={os.environ.get('COPILOT_MODEL_MINI', 'gpt-4o-mini')} "
+    # LangSmith (#214): the eval sink's second destination. The key rides
+    # the scheduler's own environment (LANGSMITH_API_KEY) - never inline
+    # here; the agent address routes the traces to the registered agent.
+    f"LANGSMITH_API_KEY={os.environ.get('LANGSMITH_API_KEY', '')} "
+    f"LANGSMITH_TRACING=true "
+    f"LANGSMITH_ENDPOINT={os.environ.get('LANGSMITH_ENDPOINT', 'https://eu.api.smith.langchain.com')} "
+    f"LANGSMITH_AGENT_ID={os.environ.get('LANGSMITH_AGENT_ID', 'smart-delivery-copilot')} "
+    f"LANGSMITH_AGENT_ENVIRONMENT={os.environ.get('LANGSMITH_AGENT_ENVIRONMENT', 'local')} "
+    f"EVAL_SINK={os.environ.get('EVAL_SINK', 'both')} "
 )
 _GIT_SHA = f"GIT_SHA=$(git --git-dir={GIT_DIR} rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
