@@ -1,7 +1,7 @@
 # Core API
 fastapi>=0.159.1
 uvicorn[standard]>=0.54.0
-sqlalchemy>=2.1.6
+sqlalchemy>=2.1.8
 pydantic>=2.14.1
 pydantic-settings>=2.16.1
 psycopg[binary]>=3.3.6
@@ -13,7 +13,7 @@ alembic>=1.20.1
 httpx>=0.28.1
 
 # Event pipeline (Phase 2): outbox relay publishes order events to Kafka
-confluent-kafka>=2.7
+confluent-kafka>=2.16.1
 
 # ── ETA model serving (Phase 3, #69): loads models:/eta_model/Production
 # from the MLflow registry at startup; heuristic fallback on any failure
@@ -31,7 +31,7 @@ python-multipart>=0.0.32
 # ── Ops Copilot (#120 Phase A): LangGraph orchestration + LangSmith wiring ──
 langgraph>=0.4
 langchain-core>=1.7.1
-openai>=1.40
+openai>=3.49.0
 # langsmith>=0.2        # tracing sink (Phase B enablement: LANGSMITH_TRACING=true)
 
 # ── Later phases (not required for Phase 1) ─────────────────────
