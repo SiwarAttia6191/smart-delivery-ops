@@ -56,7 +56,10 @@ jobs:
           fi
 
   lint:
-    needs: changes
+    # #288 item 1: no `needs: changes` — lint executes in EVERY path (it is
+    # the one job the classifier's skip still runs), so waiting for the
+    # classifier bought nothing. It starts at t=0; ci-ok still blocks on the
+    # classifier itself, so the fail-safe (#246) is untouched.
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
