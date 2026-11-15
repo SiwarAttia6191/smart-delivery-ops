@@ -38,10 +38,13 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 outputs={"expected_tools": case.get("expected_tools", [])},
             )
             client.create_run(
-                name=case["name"],
+                name=case["id"],  # the golden cases key on id, not name
                 run_type="chain",
                 inputs={"question": case["question"]},
-                outputs={"answer": result.get("answer", ""), "tools": result.get("tools", [])},
+                outputs={
+                    "answer": result.get("answer", ""),
+                    "tool_sequence": result.get("tool_sequence", []),
+                },
                 reference_dataset_id=dataset.id,
             )
         logger.info("langsmith sink: %s cases logged under %s", len(results), dataset.name)
