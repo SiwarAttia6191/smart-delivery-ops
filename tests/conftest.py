@@ -14,7 +14,14 @@ from pathlib import Path  # noqa: E402
 # left over from a PREVIOUS session (or a pre-Alembic run: tables but no
 # alembic_version) would break the upgrade — the same stamp problem the
 # live demo DB has. Delete it so every session truly starts from zero.
-_TEST_DB = Path(".test_local.db")
+#
+# Under xdist (#288) each worker imports this conftest in its own process:
+# one shared file would take N concurrent Alembic chains against one SQLite
+# file (lock storms, stamp races). The worker name suffix gives every
+# worker its own throwaway file; serial runs keep the original name.
+_WORKER = os.environ.get("PYTEST_XDIST_WORKER", "")
+_SUFFIX = f"_{_WORKER}" if _WORKER else ""
+_TEST_DB = Path(f".test_local{_SUFFIX}.db")
 _TEST_DB.unlink(missing_ok=True)
 os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
 # The deployment's .env leaks into any process launched from the repo

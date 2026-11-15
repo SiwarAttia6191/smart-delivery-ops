@@ -125,7 +125,10 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements-dev.txt
       - name: Pytest (coverage gate 85%)
-        run: pytest --cov=apps --cov=core --cov=domain --cov-fail-under=85 --cov-report=term
+        # -n auto (#288): the suite fans out across the runner's cores —
+        # the coverage gate is preserved exactly (pytest-cov combines the
+        # workers' measurements before the fail-under verdict).
+        run: pytest -n auto --cov=apps --cov=core --cov=domain --cov-fail-under=85 --cov-report=term
 
   docker-build:
     if: github.ref == 'refs/heads/main'
