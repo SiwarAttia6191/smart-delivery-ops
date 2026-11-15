@@ -27,16 +27,25 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
     verdict. Best-effort by contract."""
     try:
         client = _langsmith_client()
-        dataset = client.create_dataset(
-            dataset_name=f"{eval_name}-v{eval_set.get('version', '0')}",
-            description="Ops Copilot golden set (auto-synced from the eval harness)",
-        )
-        for case, result in zip(eval_set["cases"], results, strict=False):
-            client.create_example(
-                dataset_id=dataset.id,
-                inputs={"question": case["question"]},
-                outputs={"expected_tools": case.get("expected_tools", [])},
+        dataset_name = f"{eval_name}-v{eval_set.get('version', '0')}"
+        # idempotent sync (#214): the dataset persists across eval runs —
+        # read-or-create; the examples seed ONLY on creation (re-adding
+        # them per run would duplicate the golden set), while the runs are
+        # per-execution provenance and are always new
+        try:
+            dataset = client.read_dataset(dataset_name=dataset_name)
+        except Exception:  # noqa: BLE001 - first run: the dataset doesn't exist yet
+            dataset = client.create_dataset(
+                dataset_name=dataset_name,
+                description="Ops Copilot golden set (auto-synced from the eval harness)",
             )
+            for case in eval_set["cases"]:
+                client.create_example(
+                    dataset_id=dataset.id,
+                    inputs={"question": case["question"]},
+                    outputs={"expected_tools": case.get("expected_tools", [])},
+                )
+        for case, result in zip(eval_set["cases"], results, strict=False):
             client.create_run(
                 name=case["id"],  # the golden cases key on id, not name
                 run_type="chain",
