@@ -60,3 +60,7 @@ local/
 # it commits that specific report with `git add -f` as evidence.
 # drift_baselines.json is state, not a run — it stays tracked.
 data/benchmarks/*.md
+
+# LangGraph Studio's local runtime state (the inmem dev server's
+# sessions/checkpoints — regenerated every `langgraph dev` run)
+.langgraph_api/
