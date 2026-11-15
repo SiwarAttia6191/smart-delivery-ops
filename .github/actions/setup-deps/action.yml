@@ -1,0 +1,56 @@
+name: 'Set up the Python dependency set'
+description: >-
+  One cached venv per (python-version, requirements-hash) instead of a fresh
+  pip install per job (#288 item 3): jobs install the same dependency set
+  ~6x per push today. On a cache hit the install is skipped entirely (pip
+  check keeps the hit honest); on a miss the venv is built and saved for
+  every later job on the same commit tree.
+inputs:
+  python-version:
+    description: 'Python version for the venv (the cache is keyed on it)'
+    required: false
+    default: '3.12'
+  extra-requirements:
+    description: >-
+      Optional additional requirement file(s) beyond requirements-dev.txt,
+      space-separated (e.g. "requirements-smoke.txt") — included in the
+      cache key and the install.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v7
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - uses: actions/cache@v4
+      id: venv
+      with:
+        path: ~/.venv
+        key: >-
+          venv-${{ runner.os }}-py${{ inputs.python-version }}-${{
+          hashFiles('requirements.txt', 'requirements-dev.txt') }}-${{
+          inputs.extra-requirements && hashFiles(inputs.extra-requirements) || 'core' }}
+
+    - name: Build the venv (cache miss)
+      if: steps.venv.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        python -m venv ~/.venv
+        ~/.venv/bin/pip install --quiet --upgrade pip
+        EXTRA_ARGS=""
+        for f in ${{ inputs.extra-requirements }}; do
+          EXTRA_ARGS="$EXTRA_ARGS -r $f"
+        done
+        ~/.venv/bin/pip install --quiet -r requirements-dev.txt $EXTRA_ARGS
+
+    - name: Sanity-check the restored venv (cache hit)
+      if: steps.venv.outputs.cache-hit == 'true'
+      shell: bash
+      run: ~/.venv/bin/pip check
+
+    - name: Put the venv on PATH
+      shell: bash
+      run: echo "$HOME/.venv/bin" >> "$GITHUB_PATH"
