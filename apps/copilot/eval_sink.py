@@ -56,6 +56,11 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 },
                 reference_dataset_id=dataset.id,
             )
+        # flush BEFORE the eval subprocess exits: the SDK ingests in a
+        # background thread that dies with the process — without this the
+        # runs are lost silently (the 21:26 eval proved it: dataset
+        # created, runs zero)
+        client.flush()
         logger.info("langsmith sink: %s cases logged under %s", len(results), dataset.name)
     except Exception as exc:  # noqa: BLE001 - telemetry must not break the eval
         logger.warning("langsmith sink unavailable (%s); eval results kept in MLflow only", exc)
