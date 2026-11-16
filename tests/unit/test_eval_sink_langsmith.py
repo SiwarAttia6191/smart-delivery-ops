@@ -82,16 +82,18 @@ class _FakeClient:
         outputs: dict,
         project_name: str,
         reference_dataset_id: str,
-        kwargs: dict | None = None,
+        **extra,
     ):
-        # the REAL 0.14.x contract: fire-and-forget, returns None — the
-        # sink mints the run id itself and passes it through kwargs
+        # the REAL 0.14.x contract: fire-and-forget, returns None, and the
+        # extra fields SPLAT into **kwargs (a literal `kwargs=` keyword
+        # would nest itself under a payload key named "kwargs" — the live
+        # first attempt proved it). The sink mints the run id itself.
         self.runs.append(
             {
                 "name": name,
                 "project_name": project_name,
                 "reference_dataset_id": reference_dataset_id,
-                "kwargs": kwargs or {},
+                "extra": extra,
                 "outputs": outputs,
             }
         )
@@ -199,7 +201,7 @@ def test_runs_land_in_the_experiment_tied_to_their_examples(monkeypatch):
         assert run["project_name"] == client.projects[0]["name"]
         assert run["reference_dataset_id"] is not None
         # every run is tied to the example seeded from the same question
-        assert run["kwargs"]["reference_example_id"] in {e.id for e in client.created_examples}
+        assert run["extra"]["reference_example_id"] in {e.id for e in client.created_examples}
     assert {r["name"] for r in client.runs} == {"case_a", "case_b"}
 
 
@@ -213,7 +215,7 @@ def test_verdict_becomes_per_case_feedback(monkeypatch):
     assert all(f["comment"] == "all checks passed" for f in client.feedback)
     # the feedback references the run ids the sink MINTED (create_run is
     # fire-and-forget on this SDK generation — it returns None)
-    minted = {r["kwargs"]["id"] for r in client.runs}
+    minted = {r["extra"]["id"] for r in client.runs}
     assert {f["run_id"] for f in client.feedback} == minted
 
 
@@ -224,6 +226,9 @@ def test_flush_happens_before_feedback(monkeypatch):
 
     assert "flush" in client.events and "feedback" in client.events
     assert client.events.index("flush") < client.events.index("feedback")
+    # the feedback rides the same background queue — a FINAL flush must
+    # follow the last feedback, or it dies with the process
+    assert client.events[-1] == "flush"
 
 
 def test_failing_case_feedback_names_the_checks_and_the_degradation(monkeypatch):
@@ -254,7 +259,7 @@ def test_existing_dataset_is_reused_and_examples_mapped(monkeypatch):
     assert client.created_datasets == []  # nothing re-created
     assert client.listed_examples
     assert len(client.projects) == 1  # the experiment is still per-run
-    assert all(r["kwargs"]["reference_example_id"] in {e.id for e in seeded} for r in client.runs)
+    assert all(r["extra"]["reference_example_id"] in {e.id for e in seeded} for r in client.runs)
 
 
 def test_langsmith_outage_never_fails_the_eval(monkeypatch, caplog):

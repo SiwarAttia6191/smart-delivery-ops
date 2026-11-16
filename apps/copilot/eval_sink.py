@@ -99,7 +99,10 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
         # None; a background thread ingests the payload) — so the sink
         # mints each run's id itself (the Runs API accepts a client id),
         # flushes the queue, and only then attaches feedback against the
-        # known ids: feedback for an un-ingested run would 404.
+        # known ids: feedback for an un-ingested run would 404. The extra
+        # fields SPLAT into **kwargs (passing a literal `kwargs=` keyword
+        # would nest itself under a payload key named "kwargs" — the
+        # live first attempt proved it: id and example link vanished).
         verdicts: list[tuple[str, dict]] = []
         for case, result in zip(eval_set["cases"], results, strict=False):
             run_kwargs: dict = {
@@ -121,7 +124,7 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 },
                 project_name=experiment_name,
                 reference_dataset_id=dataset.id,
-                kwargs=run_kwargs,
+                **run_kwargs,
             )
             verdicts.append((run_kwargs["id"], result))
         # flush: the runs must EXIST before feedback (an un-ingested
@@ -136,6 +139,9 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 score=1.0 if result.get("passed") else 0.0,
                 comment=_verdict_comment(result),
             )
+        # the feedback itself rides the same background queue — drain it
+        # again, or it dies with the process (feedback silently lost)
+        client.flush()
         logger.info(
             "langsmith sink: %s cases logged under experiment %s (pass rate %.2f)",
             len(results),
