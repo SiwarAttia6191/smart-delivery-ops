@@ -16,7 +16,9 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from core.config import get_settings
+from domain.city_config import load_city_config
 from domain.models import Order, OrderReview, OrderStatus, Restaurant
+from domain.services import fuel_service
 
 
 def snapshot(session: Session, restaurant: Restaurant) -> dict:
@@ -50,6 +52,30 @@ def snapshot(session: Session, restaurant: Restaurant) -> dict:
         .where(Order.restaurant_id == restaurant.id, OrderReview.tenant_id == restaurant.tenant_id)
     )
 
+    # fuel actuals (#user idea): the assigned driver's vehicle decides the
+    # burn per delivered order — bicycles contribute zero, honestly
+    snapshot_fuel: dict | None = None
+    from core.config import get_settings as _gs
+
+    config = load_city_config(_gs().city)
+    if config.fuel is not None:
+        liters_total = 0.0
+        cost_total = 0.0
+        co2_total = 0.0
+        for order in delivered:
+            vehicle = order.driver.vehicle if order.driver is not None else None
+            fuel = fuel_service.actual(config, order.distance_km, vehicle)
+            if fuel is not None:
+                liters_total += fuel["liters"]
+                cost_total += fuel["cost"]
+                co2_total += fuel["co2_kg"]
+        snapshot_fuel = {
+            "liters": round(liters_total, 2),
+            "cost": round(cost_total, 2),
+            "co2_kg": round(co2_total, 2),
+            "currency": config.fuel.currency,
+        }
+
     return {
         "restaurant_id": restaurant.id,
         "business_date": day_start_local.date().isoformat(),
@@ -57,4 +83,5 @@ def snapshot(session: Session, restaurant: Restaurant) -> dict:
         "revenue": round(sum(o.delivery_fee for o in delivered), 2),
         "avg_delivery_minutes": round(sum(minutes) / len(minutes), 1) if minutes else None,
         "rating_average": round(float(rating_average), 2) if rating_average is not None else None,
+        "fuel": snapshot_fuel,
     }
