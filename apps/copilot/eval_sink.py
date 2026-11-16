@@ -14,6 +14,7 @@ pipeline).
 
 import logging
 from datetime import UTC, datetime
+from uuid import uuid4
 
 from core.config import get_settings
 
@@ -94,16 +95,23 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 "pass_rate": round(pass_rate, 4),
             },
         )
+        # create_run is FIRE-AND-FORGET on this SDK generation (returns
+        # None; a background thread ingests the payload) — so the sink
+        # mints each run's id itself (the Runs API accepts a client id),
+        # flushes the queue, and only then attaches feedback against the
+        # known ids: feedback for an un-ingested run would 404.
+        verdicts: list[tuple[str, dict]] = []
         for case, result in zip(eval_set["cases"], results, strict=False):
             run_kwargs: dict = {
+                "id": str(uuid4()),
                 "metadata": {
                     "provider": result.get("provider"),
                     "degraded": result.get("degraded"),
-                }
+                },
             }
             if example_id := examples_by_question.get(case["question"]):
                 run_kwargs["reference_example_id"] = example_id
-            run = client.create_run(
+            client.create_run(
                 name=case["id"],  # the golden cases key on id, not name
                 run_type="chain",
                 inputs={"question": case["question"]},
@@ -115,17 +123,19 @@ def log_to_langsmith(eval_name: str, eval_set: dict, results: list[dict]) -> Non
                 reference_dataset_id=dataset.id,
                 kwargs=run_kwargs,
             )
+            verdicts.append((run_kwargs["id"], result))
+        # flush: the runs must EXIST before feedback (an un-ingested
+        # run_id 404s the feedback); this also drains the queue before
+        # the eval subprocess exits — a dead background thread loses runs
+        # silently (the 21:26 eval proved it: dataset created, runs zero)
+        client.flush()
+        for run_id, result in verdicts:
             client.create_feedback(
-                run.id,
+                run_id,
                 key="passed",
                 score=1.0 if result.get("passed") else 0.0,
                 comment=_verdict_comment(result),
             )
-        # flush BEFORE the eval subprocess exits: the SDK ingests in a
-        # background thread that dies with the process — without this the
-        # runs are lost silently (the 21:26 eval proved it: dataset
-        # created, runs zero)
-        client.flush()
         logger.info(
             "langsmith sink: %s cases logged under experiment %s (pass rate %.2f)",
             len(results),
