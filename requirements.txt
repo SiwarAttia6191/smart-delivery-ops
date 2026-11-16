@@ -1,5 +1,5 @@
 # Core API
-fastapi>=0.159.1
+fastapi>=0.162.6
 uvicorn[standard]>=0.54.0
 sqlalchemy>=2.1.8
 pydantic>=2.14.3
