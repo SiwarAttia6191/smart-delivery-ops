@@ -2,7 +2,7 @@
 fastapi>=0.159.1
 uvicorn[standard]>=0.54.0
 sqlalchemy>=2.1.8
-pydantic>=2.14.1
+pydantic>=2.14.3
 pydantic-settings>=2.16.1
 psycopg[binary]>=3.3.6
 # Schema ownership (Phase 5, #28): the ops DB is migrated by the Alembic
