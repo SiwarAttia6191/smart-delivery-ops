@@ -26,12 +26,6 @@ class _Project:
         self.name = name
 
 
-class _Run:
-    def __init__(self, name: str):
-        self.id = str(uuid.uuid4())
-        self.name = name
-
-
 class _FakeClient:
     """The slice of the langsmith Client the sink touches — nothing more."""
 
@@ -44,6 +38,7 @@ class _FakeClient:
         self.runs: list[dict] = []
         self.feedback: list[dict] = []
         self.flushed = False
+        self.events: list[str] = []  # the call-order log (flush vs feedback)
 
     def read_dataset(self, dataset_name: str):
         if self.existing_dataset is None:
@@ -89,7 +84,8 @@ class _FakeClient:
         reference_dataset_id: str,
         kwargs: dict | None = None,
     ):
-        run = _Run(name)
+        # the REAL 0.14.x contract: fire-and-forget, returns None — the
+        # sink mints the run id itself and passes it through kwargs
         self.runs.append(
             {
                 "name": name,
@@ -99,15 +95,18 @@ class _FakeClient:
                 "outputs": outputs,
             }
         )
-        return run
+        self.events.append("run")
+        return None
 
     def create_feedback(
         self, run_id: str, key: str, score: float | None = None, comment: str | None = None
     ):
         self.feedback.append({"run_id": run_id, "key": key, "score": score, "comment": comment})
+        self.events.append("feedback")
 
     def flush(self):
         self.flushed = True
+        self.events.append("flush")
 
 
 def _eval_set() -> dict:
@@ -212,6 +211,19 @@ def test_verdict_becomes_per_case_feedback(monkeypatch):
     assert scores == {1.0}  # both cases passed
     assert all(f["key"] == "passed" for f in client.feedback)
     assert all(f["comment"] == "all checks passed" for f in client.feedback)
+    # the feedback references the run ids the sink MINTED (create_run is
+    # fire-and-forget on this SDK generation — it returns None)
+    minted = {r["kwargs"]["id"] for r in client.runs}
+    assert {f["run_id"] for f in client.feedback} == minted
+
+
+def test_flush_happens_before_feedback(monkeypatch):
+    """Feedback for an un-ingested run 404s — the queue must drain first."""
+    client = _FakeClient()  # the fake logs call order into client.events
+    _run_sink(monkeypatch, client)
+
+    assert "flush" in client.events and "feedback" in client.events
+    assert client.events.index("flush") < client.events.index("feedback")
 
 
 def test_failing_case_feedback_names_the_checks_and_the_degradation(monkeypatch):
