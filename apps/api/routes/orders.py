@@ -38,6 +38,7 @@ def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
         coupon_code=payload.coupon_code,
         source=payload.source,
         dropoff_address=payload.dropoff_address,
+        priority=payload.priority,
     )
 
 

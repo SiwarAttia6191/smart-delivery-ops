@@ -1,6 +1,7 @@
 """Order schemas."""
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -39,6 +40,15 @@ class OrderCreate(BaseModel):
             "— rides the created event so the marts can split revenue per "
             "channel (the data a restaurant needs to decide which orders to "
             "keep on-platform)."
+        ),
+    )
+
+    priority: Literal["normal", "urgent"] = Field(
+        "normal",
+        description=(
+            "Dispatch priority (#276): urgent orders bias the driver matching "
+            "toward faster vehicles (the per-vehicle speed factor) and sort "
+            "first in the portal's incoming feed. Default normal."
         ),
     )
 
@@ -92,6 +102,7 @@ class OrderResponse(ORMModel):
     delivery_fee: float
     surge_multiplier: float
     eta_minutes: int
+    priority: str = "normal"
     created_at: datetime
     updated_at: datetime
     delivered_at: datetime | None

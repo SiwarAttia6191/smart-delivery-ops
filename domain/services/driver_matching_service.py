@@ -24,11 +24,20 @@ class MatchResult:
     distance_km: float
 
 
+# Urgent orders trade a little efficiency for speed (#276): each driver's
+# effective distance is scaled by their vehicle's speed factor, so an
+# urgent order takes the motorcycle slightly farther over the bicycle
+# slightly closer. Normal orders match unchanged (the factor is 1.0 in
+# spirit - the bias only engages for urgent). Tier-3 tuning knob.
+URGENT_SPEED_FACTOR = {"motorcycle": 0.85, "car": 1.0, "bicycle": 1.15}
+
+
 def find_nearest_driver(
     session: Session,
     pickup_lat: float,
     pickup_lon: float,
     vehicle: str | None = None,
+    order_priority: str = "normal",
     settings: "Settings | None" = None,
     provider: "DistanceProvider | None" = None,
 ) -> MatchResult | None:
@@ -48,6 +57,8 @@ def find_nearest_driver(
         distance = geo.resolve_distance(
             pickup_lat, pickup_lon, driver.latitude, driver.longitude, provider, settings
         )
+        if order_priority == "urgent":
+            distance *= URGENT_SPEED_FACTOR.get(driver.vehicle, 1.0)
         if best is None or distance < best.distance_km:
             best = MatchResult(driver=driver, distance_km=distance)
     return best

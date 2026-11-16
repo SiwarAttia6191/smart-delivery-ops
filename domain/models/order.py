@@ -57,6 +57,10 @@ class Order(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+    # dispatch priority (#276): normal | urgent - urgent orders bias the
+    # matching toward faster vehicles (the per-vehicle speed factor in
+    # driver_matching_service); the event payload carries it
+    priority: Mapped[str] = mapped_column(String(10), default="normal")
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     customer = relationship("Customer", lazy="selectin")

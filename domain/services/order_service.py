@@ -89,6 +89,7 @@ def create_order(
     coupon_code: str | None = None,
     source: str | None = None,
     dropoff_address: str | None = None,
+    priority: str = "normal",
 ) -> Order:
     customer = session.get(Customer, customer_id)
     if customer is None:
@@ -148,6 +149,7 @@ def create_order(
         customer=customer,
         restaurant=restaurant,
         status=OrderStatus.pending,
+        priority=priority,
         pickup_latitude=restaurant.latitude,
         pickup_longitude=restaurant.longitude,
         dropoff_latitude=dropoff_lat,
@@ -197,6 +199,8 @@ def create_order(
         # the geocoder resolved it to — the warehouse can later measure
         # geocoding precision against the coordinates actually used
         payload.update(geocode_note)
+    if priority == "urgent":
+        payload["priority"] = "urgent"  # null keys on normal orders are noise
     if source:
         # channel attribution (#226): marketplace vs first-party revenue
         # is the data the restaurant needs to decide which orders to keep
@@ -224,7 +228,11 @@ def assign_driver(session: Session, order_id: str, vehicle: str | None = None) -
         )
 
     match = driver_matching_service.find_nearest_driver(
-        session, order.pickup_latitude, order.pickup_longitude, vehicle
+        session,
+        order.pickup_latitude,
+        order.pickup_longitude,
+        vehicle,
+        order_priority=order.priority,
     )
     if match is None:
         raise NoDriverAvailableError("no eligible driver is currently available")
