@@ -20,7 +20,7 @@ DRIVER = {"name": "Karim", "vehicle": "motorcycle", "latitude": 36.8100, "longit
 
 class TestFuelEstimate:
     def test_quote_carries_the_fuel_estimate(self, authed_client):
-        customer = authed_client.post("/customers", json=CUSTOMER).json()
+        authed_client.post("/customers", json=CUSTOMER)
         restaurant = authed_client.post("/restaurants", json=RESTAURANT).json()
         quote = authed_client.post(
             "/pricing/quote",
@@ -53,6 +53,7 @@ class TestFuelActuals:
     def test_bicycle_burns_zero_honestly(self):
         config = load_city_config("tunis")
         fuel = fuel_service.actual(config, 10.0, "bicycle")
+        assert fuel is not None  # the tunis manifest declares fuel economics
         assert fuel["liters"] == 0.0
         assert fuel["cost"] == 0.0
         assert fuel["co2_kg"] == 0.0
@@ -61,6 +62,7 @@ class TestFuelActuals:
     def test_motorcycle_actual(self):
         config = load_city_config("tunis")
         fuel = fuel_service.actual(config, 10.0, "motorcycle")
+        assert fuel is not None
         assert fuel["liters"] == 0.35
         assert fuel["cost"] == round(0.35 * 2.5, 2)
 

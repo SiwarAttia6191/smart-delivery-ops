@@ -31,14 +31,18 @@ def estimate(config: CityConfig | None, distance_km: float) -> dict[str, Any] | 
     return _compute(config, distance_km, DEFAULT_VEHICLE, basis="estimate")
 
 
-def actual(config: CityConfig | None, distance_km: float, vehicle: str | None) -> dict[str, Any] | None:
+def actual(
+    config: CityConfig | None, distance_km: float, vehicle: str | None
+) -> dict[str, Any] | None:
     """The delivered truth: the assigned driver's vehicle decides the
     burn — a bicycle delivery's fuel cost is zero, which the totals show
     honestly instead of pretending every delivery burns gas."""
     return _compute(config, distance_km, vehicle or DEFAULT_VEHICLE, basis="actual")
 
 
-def _compute(config: CityConfig | None, distance_km: float, vehicle: str, basis: str) -> dict[str, Any] | None:
+def _compute(
+    config: CityConfig | None, distance_km: float, vehicle: str, basis: str
+) -> dict[str, Any] | None:
     if config is None or config.fuel is None:
         return None
     profile: FuelProfile = config.fuel

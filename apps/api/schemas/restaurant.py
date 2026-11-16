@@ -31,3 +31,7 @@ class SalesSnapshot(BaseModel):
     revenue: float
     avg_delivery_minutes: float | None = None
     rating_average: float | None = None  # rides null until #216 lands
+    # the delivered-day fuel actuals (#274): liters/cost/CO2 summed over the
+    # day's deliveries via each assigned driver's vehicle — absent when the
+    # city manifest declares no fuel economics
+    fuel: dict | None = None
