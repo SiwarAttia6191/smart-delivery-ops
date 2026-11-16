@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 
 from apps.api.deps import get_db, require_writer
 from apps.api.schemas.order import RestaurantReviews
-from apps.api.schemas.restaurant import RestaurantCreate, RestaurantResponse, SalesSnapshot
+from apps.api.schemas.restaurant import (
+    RestaurantCreate,
+    RestaurantResponse,
+    SalesSnapshot,
+    WeeklyReport,
+)
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
 from domain.services import review_service, sales_service, tenant_service
@@ -97,6 +102,24 @@ def restaurant_qr(restaurant_id: int, url: str = Query(...), db: Session = Depen
         media_type="image/svg+xml",
         headers={"Cache-Control": "public, max-age=86400"},
     )
+
+
+@router.get("/{restaurant_id}/weekly-report", response_model=WeeklyReport)
+def get_weekly_report(restaurant_id: int, db: Session = Depends(get_db)) -> WeeklyReport:
+    """The Monday-morning artifact (#275): the last 7 business days for the
+    caller's restaurant — per-day delivered orders, revenue and average
+    delivery minutes, plus the week's fuel burn and rating average. A live
+    ops-slice like the snapshot; the mart version is the analytical path.
+    Another tenant's restaurant is the uniform 404."""
+    tid = tenant_service.context_tenant_id(db)
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.tenant_id == tid)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise NotFoundError(f"restaurant {restaurant_id} not found")
+    return WeeklyReport(**sales_service.weekly_report(db, restaurant))
 
 
 @router.get("/{restaurant_id}/reviews", response_model=RestaurantReviews)

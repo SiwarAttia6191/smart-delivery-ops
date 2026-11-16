@@ -117,6 +117,14 @@
       </section>
 
       <section class="card">
+        <h2>Weekly report <span class="badge-new" id="report-period"></span></h2>
+        <p class="hint">The last 7 business days — the Monday-morning artifact
+          (<code>GET /restaurants/{id}/weekly-report</code>). Print it, email it, act on it.</p>
+        <div id="report-empty" class="empty">No delivered orders in the window.</div>
+        <div id="report"></div>
+      </section>
+
+      <section class="card">
         <h2>Your ordering link <span class="badge-new">print me</span></h2>
         <p class="hint">The direct channel (#230): this link opens the storefront with YOUR restaurant
           preselected — put the QR on tables, receipts, packaging or your Instagram bio. Every order
@@ -317,7 +325,34 @@
         $("sales-strip").hidden = true;  // a snapshot hiccup never breaks the order feed
       }
       await loadReviews();
+      await loadWeeklyReport();
       loadQr();
+    }
+
+    // the Monday-morning artifact (#275): the last 7 business days
+    async function loadWeeklyReport() {
+      try {
+        const report = await api("/restaurants/" + state.restId + "/weekly-report");
+        $("report-period").textContent = report.period_start + " → " + report.period_end;
+        $("report-empty").hidden = report.delivered_orders > 0;
+        let html =
+          '<div class="order-card"><div class="sum"><span><strong>' + report.delivered_orders +
+          "</strong> delivered</span><span><strong>" + report.revenue.toFixed(2) + "</strong> revenue</span>" +
+          (report.avg_delivery_minutes != null ? "<span><strong>" + report.avg_delivery_minutes + "</strong> min avg</span>" : "") +
+          (report.fuel ? "<span><strong>" + report.fuel.cost + " " + report.fuel.currency + "</strong> fuel · " + report.fuel.co2_kg + " kg CO₂</span>" : "") +
+          (report.rating_average != null ? "<span>★ " + report.rating_average.toFixed(1) + "</span>" : "") +
+          "</div></div>";
+        for (const row of report.per_day) {
+          html += '<div class="order-card"><div class="sum"><span>' + row.date +
+            "</span><span>" + row.orders + " delivered</span><span>" + row.revenue.toFixed(2) +
+            "</span>" + (row.avg_delivery_minutes != null ? "<span>" + row.avg_delivery_minutes + " min avg</span>" : "") +
+            "</div></div>";
+        }
+        $("report").innerHTML = html;
+      } catch {
+        $("report-empty").hidden = false;
+        $("report").innerHTML = "";
+      }
     }
 
     // the restaurant's reviews (#216): newest first with the running average
@@ -361,6 +396,7 @@
       await loadMenu();
       await loadOrders();
       await loadReviews();
+      await loadWeeklyReport();
       loadQr();
     });
 

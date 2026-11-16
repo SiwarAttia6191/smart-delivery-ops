@@ -35,3 +35,26 @@ class SalesSnapshot(BaseModel):
     # day's deliveries via each assigned driver's vehicle — absent when the
     # city manifest declares no fuel economics
     fuel: dict | None = None
+
+
+class WeeklyDayRow(BaseModel):
+    date: str
+    orders: int
+    revenue: float
+    avg_delivery_minutes: float | None = None
+
+
+class WeeklyReport(BaseModel):
+    """The Monday-morning artifact (#275): the last N business days for
+    one restaurant — per-day rows plus the totals, from the live tables."""
+
+    restaurant_id: int
+    period_start: str
+    period_end: str
+    days_requested: int
+    delivered_orders: int
+    revenue: float
+    avg_delivery_minutes: float | None = None
+    fuel: dict | None = None
+    rating_average: float | None = None
+    per_day: list[WeeklyDayRow]
