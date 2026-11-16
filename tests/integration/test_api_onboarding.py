@@ -8,7 +8,30 @@ actually has — restaurants, dispatchable drivers, menu coverage, the
 copilot's knowledge corpus, staff accounts.
 """
 
+import urllib.request
+
+import pytest
+
+from core.config import get_settings
 from domain.models import Tenant, User
+from tests.integration.test_api_imports import _Response
+
+
+@pytest.fixture(autouse=True)
+def fake_geocoder(monkeypatch):
+    """The readiness tests import restaurants, so the geocoder must stay
+    offline and unpaced — the import-test suite pins the same seam. Live
+    Nominatim rate-limited one parallel CI leg into a flaky failure (the
+    pydantic bump's run tripped it on 3.13); hermetic since."""
+    monkeypatch.setattr(get_settings(), "import_geocode_pace_seconds", 0)
+
+    def fake_urlopen(request, timeout=None):
+        query = request.full_url.split("q=")[1].split("&")[0]
+        from urllib.parse import unquote_plus
+
+        return _Response(unquote_plus(query))
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
 
 
 class TestStaffIssuance:
