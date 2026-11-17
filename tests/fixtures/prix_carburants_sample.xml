@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<pdv_liste>
+  <pdv id="75000100" latitude="484500" longitude="271234" cp="75001" pop="R">
+    <adresse>12 Rue de Rivoli</adresse>
+    <ville>Paris</ville>
+    <prix nom="Gazole" maj="2026-11-15T10:00:00" valeur="1.85"/>
+    <prix nom="SP95" maj="2026-11-15T10:00:00" valeur="1.89"/>
+  </pdv>
+  <pdv id="75000101" latitude="484600" longitude="271300" cp="75002" pop="A">
+    <adresse>24 Boulevard Sebastopol</adresse>
+    <ville>Paris</ville>
+    <prix nom="Gazole" maj="2026-11-15T11:30:00" valeur="1.79"/>
+    <prix nom="SP98" maj="2026-11-14T08:00:00" valeur="1.95"/>
+  </pdv>
+  <pdv id="75000102" latitude="484700" longitude="271400" cp="75003" pop="R">
+    <adresse>5 Place de la Republique</adresse>
+    <ville>Paris</ville>
+    <prix nom="SP95" maj="2026-11-13T09:00:00" valeur="1.92"/>
+  </pdv>
+  <pdv id="75000103" latitude="484800" longitude="271500" cp="75004" pop="R">
+    <adresse>78 Rue de Turbigo</adresse>
+    <ville>Paris</ville>
+  </pdv>
+</pdv_liste>

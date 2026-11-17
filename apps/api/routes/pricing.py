@@ -75,9 +75,24 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         discount = promotion_service.apply_discount(coupon, quote.breakdown.total)
         applied_code = coupon.code
     # the self-deliverer's margin view (#user idea via the competitive scan):
-    # what fuel THIS delivery would burn on the deployment's dominant vehicle
+    # what fuel THIS delivery would burn on the deployment's dominant vehicle,
+    # priced at the NEAREST CACHED STATION to the restaurant (V2, #274) when
+    # the cache holds stations for the country — the manifest's official
+    # constant remains the fallback (the V1 truth)
     config = load_city_config(get_settings().city)
     fuel = fuel_service.estimate(config, quote.distance_km)
+    station = fuel_service.nearest_station_price(db, config, pickup_lat, pickup_lon)
+    if fuel is not None and station is not None:
+        fuel["price"] = station["price"]
+        fuel["cost"] = round(fuel["liters"] * station["price"], 2)
+        fuel["currency"] = station["currency"]
+        fuel["station"] = station["station_name"]
+        fuel["station_distance_km"] = station["distance_km"]
+        fuel["price_source"] = (
+            f"station ({station['updated_at'].date().isoformat() if hasattr(station['updated_at'], 'date') else station['updated_at']})"[
+                :100
+            ]
+        )
 
     return QuoteResponse(
         distance_km=quote.distance_km,

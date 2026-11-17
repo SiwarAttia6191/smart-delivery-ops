@@ -9,6 +9,7 @@ from domain.models.deployment_state import INCARNATION_KEY, LEGACY_INCARNATION, 
 from domain.models.driver import Driver
 from domain.models.driver_event import DriverEvent
 from domain.models.driver_relay_dead_letter import DriverRelayDeadLetter
+from domain.models.fuel_station import FuelPriceStation
 from domain.models.geocode_cache import GeocodeCache
 from domain.models.knowledge_chunk import KnowledgeChunk
 from domain.models.memory import Memory
@@ -40,6 +41,7 @@ __all__ = [
     "GeocodeCache",
     "KnowledgeChunk",
     "Memory",
+    "FuelPriceStation",
     "OrderReview",
     "MenuItem",
     "Order",
