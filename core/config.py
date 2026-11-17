@@ -169,6 +169,10 @@ class Settings(BaseSettings):
     # placeholder "xxx" wires the path end to end before a real key lands.
     openai_api_key_file: str | None = None
     openai_api_key: str | None = None
+    # Any OpenAI-COMPATIBLE endpoint (#121): the default (None) is the real
+    # OpenAI API; setting it points the whole chain at a compatible
+    # gateway (Apinex, OpenRouter, a local vLLM...) with the same key.
+    openai_base_url: str | None = None
 
     # ── Stripe test-mode provider (#215) ───────────────────────
     # PAYMENT_PROVIDER=stripe activates it; the TEST key arrives as a

@@ -42,8 +42,20 @@ def build_provider_chain() -> list[Any]:
         return [build_scripted_provider()]
     if settings.copilot_provider == "openai":
         key = settings.openai_api_key or ""
-        chain: list[Any] = [OpenAIProvider(api_key=key, model=settings.copilot_model)]
+        # base_url (#121): the same OpenAI-compatible chain works against
+        # any compatible gateway — both rungs inherit it
+        chain: list[Any] = [
+            OpenAIProvider(
+                api_key=key, model=settings.copilot_model, base_url=settings.openai_base_url
+            )
+        ]
         if settings.copilot_model_mini != settings.copilot_model:
-            chain.append(OpenAIProvider(api_key=key, model=settings.copilot_model_mini))
+            chain.append(
+                OpenAIProvider(
+                    api_key=key,
+                    model=settings.copilot_model_mini,
+                    base_url=settings.openai_base_url,
+                )
+            )
         return chain
     raise ValueError(f"unknown copilot provider '{settings.copilot_provider}'")
