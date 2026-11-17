@@ -23,24 +23,36 @@ PYTHON = "/home/airflow/ml-venv/bin/python"
 
 # The copilot deps (langgraph, openai, fastapi for the shared factory)
 # live in the same ml-venv as the other ML tasks — see Dockerfile.airflow.
-_EVAL_ENV = (
-    f"DATABASE_URL=postgresql+psycopg2://smartops:smartops@postgres:5432/smart_delivery_ops "
-    f"MLFLOW_TRACKING_URI={MLFLOW_URI} "
-    f"MLFLOW_HTTP_REQUEST_MAX_RETRIES=2 "
-    f"OPENAI_API_KEY_FILE=/run/secrets/openai_api_key "
-    f"COPILOT_PROVIDER={os.environ.get('COPILOT_PROVIDER', 'scripted')} "
-    f"COPILOT_MODEL={os.environ.get('COPILOT_MODEL', 'gpt-4o-mini')} "
-    f"COPILOT_MODEL_MINI={os.environ.get('COPILOT_MODEL_MINI', 'gpt-4o-mini')} "
-    # LangSmith (#214): the eval sink's second destination. The key rides
-    # the scheduler's own environment (LANGSMITH_API_KEY) - never inline
-    # here; the agent address routes the traces to the registered agent.
-    f"LANGSMITH_API_KEY={os.environ.get('LANGSMITH_API_KEY', '')} "
-    f"LANGSMITH_TRACING=true "
-    f"LANGSMITH_ENDPOINT={os.environ.get('LANGSMITH_ENDPOINT', 'https://eu.api.smith.langchain.com')} "
-    f"LANGSMITH_AGENT_ID={os.environ.get('LANGSMITH_AGENT_ID', 'smart-delivery-copilot')} "
-    f"LANGSMITH_AGENT_ENVIRONMENT={os.environ.get('LANGSMITH_AGENT_ENVIRONMENT', 'local')} "
-    f"EVAL_SINK={os.environ.get('EVAL_SINK', 'both')} "
-)
+#
+# The subprocess env is passed via BashOperator's env= parameter, NOT the
+# command string: the task log echoes the full command, and the earlier
+# inline pattern logged the LangSmith key in plaintext (#214 fix). Values
+# are read at parse time — the scheduler parses fresh per run.
+
+
+def _eval_env() -> dict[str, str]:
+    return {
+        "DATABASE_URL": "postgresql+psycopg2://smartops:smartops@postgres:5432/smart_delivery_ops",
+        "MLFLOW_TRACKING_URI": MLFLOW_URI,
+        "MLFLOW_HTTP_REQUEST_MAX_RETRIES": "2",
+        "OPENAI_API_KEY_FILE": "/run/secrets/openai_api_key",
+        "COPILOT_PROVIDER": os.environ.get("COPILOT_PROVIDER", "scripted"),
+        "COPILOT_MODEL": os.environ.get("COPILOT_MODEL", "gpt-4o-mini"),
+        "COPILOT_MODEL_MINI": os.environ.get("COPILOT_MODEL_MINI", "gpt-4o-mini"),
+        # LangSmith (#214): the eval sink's second destination. The key rides
+        # the scheduler's own environment; the agent address routes the
+        # traces to the registered agent.
+        "LANGSMITH_API_KEY": os.environ.get("LANGSMITH_API_KEY", ""),
+        "LANGSMITH_TRACING": "true",
+        "LANGSMITH_ENDPOINT": os.environ.get(
+            "LANGSMITH_ENDPOINT", "https://eu.api.smith.langchain.com"
+        ),
+        "LANGSMITH_AGENT_ID": os.environ.get("LANGSMITH_AGENT_ID", "smart-delivery-copilot"),
+        "LANGSMITH_AGENT_ENVIRONMENT": os.environ.get("LANGSMITH_AGENT_ENVIRONMENT", "local"),
+        "EVAL_SINK": os.environ.get("EVAL_SINK", "both"),
+    }
+
+
 _GIT_SHA = f"GIT_SHA=$(git --git-dir={GIT_DIR} rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
 with DAG(
@@ -62,10 +74,11 @@ with DAG(
     copilot_eval = BashOperator(
         task_id="copilot_eval",
         bash_command=(
-            f"cd {ML_HOME} && {_GIT_SHA} {_EVAL_ENV} "
+            f"cd {ML_HOME} && {_GIT_SHA} "
             f"{PYTHON} ml/evals/run_copilot_eval.py "
             f"--eval-set data/evals/copilot_eval_set.json --min-pass-rate 0.8"
         ),
+        env=_eval_env(),
     )
 
     # Copilot health (#212): the degradation digest over the copilot
@@ -76,9 +89,10 @@ with DAG(
     copilot_health = BashOperator(
         task_id="copilot_health",
         bash_command=(
-            f"cd {ML_HOME} && {_GIT_SHA} {_EVAL_ENV} "
+            f"cd {ML_HOME} && {_GIT_SHA} "
             f"{PYTHON} ml/evals/copilot_health.py --days 7 --threshold 0.34"
         ),
+        env=_eval_env(),
     )
 
     copilot_eval >> copilot_health
