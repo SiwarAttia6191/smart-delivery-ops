@@ -18,6 +18,7 @@ invention.
 from typing import Any
 
 from domain.city_config import CityConfig, FuelProfile
+from domain.rules import geo
 
 CO2_KG_PER_LITER_GASOLINE = 2.31
 DEFAULT_VEHICLE = "motorcycle"  # the fleet's dominant kind — the quote-time basis
@@ -38,6 +39,51 @@ def actual(
     burn — a bicycle delivery's fuel cost is zero, which the totals show
     honestly instead of pretending every delivery burns gas."""
     return _compute(config, distance_km, vehicle or DEFAULT_VEHICLE, basis="actual")
+
+
+def nearest_station_price(
+    session: Any, config: CityConfig | None, latitude: float, longitude: float
+) -> dict[str, Any] | None:
+    """The nearest cached station's price for the deployment's fuel kind
+    (#274 V2): a bounding box (+-0.05 degrees, ~5.5 km of latitude) over
+    the station cache, then haversine top-1 — no external calls at
+    request time. Returns None when the cache holds no stations for the
+    country: the manifest constant covers the estimate (the V1 truth)."""
+    if config is None or config.fuel is None or not config.fuel.country_code:
+        return None
+    from domain.models import FuelPriceStation
+
+    kind = config.fuel.station_fuel_kind or "diesel"
+    stations = (
+        session.query(FuelPriceStation)
+        .filter(
+            FuelPriceStation.country == config.fuel.country_code,
+            FuelPriceStation.fuel_kind == kind,
+            FuelPriceStation.latitude.between(latitude - 0.05, latitude + 0.05),
+            FuelPriceStation.longitude.between(longitude - 0.07, longitude + 0.07),
+        )
+        .all()
+    )
+    best = None
+    best_distance: float | None = None
+    for station in stations:
+        distance = geo.haversine_km(latitude, longitude, station.latitude, station.longitude)
+        if best_distance is None or distance < best_distance:
+            best, best_distance = station, distance
+    if best is None or best_distance is None:
+        return None
+    return {
+        "station_id": best.station_id,
+        "station_name": best.name,
+        "latitude": best.latitude,
+        "longitude": best.longitude,
+        "fuel_kind": best.fuel_kind,
+        "price": best.price,
+        "currency": best.currency,
+        "updated_at": best.updated_at,
+        "source": best.source,
+        "distance_km": round(best_distance, 3),
+    }
 
 
 def _compute(

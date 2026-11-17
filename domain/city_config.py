@@ -72,6 +72,12 @@ class FuelProfile(BaseModel):
     price_per_liter: float = Field(gt=0)
     currency: str = Field(min_length=1, max_length=8)
     source: str = Field(min_length=1)
+    # the ISO country code keys the station-level price-source adapter
+    # ("fr" = the prix-carburants adapter, ...) — empty = manifest-only V1
+    country_code: str = Field("", max_length=2)
+    # the fuel kind the delivery vehicles burn, as the source names it
+    # (France: "Gazole" / "SP95" / "E10" / "SP98" / "E85" / "GPLc")
+    station_fuel_kind: str = Field("", max_length=20)
     consumption_l_per_100km: dict[str, float] = Field(
         description="vehicle kind -> liters per 100 km (bicycle entries mean zero fuel)"
     )

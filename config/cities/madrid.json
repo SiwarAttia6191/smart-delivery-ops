@@ -157,6 +157,8 @@
       "motorcycle": 3.5,
       "car": 7.0,
       "bicycle": 0.0
-    }
+    },
+    "country_code": "es",
+    "station_fuel_kind": "Gazole"
   }
 }
