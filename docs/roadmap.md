@@ -46,7 +46,7 @@
 
 **Goal:** show operational value.
 
-- [ ] Streamlit dashboard (`apps/dashboard`)
+- [x] Streamlit dashboard (top-level `dashboard/` — serves on :8501)
 - [ ] KPIs: order volume, fulfillment rate, avg delivery time, driver
       utilization, revenue per zone, demand by hour/region
 - [ ] Drill-down views and forecasting screens
