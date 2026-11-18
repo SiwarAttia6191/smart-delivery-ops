@@ -7,10 +7,12 @@ error), and tenant scoping (another tenant's restaurant is the uniform
 404).
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
+from core.config import get_settings
 from domain.models import Order
 
 CUSTOMER = {"name": "Aziza", "phone": "+216 20 000 000", "latitude": 36.8381, "longitude": 10.2385}
@@ -63,7 +65,12 @@ def test_multi_day_math_and_fuel_join(authed_client: TestClient, db):
     report = authed_client.get(f"/restaurants/{restaurant['id']}/weekly-report").json()
     assert report["delivered_orders"] == 2
     assert report["revenue"] == round(today_fee + old_fee, 2)
-    assert report["period_end"] == datetime.now(UTC).date().isoformat()
+    # the report's window runs on the BUSINESS-TIMEZONE grain (Africa/Tunis
+    # by default) — asserting the UTC date here fails whenever CI runs in
+    # the 23:00-24:00 UTC window, where Tunis is already tomorrow (#320's
+    # flake). Mirror the service's own grain.
+    expected_end = datetime.now(ZoneInfo(get_settings().business_timezone)).date().isoformat()
+    assert report["period_end"] == expected_end
     days = {row["date"]: row for row in report["per_day"]}
     assert len(days) >= 2  # both business days appear as rows
     assert all(row["orders"] >= 1 for row in days.values())
