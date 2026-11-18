@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Track your order — Smart Delivery Ops</title>
+  <meta name="description" content="Shareable order tracking over the live Smart Delivery Ops API: status timeline, ETA and the actual road route the dispatcher computed — no login needed, the order id is the capability token." />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    .track-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
+    .track-lead { max-width: 62ch; color: var(--muted, #5b6472); }
+    .api-bar { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; margin: 1.5rem 0 2.25rem; }
+    .api-bar input { flex: 1 1 260px; }
+    .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #b33; display: inline-block; }
+    .status-dot.ok { background: #2e9e5b; }
+    .status-hint { font-size: .85rem; color: var(--muted, #5b6472); }
+    .banner { display: none; margin: 0 0 1.25rem; padding: .7rem 1rem; border-radius: 10px;
+              background: #fdeceb; color: #8c2f28; border: 1px solid #f3c2be; font-size: .9rem; }
+    .banner.show { display: block; }
+    .banner.info { background: #eef4fd; color: #274b7a; border-color: #c4d8f2; }
+    .order-head { display: flex; flex-wrap: wrap; gap: .6rem 1.25rem; align-items: baseline; margin-bottom: .5rem; }
+    .order-head code { background: #262b36; color: #d7dce6; padding: .12rem .4rem; border-radius: 6px; font-size: .82rem; }
+    .status-badge { padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700;
+                    text-transform: uppercase; letter-spacing: .04em; background: #e8ebf0; color: #454d59; }
+    .status-badge[data-status="created"] { background: #eef4fd; color: #274b7a; }
+    .status-badge[data-status="paid"] { background: #eef4fd; color: #274b7a; }
+    .status-badge[data-status="assigned"] { background: #f3ecfd; color: #5b3a99; }
+    .status-badge[data-status="in_transit"] { background: #fdf3e4; color: #8a5a13; }
+    .status-badge[data-status="delivered"] { background: #e7f6ec; color: #1c7c46; }
+    .status-badge[data-status="cancelled"] { background: #fdeceb; color: #8c2f28; }
+    .kpi-row { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: .75rem 0 0; }
+    .kpi-row div { font-size: .92rem; }
+    .kpi-row b { display: block; font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+    .kpi-row span { color: var(--muted, #5b6472); font-size: .8rem; }
+    .events { list-style: none; margin: .75rem 0 0; padding: 0; font-size: .86rem; }
+    .events li { padding: .3rem 0; border-bottom: 1px dashed #e3e6ec; display: flex; gap: .75rem; }
+    .events time { color: var(--muted, #5b6472); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+    #map { height: 380px; border-radius: 12px; }
+    .map-note { font-size: .82rem; color: var(--muted, #5b6472); margin: .5rem 0 0; }
+    .track-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
+    .track-foot a { color: #8ab4ff; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.5rem">
+    <div class="track-main" style="padding-bottom:0">
+      <p class="eyebrow">Shareable tracking · the order id is the key</p>
+      <h1>Track your order</h1>
+      <p class="track-lead">
+        The status timeline, the price you paid, and the actual road route the dispatcher
+        computed — straight from the live API. No login: whoever holds the order id can watch it,
+        so share the link from checkout and it just works.
+      </p>
+      <div class="api-bar">
+        <input id="api-base" type="text" spellcheck="false" aria-label="API base URL"
+               placeholder="API base — same origin (leave as is)" hidden />
+        <span class="status-dot" id="api-dot" role="img" aria-label="API status"></span>
+        <span class="status-hint" id="api-hint">checking…</span>
+        <input id="order-id" type="text" spellcheck="false" aria-label="Order id"
+               placeholder="Order id (or open this page as ?order=…)" style="flex:2 1 340px" />
+        <button class="btn btn-primary" id="btn-track" type="button">Track</button>
+      </div>
+      <div class="banner" id="banner"></div>
+    </div>
+  </header>
+
+  <main class="track-main" style="padding-top:0">
+    <div class="steps" style="display:grid; gap:1.25rem">
+      <section class="card step" aria-labelledby="h-status">
+        <h2 id="h-status">Status</h2>
+        <div class="order-head">
+          <span class="status-badge" id="order-status" data-status="">—</span>
+          <code id="order-id-label">no order loaded</code>
+        </div>
+        <div class="kpi-row">
+          <div><b id="kpi-eta">—</b><span>ETA (minutes)</span></div>
+          <div><b id="kpi-distance">—</b><span>distance (km)</span></div>
+          <div><b id="kpi-fee">—</b><span>delivery fee</span></div>
+        </div>
+        <ul class="events" id="events"></ul>
+      </section>
+
+      <section class="card step" aria-labelledby="h-map">
+        <h2 id="h-map">The route</h2>
+        <p class="hint" style="font-size:.82rem;color:var(--muted,#5b6472);margin:.35rem 0 .75rem">
+          The dispatcher captured this road geometry from OSRM when the order was created —
+          pickup to dropoff, the way the courier actually rides it.
+        </p>
+        <div id="map" aria-label="Order route map"></div>
+        <p class="map-note" id="map-note">Load an order to draw its route.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="track-foot">
+    Part of the <a href="demos.html">Smart Delivery Ops demo surfaces</a> ·
+    <a href="ordering-demo.html">order something first</a>
+  </footer>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script type="module">
+    // The same surface family as the storefront: same origin (the API serves
+    // this page), the ?api= override only for the cross-origin demo case.
+    const apiInput = $("api-base");
+    if (new URLSearchParams(location.search).get("api")) {
+      apiInput.value = new URLSearchParams(location.search).get("api");
+      apiInput.hidden = false;
+    }
+    function $(id) { return document.getElementById(id); }
+
+    let map = null;
+    let routeLayer = null;
+    let pollTimer = null;
+    const ACTIVE = new Set(["created", "paid", "assigned", "in_transit"]);
+
+    function showBanner(text, info = false) {
+      const banner = $("banner");
+      banner.textContent = text;
+      banner.className = "banner show" + (info ? " info" : "");
+    }
+    function hideBanner() { $("banner").className = "banner"; }
+
+    async function api(path) {
+      const response = await fetch(apiInput.value.replace(/\/$/, "") + path);
+      if (!response.ok) {
+        let detail = response.status + " " + response.statusText;
+        try {
+          const body = await response.json();
+          detail = body.detail || body.error?.message || detail;
+        } catch { /* non-JSON error body */ }
+        const error = new Error(detail);
+        error.status = response.status;
+        throw error;
+      }
+      return response.json();
+    }
+
+    async function checkApi() {
+      const dot = $("api-dot");
+      const hint = $("api-hint");
+      try {
+        await api("/health");
+        dot.className = "status-dot ok";
+        hint.textContent = "API reachable";
+      } catch {
+        dot.className = "status-dot";
+        hint.textContent = "API unreachable — is the stack up?";
+      }
+    }
+
+    function eventNote(event) {
+      const p = event.payload || {};
+      if (event.event_type === "created") {
+        let note = " · fee " + Number(p.delivery_fee).toFixed(2);
+        if (p.coupon_code) note += " · " + p.coupon_code + " −" + Number(p.coupon_discount).toFixed(2);
+        return note;
+      }
+      if (event.event_type === "paid" && p.provider_ref) {
+        return " · receipt " + p.provider_ref + " (" + Number(p.amount).toFixed(2) + ")";
+      }
+      return "";
+    }
+
+    function renderStatus(order) {
+      const badge = $("order-status");
+      badge.dataset.status = order.status;
+      badge.textContent = order.status.replace("_", " ");
+      $("order-id-label").textContent = order.id.slice(0, 8) + "…";
+      $("kpi-eta").textContent = order.status === "delivered" ? "done" : "≈ " + order.eta_minutes;
+      $("kpi-distance").textContent = Number(order.distance_km).toFixed(2);
+      $("kpi-fee").textContent = Number(order.delivery_fee).toFixed(2);
+      $("events").innerHTML = order.events
+        .map((event) => {
+          const time = new Date(event.created_at).toLocaleTimeString();
+          return "<li><time>" + time + "</time><span><b>" + event.event_type + "</b>" +
+            eventNote(event) + "</span></li>";
+        })
+        .join("");
+    }
+
+    function drawRoute(geojson) {
+      if (!window.L) throw new Error("Leaflet failed to load.");
+      const coords = geojson.features?.[0]?.geometry?.coordinates ||
+        geojson.geometry?.coordinates || null;
+      if (!map) {
+        map = window.L.map("map");
+        window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap contributors",
+        }).addTo(map);
+        routeLayer = window.L.layerGroup().addTo(map);
+      }
+      routeLayer.clearLayers();
+      if (coords && coords.length >= 2) {
+        const line = coords.map(([lon, lat]) => [lat, lon]);
+        window.L.polyline(line, { color: "#274b7a", weight: 4 }).addTo(routeLayer);
+        const first = line[0];
+        const last = line[line.length - 1];
+        window.L.marker(last).addTo(routeLayer).bindTooltip("dropoff");
+        window.L.marker(first).addTo(routeLayer).bindTooltip("pickup");
+        map.fitBounds(line, { padding: [24, 24] });
+        $("map-note").textContent = "Road geometry captured at creation (OSRM) — " +
+          coords.length + " points.";
+      } else {
+        throw new Error("no coordinates in the route payload");
+      }
+    }
+
+    function drawDropoffOnly(order) {
+      // The honest degrade (#205 posture): geometry missing (OSRM was down
+      // at creation) — show the dropoff pin and say so, never fake a route.
+      if (!window.L) throw new Error("Leaflet failed to load.");
+      if (!map) {
+        map = window.L.map("map");
+        window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap contributors",
+        }).addTo(map);
+        routeLayer = window.L.layerGroup().addTo(map);
+      }
+      routeLayer.clearLayers();
+      const drop = [order.dropoff_latitude, order.dropoff_longitude];
+      window.L.marker(drop).addTo(routeLayer).bindTooltip("dropoff");
+      map.setView(drop, 14);
+      $("map-note").textContent =
+        "No road geometry was captured for this order (OSRM unavailable at creation) — showing the dropoff only.";
+    }
+
+    async function track(orderId) {
+      hideBanner();
+      try {
+        const order = await api("/orders/" + encodeURIComponent(orderId));
+        renderStatus(order);
+        if (!pollTimer && ACTIVE.has(order.status)) {
+          pollTimer = setInterval(() => track(orderId), 4000); // the storefront's cadence
+        }
+        if (!ACTIVE.has(order.status) && pollTimer) {
+          clearInterval(pollTimer);
+          pollTimer = null;
+        }
+        try {
+          const geojson = await api("/orders/" + encodeURIComponent(orderId) + "/route");
+          drawRoute(geojson);
+        } catch (routeError) {
+          drawDropoffOnly(order);
+        }
+      } catch (error) {
+        if (error.status === 404) {
+          showBanner("Order not found — check the id. The order id is the tracking key.");
+        } else {
+          showBanner("Tracking failed: " + error.message);
+        }
+      }
+    }
+
+    $("btn-track").addEventListener("click", () => {
+      const orderId = $("order-id").value.trim();
+      if (!orderId) { showBanner("Paste an order id (or open this page as ?order=…)"); return; }
+      history.replaceState(null, "", "?order=" + encodeURIComponent(orderId));
+      track(orderId);
+    });
+
+    checkApi();
+    const fromUrl = new URLSearchParams(location.search).get("order");
+    if (fromUrl) {
+      $("order-id").value = fromUrl;
+      track(fromUrl);
+    }
+  </script>
+</body>
+</html>
