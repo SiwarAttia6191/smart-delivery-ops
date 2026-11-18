@@ -18,6 +18,7 @@ docs/*
 !docs/decisions
 !docs/decisions/*.md
 !docs/ordering-demo.html
+!docs/track.html
 !docs/restaurant-portal.html
 !docs/onboarding-wizard.html
 !docs/demos.html

@@ -18,6 +18,7 @@ no separate web server (`make api` or `docker compose up -d api`):
 |---|---|---|
 | Demos hub (the index) | `/storefront/demos.html` | — |
 | Customer storefront (quote → coupon → order → pay → track) | `/storefront/ordering-demo.html` | `ops/ops` to order |
+| Order tracking (shareable, no login — the order id is the key) | `/storefront/track.html?order=<uuid>` | — |
 | Restaurant portal (menu CRUD, live incoming orders) | `/storefront/restaurant-portal.html` | `ops/ops` |
 | Onboarding wizard (map preview → import → staff → checklist) | `/storefront/onboarding-wizard.html` | `ops/ops` |
 | Swagger UI (every endpoint, click-to-try) | `/docs` | token for writes |
@@ -61,6 +62,7 @@ live surge derivation works without the ML pipeline.
 |---|---|
 | Onboarding wizard | `http://localhost:8011/storefront/onboarding-wizard.html` |
 | Customer storefront | `http://localhost:8011/storefront/ordering-demo.html` |
+| Order tracking | `http://localhost:8011/storefront/track.html?order=<uuid>` |
 | Restaurant portal | `http://localhost:8011/storefront/restaurant-portal.html` |
 | Swagger UI | `http://localhost:8011/docs` |
 
