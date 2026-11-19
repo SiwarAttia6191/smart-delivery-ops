@@ -102,6 +102,20 @@
 .pricing-note h3 { font-family: "Space Grotesk", sans-serif; margin-bottom: 0.6rem; }
 .pricing-note p { color: var(--muted); font-size: 0.95rem; line-height: 1.6; }
 
+    /* ROI calculator (#314): pure client-side arithmetic over the two
+       inputs the owner already knows - orders and basket - against the
+       commission percentage the marketplaces quote. */
+    .roi-grid { display: grid; gap: 1rem; margin-top: 1.25rem; }
+    @media (min-width: 760px) { .roi-grid.two { grid-template-columns: 1fr 1fr; } }
+    .roi-row { display: flex; flex-direction: column; gap: .3rem; }
+    .roi-row label { font-size: .86rem; color: var(--muted); display: flex; justify-content: space-between; }
+    .roi-row label b { color: #7cd0ff; font-variant-numeric: tabular-nums; }
+    .roi-out { margin-top: 1.25rem; padding: 1.1rem 1.25rem; border-radius: 14px;
+               background: rgba(124, 108, 255, 0.08); border: 1px solid rgba(124, 108, 255, 0.3); }
+    .roi-out .big { font-family: "Space Grotesk", sans-serif; font-size: 1.7rem; font-weight: 700;
+                    font-variant-numeric: tabular-nums; }
+    .roi-out .note { color: var(--muted); font-size: .88rem; margin-top: .35rem; line-height: 1.5; }
+    .roi-out .keep { color: #1c7c46; }
 .trust {
   display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; margin-top: 2.2rem;
 }
@@ -333,6 +347,42 @@
       </p>
     </div>
 
+    <!-- ROI calculator (#314): the 25-40% pitch as a moment of
+         self-persuasion. The tier price is quote-based, so the owner
+         types their own quoted fee and sees the crossover. -->
+    <div class="card" style="margin-top:1.5rem">
+      <h3>The math, before the call</h3>
+      <p style="color:var(--muted);font-size:.92rem;line-height:1.5">
+        Move the sliders to your real numbers. This is the money the marketplaces'
+        commission model takes from you — and where a flat fee beats it.
+      </p>
+      <div class="roi-grid two">
+        <div class="roi-row">
+          <label>Orders per month <b id="roi-orders-out">400</b></label>
+          <input id="roi-orders" type="range" min="50" max="3000" step="10" value="400" />
+        </div>
+        <div class="roi-row">
+          <label>Average basket <b id="roi-basket-out">12</b></label>
+          <input id="roi-basket" type="range" min="5" max="60" step="1" value="12" />
+        </div>
+        <div class="roi-row">
+          <label>Marketplace commission <b id="roi-pct-out">30%</b></label>
+          <input id="roi-pct" type="range" min="25" max="40" step="1" value="30" />
+        </div>
+        <div class="roi-row">
+          <label>Your flat monthly fee (the price we quote you) <b id="roi-fee-out">150</b></label>
+          <input id="roi-fee" type="range" min="0" max="600" step="5" value="150" />
+        </div>
+      </div>
+      <div class="roi-out">
+        <div class="big">The marketplace takes <span id="roi-monthly">1,440</span> / month
+          <span style="font-size:1rem;color:var(--muted)">(<span id="roi-yearly">17,280</span> / year)</span></div>
+        <p class="note"><span id="roi-compare">With a flat fee of 150/month you keep <b class="keep">1,290/month</b> —
+          the flat fee pays for itself at any volume above 42 orders/month.</span>
+          <span id="roi-no-fee" hidden>Set the fee we quoted you to see your savings and the crossover point.</span></p>
+      </div>
+    </div>
+
     <div class="trust">
       <span>Your data is walled off from every other customer — enforced by the database</span>
       <span>Every order change is logged: always answer "who changed this, and when"</span>
@@ -504,6 +554,58 @@ const revealTimer = setInterval(revealLoop, 400);
       target.scrollIntoView({ behavior: "smooth", block: "start" });
       history.pushState(null, "", link.getAttribute("href"));
     });
+  </script>
+  <script type="module">
+    // ROI calculator (#314): pure client-side arithmetic over the four
+    // inputs the owner already knows. No API, no stored state - the same
+    // numbers a prospect recomputes by hand, live on the page.
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => Math.round(n).toLocaleString("en-US");
+    const S = { orders: 400, basket: 12, pct: 30, fee: 150 };
+
+    function recompute() {
+      const monthly = S.orders * S.basket * (S.pct / 100);
+      $("roi-orders-out").textContent = fmt(S.orders);
+      $("roi-basket-out").textContent = fmt(S.basket);
+      $("roi-pct-out").textContent = S.pct + "%";
+      $("roi-fee-out").textContent = fmt(S.fee);
+      $("roi-monthly").textContent = fmt(monthly);
+      $("roi-yearly").textContent = fmt(monthly * 12);
+      const crossover = S.basket * (S.pct / 100) > 0
+        ? Math.ceil(S.fee / (S.basket * (S.pct / 100)))
+        : Infinity;
+      if (S.fee <= 0) {
+        $("roi-compare").hidden = true;
+        $("roi-no-fee").hidden = false;
+        return;
+      }
+      $("roi-compare").hidden = false;
+      $("roi-no-fee").hidden = true;
+      const keep = monthly - S.fee;
+      if (keep > 0) {
+        $("roi-compare").innerHTML =
+          "With a flat fee of " + fmt(S.fee) + "/month you keep <b class=\"keep\">" +
+          fmt(keep) + "/month</b> - the flat fee pays for itself at any volume above " +
+          fmt(crossover) + " orders/month.";
+      } else {
+        $("roi-compare").innerHTML =
+          "At " + fmt(S.orders) + " orders/month the commission (" + fmt(monthly) +
+          ") is BELOW that flat fee - the math only favors a flat fee above " +
+          fmt(crossover) + " orders/month. That is exactly the kind of number the " +
+          "first call settles.";
+      }
+    }
+
+    for (const [id, key] of [
+      ["roi-orders", "orders"], ["roi-basket", "basket"],
+      ["roi-pct", "pct"], ["roi-fee", "fee"],
+    ]) {
+      $(id).addEventListener("input", (event) => {
+        S[key] = Number(event.target.value);
+        recompute();
+      });
+    }
+    recompute();
   </script>
 </body>
 </html>
