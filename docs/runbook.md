@@ -189,3 +189,4 @@ again.
 
 | date | dump | tenants/orders live→restored | wall time | findings |
 |---|---|---|---|---|
+| 2026-11-20 | 17.4 MB | 2/17986 → 2/17986 (orders, events, restaurants identical) | ≈1 min end-to-end | 102 duplicate-constraint warnings (constraints defined both in CREATE TABLE and Alembic ALTERs) — cosmetic, row counts identical; dedupe follow-up filed |
