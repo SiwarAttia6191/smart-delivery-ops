@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from apps.api.rate_limit import RateLimitMiddleware
 from apps.api.routes import (
     analytics,
     auth,
@@ -92,6 +93,9 @@ def create_app() -> FastAPI:
     # Tenant scoping (#36): pin the JWT's tid claim for the request so
     # writes resolve their owner and Postgres RLS filters reads/writes.
     app.add_middleware(TenantScopeMiddleware)
+    # added AFTER TenantScope so it runs BEFORE it: a flood is rejected
+    # before any RLS/database work happens (#315).
+    app.add_middleware(RateLimitMiddleware)
 
     @app.exception_handler(DomainError)
     async def domain_error_handler(request: Request, exc: DomainError) -> JSONResponse:

@@ -27,6 +27,16 @@ DEV-ONLY — see `.env.example`). Demo users: `python scripts/create_user.py --d
 UI's dev credentials). Unknown user and wrong password return the same
 401, so the endpoint can't be used to enumerate accounts.
 
+**Rate limiting (#315):** every path class is guarded by a per-client token bucket —
+`/auth/token` **10/min** (doubled by the failed-login lockout: 5 wrong passwords inside
+10 minutes locks the client out for the rest of the window, even with the right password),
+`POST /pricing/quote` **60/min**, the import paths **30/min**, everything else **240/min**.
+Denials are **429** `rate_limited` in the standard error envelope with a `Retry-After`
+header naming the wait. `/health`, the API docs and the static surfaces are exempt, so
+monitoring and humans browsing the pages never throttle. Knobs live on the settings
+(`rate_limit_*`); behind a reverse proxy flip `rate_limit_trust_proxy` so the client key
+comes from X-Forwarded-For.
+
 ## Health
 
 | Method | Path | Description |

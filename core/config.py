@@ -174,6 +174,26 @@ class Settings(BaseSettings):
     # gateway (Apinex, OpenRouter, a local vLLM...) with the same key.
     openai_base_url: str | None = None
 
+    # Rate limiting on the public surface (#315): the demo posture leaves
+    # GETs and the pricing quote open, so a per-IP token bucket guards
+    # them before the deployment faces the internet (#167). Requests per
+    # MINUTE per client per path class; the login bucket doubles as the
+    # brute-force guard next to the failed-login lockout below.
+    rate_limit_enabled: bool = True
+    rate_limit_general_rpm: int = 240
+    rate_limit_login_rpm: int = 10
+    rate_limit_quote_rpm: int = 60
+    rate_limit_import_rpm: int = 30
+    # Failed-login lockout: this many wrong passwords inside the window
+    # locks the client out of /auth/token for the rest of the window.
+    login_backoff_threshold: int = 5
+    login_backoff_window_seconds: int = 600
+    # Trust X-Forwarded-For for the client key. OFF by default: a spoofed
+    # header would otherwise rotate the bucket key at will. Turn it on
+    # only behind a proxy that overwrites the header (the VPS's reverse
+    # proxy when #167 lands).
+    rate_limit_trust_proxy: bool = False
+
     # ── Stripe test-mode provider (#215) ───────────────────────
     # PAYMENT_PROVIDER=stripe activates it; the TEST key arrives as a
     # Docker secret (STRIPE_API_KEY_FILE) like every other credential.
