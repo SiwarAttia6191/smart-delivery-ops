@@ -59,6 +59,35 @@ def require_writer(claims: dict[str, Any] = Depends(current_claims)) -> dict[str
     return claims
 
 
+def require_customer(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
+    """Guard for the customer-owned surfaces (#309): the token must be a
+    CUSTOMER token carrying the customer id (cid). Staff tokens are
+    rejected here by design — a customer's order history is customer-
+    scoped, not staff-readable through this route."""
+    if claims.get("role") != "customer" or claims.get("cid") is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Customer role required",
+        )
+    return claims
+
+
+def require_order_creator(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
+    """POST /orders accepts two caller kinds (#309): STAFF (ops/admin,
+    ordering on behalf of any customer — the operator's own flow) and a
+    CUSTOMER token (which may only ever order for itself). The route
+    enforces the self-ordering rule against the returned kind."""
+    role = claims.get("role", "")
+    if role_can_write(role):
+        return {"kind": "staff", "claims": claims}
+    if role == "customer" and claims.get("cid") is not None:
+        return {"kind": "customer", "customer_id": int(claims["cid"])}
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Role '{role}' may not place orders",
+    )
+
+
 def require_admin(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
     """Guard for platform-administration endpoints (tenant onboarding, #36):
     only the admin role — ops writers and viewers of ONE tenant must not

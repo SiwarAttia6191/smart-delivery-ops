@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db, require_writer
+from apps.api.deps import get_db, require_order_creator, require_writer
 from apps.api.schemas.order import (
     OrderCreate,
     OrderResponse,
@@ -25,9 +25,17 @@ router = APIRouter(prefix="/orders", tags=["orders"])
     "",
     response_model=OrderResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_writer)],
 )
-def create_order(payload: OrderCreate, db: Session = Depends(get_db)):
+def create_order(
+    payload: OrderCreate,
+    db: Session = Depends(get_db),
+    caller: dict = Depends(require_order_creator),
+):
+    # Self-ordering enforcement (#309): a customer token may only ever
+    # create orders for ITSELF — the payload's customer_id is overridden,
+    # never trusted. Staff callers keep the on-behalf-of flow.
+    if caller["kind"] == "customer":
+        payload.customer_id = caller["customer_id"]
     return order_service.create_order(
         db,
         customer_id=payload.customer_id,

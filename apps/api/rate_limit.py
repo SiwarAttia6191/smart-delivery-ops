@@ -52,6 +52,10 @@ def _rpm_for(path: str, method: str) -> int | None:
         return settings.rate_limit_login_rpm
     if path == QUOTE_PATH and method == "POST":
         return settings.rate_limit_quote_rpm
+    # the customer-OTP login flow (#309): the same brute-force guard as
+    # /auth/token - a 6-digit code against 10 guesses/minute per client
+    if path in ("/customers/otp", "/customers/otp/verify") and method == "POST":
+        return settings.rate_limit_login_rpm
     if path.startswith(IMPORT_PREFIX) and method in ("POST", "PATCH"):
         return settings.rate_limit_import_rpm
     if path.startswith(EXEMPT_PREFIXES):
