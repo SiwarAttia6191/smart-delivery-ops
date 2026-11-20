@@ -79,6 +79,36 @@ def _ensure_coupon(session, tenant_id: int) -> bool:
     return True
 
 
+def _ensure_driver_user(session) -> bool:
+    """The courier's own login (#311): username `driver1` / password
+    `driver1` bound to the fleet's FIRST driver row — the demo's
+    courier identity for the driver job view. Dev-only credentials like
+    the admin/ops trio."""
+    from core.security import hash_password
+    from domain.models import User
+
+    driver = session.query(Driver).order_by(Driver.id).first()
+    if driver is None:
+        return False
+    existing = session.query(User).filter_by(username="driver1").one_or_none()
+    if existing is not None:
+        if existing.driver_id != driver.id:
+            existing.driver_id = driver.id
+            session.commit()
+        return True
+    session.add(
+        User(
+            username="driver1",
+            password_hash=hash_password("driver1"),
+            role="driver",
+            tenant_id=driver.tenant_id,
+            driver_id=driver.id,
+        )
+    )
+    session.commit()
+    return True
+
+
 def _ensure_dispatchable_driver(session) -> int:
     """The first restaurant needs ONE available driver outside its door —
     the backfill leaves drivers offline, and an honest dispatcher correctly
@@ -167,11 +197,13 @@ def main() -> None:
         users = _ensure_users(session)
         coupon = _ensure_coupon(session, tenant_id)
         driver = _ensure_dispatchable_driver(session)
+        driver_user = _ensure_driver_user(session)
         forecasts, zones = _seed_forecasts(session)
 
         print(
             f"demo seed: users +{users} · coupon {'created' if coupon else 'present'} · "
-            f"driver {'ready' if driver else 'n/a'} · {forecasts} forecast rows "
+            f"driver {'ready' if driver else 'n/a'} · driver login "
+            f"{'ready' if driver_user else 'n/a'} · {forecasts} forecast rows "
             f"across {zones} zones"
         )
     finally:

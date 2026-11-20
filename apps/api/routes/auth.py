@@ -43,6 +43,7 @@ def issue_token(
             user.role,
             tenant_id=user.tenant_id,
             tenant_slug=tenant.slug if tenant else None,
+            driver_id=user.driver_id,
         ),
         "token_type": "bearer",
     }

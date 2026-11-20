@@ -31,6 +31,13 @@ class User(Base):
     # doesn't belong to. users is deliberately NOT an RLS table: auth runs
     # before a tenant is known, and username is globally unique.
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), index=True, default=1)
+    # the driver binding (#311): a role="driver" user IS a fleet member —
+    # the did claim comes from here, so a driver token can only act on
+    # orders assigned to THEIR driver row. Nullable: staff users ride
+    # without one.
+    driver_id: Mapped[int | None] = mapped_column(
+        ForeignKey("drivers.id"), index=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
