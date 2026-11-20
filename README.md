@@ -25,7 +25,7 @@ in plain language and narrates incidents when something breaks.
 
 | Domain | What it does |
 |---|---|
-| 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order; after delivery the customer **rates the order** (1–5 stars + comment, one per order — database-enforced) and the restaurant sees its reviews and running average in the portal; the customer's browser **notifies on every transition** (permission at place-time, zero dependencies) |
+| 📦 **Order management** | Create orders, track the full lifecycle (`pending → assigned → in_transit → delivered / cancelled`), immutable event log per order; after delivery the customer **rates the order** (1–5 stars + comment, one per order — database-enforced) and the restaurant sees its reviews and running average in the portal; the customer's browser **notifies on every transition** (permission at place-time, zero dependencies); the order id doubles as a **shareable no-login tracking key** — a dedicated page draws the actual OSRM road route on a map |
 | 📡 **Event streaming** | Transactional outboxes → Kafka (`orders.events` and `drivers.events`) → warehouse raw layer with per-incarnation primary-key dedupe (a rebuilt ops database can never collide with an older incarnation's ids) — at-least-once end to end |
 | 📍 **Driver dispatch** | Geolocation-aware nearest-driver matching with vehicle filters and live availability heartbeats |
 | 💸 **Dynamic pricing** | Distance-based fees with demand-surge tiers, minimum-fee floor, full price breakdown for auditability; per-tenant **coupon codes** (`POST /coupons`) redeem at checkout — the fee is discounted, the counter ticks, the audit line rides the order event; **loyalty points** (#217) accrue per delivered order (1/unit) and redeem through points-funded coupons — the balance rides the customer record and can never go negative; dropoff can be a **typed address** (`dropoff_address` on quote and order — Nominatim resolves it, `geocode_cache` remembers it forever, city facts shared across tenants; unresolvable = 422, provider down = 503); every quote shows the delivery's **estimated fuel cost and CO₂** — the city's official price × the real distance × the vehicle's consumption (#274) |
@@ -142,6 +142,12 @@ DATABASE_URL="postgresql+psycopg://smartops:$(cat secrets/db_password.txt | tr -
 
 Then the storefront is at `http://localhost:${DEMO_API_PORT:-8010}/storefront/ordering-demo.html`, seeded with the demo sign-in trio, the `STOREDEMO10` coupon, a dispatchable driver and 24h of forecasts. `scripts/seed_demo.py` is idempotent — the same command re-tops-up a running demo and is the nightly-reset body on the hosted deployment (decision record [0004](docs/decisions/0004-live-public-demo.md)).
 
+**Backups**: `deploy/backup_demo.sh` (demo box, 03:10) and `deploy/backup_main.sh`
+(the main tenant-data database, 03:20) each keep the last 7 timestamped dumps; the
+quarterly **restore drill** — restore the newest dump into a throwaway container, verify
+row counts against the live database, log the run — is worked and timed in
+[`docs/runbook.md`](docs/runbook.md) (#316).
+
 Building it also fixed a **fresh-install gap in the main stack**: nothing created the `sdo_app` runtime role the api connects as — every deployment's volume had it only from manual setup, so a brand-new `docker compose up` crash-looped the api on authentication. The migrate one-shot now runs `scripts/bootstrap_roles.py` (role created-if-absent, password synced from the mounted secret, grants applied) before the Alembic chain.
 
 ## 🎮 Try it live — Swagger walkthrough
@@ -156,7 +162,10 @@ itself at **http://localhost:8010/storefront** once the stack is up (also at
 `docs/ordering-demo.html`) — is a minimal
 customer face over the same API: pick a customer and restaurant, quote the fee
 (coupon codes included), sign in as the demo `ops` user, place the order, then
-assign a driver and watch the lifecycle events arrive in real time.
+assign a driver and watch the lifecycle events arrive in real time. The order id doubles
+as a **shareable tracking key**: `/storefront/track.html?order=<uuid>` — status timeline,
+ETA and the actual OSRM road route drawn on a map, no login, polling every 4 seconds until
+the order lands (#310).
 
 **0 · Authorize** — mutating endpoints need a JWT (#28): click the green
 **Authorize** button, log in with the demo `ops` / `ops` credentials
@@ -620,6 +629,13 @@ stack ships with **Prometheus** (rules for outbox backlog, relay staleness,
 ETA-model fallback), **Grafana** (provisioned ops dashboard, anonymous view),
 and **Alertmanager** (routed alerts with RelayStale inhibiting OutboxBacklog) —
 see [`docs/runbook.md`](docs/runbook.md), "When something pages".
+
+The public surface is **rate-limited from day one** (#315): a per-IP token bucket per
+path class — login 10/min (doubled by a failed-login lockout: 5 wrong passwords in
+10 minutes locks the client out for the window), quote 60/min, imports 30/min,
+everything else 240/min — with **429 `rate_limited`** in the standard error envelope
+and a `Retry-After` naming the wait. Health, API docs and the static surfaces are
+exempt, so monitoring and human browsing never throttle.
 
 ## 🗂️ Project structure
 
