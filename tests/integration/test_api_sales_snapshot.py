@@ -6,7 +6,7 @@ BUSINESS day), empty state (zeros and nulls, not an error), and scoping
 (another tenant's restaurant reads as not found — the uniform 404).
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
