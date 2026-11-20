@@ -145,6 +145,35 @@
         <p class="hint" id="place-note" hidden></p>
       </section>
 
+      <section class="card step" aria-labelledby="h-cust3">
+        <h2 id="h-cust3">3b · Or sign in as the customer</h2>
+        <p class="hint">A real customer orders as THEMSELVES — phone + one-time code, no operator
+          credentials (#309). The token is customer-scoped: it can place orders for this customer
+          and read their own history, nothing else. Demo mode has no SMS, so the code shows here.</p>
+        <div class="field-grid two">
+          <div class="field">
+            <label for="cust-phone"><span>Phone (the checkout one)</span></label>
+            <input id="cust-phone" type="tel" placeholder="+216 …" />
+          </div>
+          <div class="field">
+            <label for="cust-code"><span>One-time code</span></label>
+            <input id="cust-code" type="text" inputmode="numeric" maxlength="6" placeholder="6 digits" />
+          </div>
+        </div>
+        <div class="flow-actions">
+          <button class="btn btn-ghost btn-sm" id="btn-cust-otp" type="button">Send code</button>
+          <button class="btn btn-primary btn-sm" id="btn-cust-verify" type="button">Verify &amp; sign in</button>
+          <button class="btn btn-ghost btn-sm" id="btn-cust-out" type="button" hidden>Sign out</button>
+          <span class="who" id="cust-who"></span>
+        </div>
+        <p class="hint" id="cust-otp-note" hidden></p>
+        <div id="my-orders-box" hidden>
+          <p class="hint" style="margin:.6rem 0 .3rem">My orders — live from
+            <code>GET /customers/me/orders</code>:</p>
+          <ul class="events" id="my-orders"></ul>
+        </div>
+      </section>
+
       <section class="card step" aria-labelledby="h-track">
         <h2 id="h-track">4 · Track the lifecycle</h2>
         <p class="hint">Polled from <code>GET /orders/{id}</code> every few seconds — the same event
@@ -199,7 +228,7 @@
     // live drive): an empty same-origin input read as a broken white bar
     if (params.get("api")) apiInput.hidden = false;
 
-    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null };
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null, custToken: null, custName: null, custId: null };
 
     const $ = (id) => document.getElementById(id);
     const banner = $("banner");
@@ -212,7 +241,10 @@
 
     async function api(path, options = {}) {
       const headers = { ...(options.headers || {}) };
-      if (state.token) headers.Authorization = "Bearer " + state.token;
+      // explicit token wins: the customer session (#309) rides beside the
+      // staff one, whichever the caller asks for
+      const bearer = options.token ?? state.token;
+      if (bearer) headers.Authorization = "Bearer " + bearer;
       if (options.json !== undefined) {
         headers["Content-Type"] = "application/json";
         options.body = JSON.stringify(options.json);
@@ -384,12 +416,77 @@
       }
     }
 
+    // ── customer identity (#309): phone OTP → a customer-scoped session ──
+    async function custOtp() {
+      hideBanner();
+      const phone = $("cust-phone").value.trim();
+      if (!phone) { showBanner("Type the phone the order used."); return; }
+      try {
+        const body = await api("/customers/otp", { method: "POST", json: { phone } });
+        const note = $("cust-otp-note");
+        note.hidden = false;
+        note.innerHTML = "Demo mode — no SMS, so here is the code: <b>" + body.dev_otp +
+          "</b> (expires in " + body.expires_in + "s). A real deployment texts it instead.";
+      } catch (error) {
+        showBanner("Code send failed: " + error.message);
+      }
+    }
+
+    async function custVerify() {
+      hideBanner();
+      const phone = $("cust-phone").value.trim();
+      const code = $("cust-code").value.trim();
+      if (!phone || !code) { showBanner("Phone and code both needed."); return; }
+      try {
+        const body = await api("/customers/otp/verify", { method: "POST", json: { phone, code } });
+        state.custToken = body.access_token;
+        state.custName = body.customer.name;
+        state.custId = body.customer.id;
+        $("cust-who").textContent = "customer: " + body.customer.name + " (#" +
+          body.customer.id + " · " + body.customer.loyalty_points + " pts)";
+        $("btn-cust-out").hidden = false;
+        $("my-orders-box").hidden = false;
+        refreshMyOrders();
+      } catch (error) {
+        showBanner("Verify failed: " + error.message);
+      }
+    }
+
+    function custOut() {
+      state.custToken = null;
+      state.custName = null;
+      state.custId = null;
+      $("cust-who").textContent = "";
+      $("btn-cust-out").hidden = true;
+      $("my-orders-box").hidden = true;
+      $("cust-otp-note").hidden = true;
+    }
+
+    async function refreshMyOrders() {
+      // customer-scoped by the cid claim; each order links its shareable
+      // tracking page (#310) - the two surfaces compose here
+      try {
+        const orders = await api("/customers/me/orders", { token: state.custToken });
+        $("my-orders").innerHTML = orders
+          .map((o) => {
+            const time = new Date(o.created_at).toLocaleTimeString();
+            return "<li><time>" + time + "</time><span><b>" + o.status.replace("_", " ") +
+              "</b> · fee " + Number(o.delivery_fee).toFixed(2) +
+              ' · <a href="track.html?order=' + o.id + '">track ↗</a></span></li>';
+          })
+          .join("");
+      } catch { /* the panel stays stale - a banner here would be noise */ }
+    }
+
     async function placeOrder() {
       hideBanner();
       if (!state.customers.length) { showBanner("Load the catalog first (check the API)."); return; }
-      // channel attribution (#226): this page IS the first-party channel
+      // channel attribution (#226): this page IS the first-party channel.
+      // Customer-signed (#309): the token decides the customer - the
+      // payload's customer_id is overridden server-side, never trusted.
+      const usingCustomer = !!state.custToken;
       const payload = {
-        customer_id: Number($("cust").value),
+        customer_id: usingCustomer ? state.custId : Number($("cust").value),
         restaurant_id: Number($("rest").value),
         ...dropoffFields(),
         source: state.source || "storefront",
@@ -399,7 +496,11 @@
       // fee HERE and ticks the counter — the quote was only a preview
       if ($("coupon").value.trim()) payload.coupon_code = $("coupon").value.trim();
       try {
-        const order = await api("/orders", { method: "POST", json: payload });
+        const order = await api("/orders", {
+          method: "POST",
+          json: payload,
+          token: usingCustomer ? state.custToken : undefined,
+        });
         // the permission prompt is requested HERE — after the user placed an
         // order, never on page load (#218 acceptance)
         if ("Notification" in window && Notification.permission === "default") {
@@ -407,6 +508,7 @@
         }
         state.lastStatus = null;  // the first render of the new order never notifies
         showOrder(order);
+        if (usingCustomer) refreshMyOrders();
         $("place-note").hidden = false;
         $("place-note").textContent = "Order " + order.id + " placed — fee " + order.delivery_fee.toFixed(2) +
           " · ETA " + order.eta_minutes + " min. Tracking below.";
@@ -578,6 +680,9 @@
 
     $("btn-quote").addEventListener("click", quote);
     $("btn-signin").addEventListener("click", signin);
+    $("btn-cust-otp").addEventListener("click", custOtp);
+    $("btn-cust-verify").addEventListener("click", custVerify);
+    $("btn-cust-out").addEventListener("click", custOut);
     $("btn-place").addEventListener("click", placeOrder);
     // pay returns a RECEIPT, not the order — settle, then re-read the order
     // so the paid event (with its sbx_ reference) lands in the timeline
