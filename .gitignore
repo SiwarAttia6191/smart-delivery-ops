@@ -64,3 +64,6 @@ data/benchmarks/*.md
 # LangGraph Studio's local runtime state (the inmem dev server's
 # sessions/checkpoints — regenerated every `langgraph dev` run)
 .langgraph_api/
+
+# DB dumps (tenant data - never commit; cron writes here via deploy/backup_*.sh)
+backups/
