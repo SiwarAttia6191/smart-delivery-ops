@@ -24,12 +24,20 @@ and index.html's demos hub get `https://<demo-domain>/storefront/ordering-demo.h
 | `reset_demo.py` (in `scripts/`) | the nightly reset: truncate the day's orders/events/payments, zero coupon counters, re-seed idempotently |
 | `.github/workflows/deploy-demo.yml` | one-click redeploy from the Actions tab after the repo secrets (`DEMO_HOST`/`DEMO_USER`/`DEMO_SSH_KEY`/`DEMO_DOMAIN`) are set — inert until then |
 
-## Backups (#193)
+## Backups (#193 + #316)
 
-`deploy/backup_demo.sh` — a timestamped `pg_dump` of the demo database,
-keeping the last 7; cron it daily (`10 3 * * *`). The restore drill:
-`docker compose -f docker-compose.demo.yml exec -T postgres psql -U smartops -d smart_delivery_ops < backups/<file>.sql` into a FRESH
-`demo_pgdata` volume (stop the unit, `docker volume rm`, up, restore).
+- `deploy/backup_demo.sh` — a timestamped `pg_dump` of the DEMO database,
+  keeping the last 7; cron it daily (`10 3 * * *`). The demo restore
+  path: `docker compose -f docker-compose.demo.yml exec -T postgres
+  psql -U smartops -d smart_delivery_ops < backups/<file>.sql` into a
+  FRESH `demo_pgdata` volume (stop the unit, `docker volume rm`, up,
+  restore).
+- `deploy/backup_main.sh` — the same pattern for the MAIN ops database
+  (the one holding tenant data); cron it daily (`20 3 * * *`). The
+  restore drill for it is worked and timed in
+  `docs/runbook.md -> "Backups & the restore drill"`: restore the
+  newest dump into a throwaway container, verify row counts against
+  the live database, log the run in the drill table.
 
 ## Deliberate posture (decision 0004)
 

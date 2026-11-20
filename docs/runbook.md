@@ -140,3 +140,52 @@ Since Phase C (#122), every Airflow alert also carries a narrated summary
 `apps/copilot/narrator.py`; `SDO_NARRATOR=0` disables it. The narrator
 serves the Airflow path; Prometheus-side alerts page through Alertmanager
 (the Alertmanager webhook can post to the same bridge in a future round).
+
+
+## Backups & the restore drill (#316)
+
+Two pg_dump scripts, one per stack, both keeping the last 7 dumps:
+
+| stack | script | cron | writes |
+|---|---|---|---|
+| demo unit (docker-compose.demo.yml) | `deploy/backup_demo.sh` | `10 3 * * *` | `backups/demo_<stamp>.sql` |
+| main ops stack (tenant data) | `deploy/backup_main.sh` | `20 3 * * *` | `backups/main_<stamp>.sql` |
+
+The main dump is the one that matters: it holds tenant data (decision
+0005's 7-day rolling posture).
+
+### The quarterly restore drill (worked, timed)
+
+A backup nobody has restored is a hope, not a backup. The drill
+restores the newest main dump into a throwaway container and verifies
+it — run it quarterly and log each run below.
+
+```bash
+# 1. dump (or reuse the newest cron dump)
+./deploy/backup_main.sh
+
+# 2. throwaway postgres (never touches the live stack)
+docker run --rm -d --name sdo_restore_drill -e POSTGRES_PASSWORD=drill postgres:16
+sleep 5
+
+# 3. restore into it
+docker exec -i sdo_restore_drill psql -U postgres -c "CREATE DATABASE drill" >/dev/null
+docker exec -i sdo_restore_drill psql -U postgres -d drill < backups/main_<stamp>.sql
+
+# 4. verify: row counts must match the live database
+LIVE=$(docker compose exec -T postgres psql -U smartops -d smart_delivery_ops -tAc   "SELECT (SELECT count(*) FROM tenants) || '/' || (SELECT count(*) FROM orders)")
+DRILL=$(docker exec sdo_restore_drill psql -U postgres -d drill -tAc   "SELECT (SELECT count(*) FROM tenants) || '/' || (SELECT count(*) FROM orders)")
+echo "live=$LIVE restored=$DRILL"   # must be identical
+
+# 5. destroy the throwaway
+docker rm -f sdo_restore_drill
+```
+
+**Acceptance: `live` and `restored` identical, wall time recorded.** A
+drill that finds drift or fails is a bug — file it, fix it, drill
+again.
+
+### Drill log
+
+| date | dump | tenants/orders live→restored | wall time | findings |
+|---|---|---|---|---|
