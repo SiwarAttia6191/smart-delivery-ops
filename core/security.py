@@ -18,7 +18,9 @@ from core.config import get_settings
 
 # Role hierarchy: a writer check passes for ops AND admin; "viewer" exists
 # so read-closing has a role to grant without new migrations later.
-ROLES = ("viewer", "ops", "admin")
+# "driver" is a fleet-member role (#311): it can advance ITS OWN orders
+# (in_transit/delivered) and heartbeat its own driver row — nothing else.
+ROLES = ("viewer", "ops", "admin", "driver")
 _WRITE_ROLES = frozenset({"ops", "admin"})
 
 
@@ -40,6 +42,7 @@ def create_access_token(
     tenant_id: int | None = None,
     tenant_slug: str | None = None,
     customer_id: int | None = None,
+    driver_id: int | None = None,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -62,6 +65,10 @@ def create_access_token(
     # lookup, and the order path can enforce self-ordering.
     if customer_id is not None:
         claims["cid"] = customer_id
+    # the driver binding (#311): the did claim scopes every driver action
+    # to ONE fleet member's rows
+    if driver_id is not None:
+        claims["did"] = driver_id
     return jwt.encode(claims, settings.auth_jwt_secret, algorithm="HS256")
 
 

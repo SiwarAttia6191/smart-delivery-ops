@@ -3,10 +3,15 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
-from apps.api.deps import get_db, require_order_creator, require_writer
+from apps.api.deps import (
+    get_db,
+    require_order_creator,
+    require_transition_caller,
+    require_writer,
+)
 from apps.api.schemas.order import (
     OrderCreate,
     OrderResponse,
@@ -105,10 +110,30 @@ def assign_driver(
 @router.post(
     "/{order_id}/status",
     response_model=OrderResponse,
-    dependencies=[Depends(require_writer)],
 )
-def update_status(order_id: str, payload: OrderStatusUpdate, db: Session = Depends(get_db)):
-    """Advance the lifecycle: pending/assigned → in_transit → delivered (or cancelled)."""
+def update_status(
+    order_id: str,
+    payload: OrderStatusUpdate,
+    db: Session = Depends(get_db),
+    caller: dict = Depends(require_transition_caller),
+):
+    """Advance the lifecycle: pending/assigned → in_transit → delivered (or cancelled).
+
+    Two caller kinds (#311): STAFF may advance any order; a DRIVER token
+    may only advance THEIR OWN assigned order, and only the ride-and-
+    deliver transitions — the cancel stays with the operator."""
+    if caller["kind"] == "driver":
+        order = db.get(Order, order_id)
+        if order is None or order.driver_id != caller["driver_id"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="this order is not assigned to you",
+            )
+        if payload.status not in (OrderStatus.in_transit, OrderStatus.delivered):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="drivers may only start transit or mark delivered",
+            )
     return order_service.transition(db, order_id, payload.status)
 
 

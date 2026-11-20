@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Driver jobs — Smart Delivery Ops</title>
+  <meta name="description" content="The courier's own surface: the rides assigned to you, one tap to start transit and mark delivered, your live location and availability. Courier-scoped — you see only your runs." />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .drv-main { max-width: 480px; margin: 0 auto; padding: 2rem 1.1rem 3.5rem; }
+    .drv-lead { max-width: 60ch; color: var(--muted, #5b6472); font-size: .95rem; }
+    .drv-card { margin-top: 1.1rem; }
+    .drv-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between; margin: .5rem 0; }
+    .badge-avail { padding: .15rem .6rem; border-radius: 999px; font-size: .78rem; font-weight: 700;
+                   text-transform: uppercase; letter-spacing: .04em; background: #e7f6ec; color: #1c7c46; }
+    .badge-avail[data-avail="false"] { background: #fdeceb; color: #8c2f28; }
+    .job { border-top: 1px dashed #e3e6ec; padding: .7rem 0; }
+    .job:first-child { border-top: none; }
+    .job .status-badge { display: inline-block; margin-bottom: .3rem; }
+    .job .meta { font-size: .82rem; color: var(--muted, #5b6472); }
+    .job .flow-actions { margin: .45rem 0 0; }
+    .banner { display: none; margin: 0 0 1rem; padding: .7rem 1rem; border-radius: 10px;
+              background: #fdeceb; color: #8c2f28; border: 1px solid #f3c2be; font-size: .9rem; }
+    .banner.show { display: block; }
+    .drv-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
+    .drv-foot a { color: #8ab4ff; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.5rem">
+    <div class="drv-main" style="padding-bottom:0">
+      <p class="eyebrow">The courier's surface · courier-scoped (#311)</p>
+      <h1>Driver jobs</h1>
+      <p class="drv-lead">
+        Your rides, your taps. You see only the runs assigned to your fleet row; the dispatcher
+        assigns, you ride. Start transit when you leave, mark delivered at the door — and keep your
+        availability and location honest so the dispatcher can trust the map.
+      </p>
+      <input id="api-base" type="text" spellcheck="false" aria-label="API base URL"
+             placeholder="API base — same origin (leave as is)" hidden />
+    </div>
+  </header>
+
+  <main class="drv-main" style="padding-top:0">
+    <section class="card drv-card" aria-labelledby="h-signin">
+      <h2 id="h-signin">Courier sign-in</h2>
+      <p class="hint">Demo credentials: <code>driver1 / driver1</code> — seeded against the fleet's
+        first member (dev-only, like <code>ops/ops</code>).</p>
+      <div class="field-grid two">
+        <div class="field">
+          <label for="drv-user"><span>Username</span></label>
+          <input id="drv-user" type="text" value="driver1" autocomplete="username" />
+        </div>
+        <div class="field">
+          <label for="drv-pass"><span>Password</span></label>
+          <input id="drv-pass" type="password" value="driver1" autocomplete="current-password" />
+        </div>
+      </div>
+      <div class="flow-actions">
+        <button class="btn btn-primary btn-sm" id="btn-drv-signin" type="button">Sign in</button>
+        <button class="btn btn-ghost btn-sm" id="btn-drv-signout" type="button" hidden>Sign out</button>
+      </div>
+    </section>
+
+    <section class="card drv-card" id="profile-card" hidden aria-labelledby="h-profile">
+      <h2 id="h-profile">Your fleet row</h2>
+      <div class="drv-row">
+        <div><b id="drv-name">—</b> · <span id="drv-vehicle">—</span></div>
+        <span class="badge-avail" id="drv-avail" data-avail="true">available</span>
+      </div>
+      <div class="field-grid two">
+        <div class="field">
+          <label for="drv-lat"><span>Latitude</span></label>
+          <input id="drv-lat" type="number" step="0.0001" />
+        </div>
+        <div class="field">
+          <label for="drv-lon"><span>Longitude</span></label>
+          <input id="drv-lon" type="number" step="0.0001" />
+        </div>
+      </div>
+      <div class="flow-actions">
+        <button class="btn btn-ghost btn-sm" id="btn-heartbeat" type="button">Send heartbeat</button>
+        <button class="btn btn-ghost btn-sm" id="btn-toggle-avail" type="button">Toggle availability</button>
+      </div>
+    </section>
+
+    <section class="card drv-card" id="jobs-card" hidden aria-labelledby="h-jobs">
+      <h2 id="h-jobs">Your jobs</h2>
+      <p class="hint">Live from <code>GET /drivers/me/jobs</code> — courier-scoped by your token.</p>
+      <div class="banner" id="banner"></div>
+      <div id="jobs"></div>
+      <div id="jobs-empty" class="hint" hidden>No runs assigned right now — the dispatcher will send them here.</div>
+    </section>
+  </main>
+
+  <p class="drv-foot">
+    Part of the <a href="demos.html">Smart Delivery Ops demo surfaces</a> ·
+    dispatch quotes live from <a href="index.html#features">the demand forecast</a>
+  </p>
+
+  <script type="module">
+    const params = new URLSearchParams(location.search);
+    const apiInput = document.getElementById("api-base");
+    if (params.get("api")) apiInput.hidden = false;
+
+    const state = { token: null, driverId: null, name: null };
+
+    const $ = (id) => document.getElementById(id);
+    const banner = $("banner");
+    function showBanner(text) { banner.textContent = text; banner.className = "banner show"; }
+    function hideBanner() { banner.className = "banner"; }
+
+    async function api(path, options = {}) {
+      const headers = { ...(options.headers || {}) };
+      if (state.token) headers.Authorization = "Bearer " + state.token;
+      if (options.json !== undefined) {
+        headers["Content-Type"] = "application/json";
+        options.body = JSON.stringify(options.json);
+      }
+      const response = await fetch(apiInput.value.replace(/\/$/, "") + path, { ...options, headers });
+      if (!response.ok) {
+        let detail = response.status + " " + response.statusText;
+        try {
+          const body = await response.json();
+          detail = body.detail || body.error?.message || detail;
+        } catch { /* non-JSON error body */ }
+        const error = new Error(detail);
+        error.status = response.status;
+        throw error;
+      }
+      return response.status === 204 ? null : response.json();
+    }
+
+    function paintProfile(driver) {
+      $("drv-name").textContent = driver.name;
+      $("drv-vehicle").textContent = driver.vehicle;
+      $("drv-lat").value = driver.latitude;
+      $("drv-lon").value = driver.longitude;
+      const badge = $("drv-avail");
+      badge.dataset.avail = String(driver.is_available);
+      badge.textContent = driver.is_available ? "available" : "off duty";
+    }
+
+    async function refreshProfile() {
+      paintProfile(await api("/drivers/me"));
+    }
+
+    async function refreshJobs() {
+      const orders = await api("/drivers/me/jobs");
+      $("jobs-empty").hidden = orders.length > 0;
+      $("jobs").innerHTML = orders
+        .map((o) => {
+          const active = o.status === "assigned" || o.status === "in_transit";
+          const buttons = active
+            ? `<div class="flow-actions">` +
+              (o.status === "assigned"
+                ? `<button class="btn btn-primary btn-sm" data-adv="in_transit" data-id="${o.id}" type="button">Start transit</button>`
+                : `<button class="btn btn-primary btn-sm" data-adv="delivered" data-id="${o.id}" type="button">Mark delivered</button>`) +
+              `</div>`
+            : "";
+          const drop = o.dropoff_address ? " · " + o.dropoff_address : "";
+          return `<div class="job">
+            <span class="status-badge" data-status="${o.status}">${o.status.replace("_", " ")}</span>
+            <div class="meta">fee ${Number(o.delivery_fee).toFixed(2)}${drop} · ETA ≈ ${o.eta_minutes} min</div>
+            ${buttons}
+          </div>`;
+        })
+        .join("");
+    }
+
+    async function refreshAll() {
+      await refreshProfile();
+      await refreshJobs();
+    }
+
+    async function signin() {
+      hideBanner();
+      const form = new FormData();
+      form.set("username", $("drv-user").value);
+      form.set("password", $("drv-pass").value);
+      try {
+        const body = await api("/auth/token", { method: "POST", body: form });
+        state.token = body.access_token;
+        const claims = JSON.parse(atob(body.access_token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+        state.driverId = claims.did;
+        $("profile-card").hidden = false;
+        $("jobs-card").hidden = false;
+        $("btn-drv-signout").hidden = false;
+        await refreshAll();
+      } catch (error) {
+        showBanner("Sign-in failed: " + error.message);
+      }
+    }
+
+    function signout() {
+      state.token = null;
+      state.driverId = null;
+      $("profile-card").hidden = true;
+      $("jobs-card").hidden = true;
+      $("btn-drv-signout").hidden = true;
+    }
+
+    async function heartbeat() {
+      hideBanner();
+      try {
+        await api(`/drivers/${state.driverId}`, {
+          method: "PATCH",
+          json: { latitude: Number($("drv-lat").value), longitude: Number($("drv-lon").value), is_available: $("drv-avail").dataset.avail === "true" },
+        });
+        await refreshProfile();
+      } catch (error) {
+        showBanner("Heartbeat failed: " + error.message);
+      }
+    }
+
+    async function toggleAvail() {
+      hideBanner();
+      const next = $("drv-avail").dataset.avail !== "true";
+      try {
+        await api(`/drivers/${state.driverId}`, {
+          method: "PATCH",
+          json: { latitude: Number($("drv-lat").value), longitude: Number($("drv-lon").value), is_available: next },
+        });
+        await refreshProfile();
+      } catch (error) {
+        showBanner("Availability failed: " + error.message);
+      }
+    }
+
+    async function advance(event) {
+      const button = event.target.closest("button[data-adv]");
+      if (!button) return;
+      hideBanner();
+      try {
+        await api(`/orders/${button.dataset.id}/status`, {
+          method: "POST",
+          json: { status: button.dataset.adv },
+        });
+        await refreshJobs();
+      } catch (error) {
+        showBanner("Transition failed: " + error.message);
+      }
+    }
+
+    $("btn-drv-signin").addEventListener("click", signin);
+    $("btn-drv-signout").addEventListener("click", signout);
+    $("btn-heartbeat").addEventListener("click", heartbeat);
+    $("btn-toggle-avail").addEventListener("click", toggleAvail);
+    $("jobs").addEventListener("click", advance);
+  </script>
+</body>
+</html>

@@ -88,6 +88,34 @@ def require_order_creator(claims: dict[str, Any] = Depends(current_claims)) -> d
     )
 
 
+def require_driver(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
+    """Guard for the driver-owned surfaces (#311): the token must be a
+    DRIVER token carrying the fleet-member id (did). Staff tokens are
+    rejected here — a courier's job list is courier-scoped."""
+    if claims.get("role") != "driver" or claims.get("did") is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Driver role required",
+        )
+    return claims
+
+
+def require_transition_caller(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
+    """The order-transition guard (#311): STAFF may advance any order;
+    a DRIVER token may only advance orders assigned to their own fleet
+    row, and only ride-and-deliver transitions (the cancel stays with the
+    operator). The route enforces the order ownership against the did."""
+    role = claims.get("role", "")
+    if role_can_write(role):
+        return {"kind": "staff", "claims": claims}
+    if role == "driver" and claims.get("did") is not None:
+        return {"kind": "driver", "driver_id": int(claims["did"])}
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Role '{role}' may not advance orders",
+    )
+
+
 def require_admin(claims: dict[str, Any] = Depends(current_claims)) -> dict[str, Any]:
     """Guard for platform-administration endpoints (tenant onboarding, #36):
     only the admin role — ops writers and viewers of ONE tenant must not

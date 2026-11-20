@@ -6,7 +6,7 @@ BUSINESS day), empty state (zeros and nulls, not an error), and scoping
 (another tenant's restaurant reads as not found — the uniform 404).
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -56,11 +56,22 @@ def test_delivered_only_revenue_math(authed_client: TestClient, db):
     )
     assert cancelled.status_code == 200
 
-    # backdate the second delivery to YESTERDAY (business-day window)
-    yesterday = datetime.now(UTC) - timedelta(days=2)
+    # backdate the second delivery to NOON of the business day two days
+    # ago — safely INSIDE that business day regardless of the UTC/Tunis
+    # offset, so the boundary hour (23:00-24:00 UTC) can never flip the
+    # day classification (the flake this test carried, fired on #339's CI
+    # at 23:04 UTC)
+    from zoneinfo import ZoneInfo
+
+    from core.config import get_settings
+
+    tz = ZoneInfo(get_settings().business_timezone)
+    backday = (datetime.now(tz) - timedelta(days=2)).replace(
+        hour=12, minute=0, second=0, microsecond=0
+    )
     old = db.get(Order, orders[1]["id"])
-    old.created_at = yesterday
-    old.delivered_at = yesterday + timedelta(minutes=20)
+    old.created_at = backday
+    old.delivered_at = backday + timedelta(minutes=20)
     db.commit()
 
     snap = authed_client.get(f"/restaurants/{restaurant['id']}/sales-snapshot").json()
