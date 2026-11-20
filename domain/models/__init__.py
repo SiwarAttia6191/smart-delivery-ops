@@ -4,6 +4,7 @@ from domain.models.base import Base
 from domain.models.conversation import Conversation, ConversationMessage
 from domain.models.coupon import Coupon
 from domain.models.customer import Customer
+from domain.models.customer_otp import CustomerOtp
 from domain.models.demand_forecast import DemandForecast
 from domain.models.deployment_state import INCARNATION_KEY, LEGACY_INCARNATION, DeploymentState
 from domain.models.driver import Driver
@@ -31,6 +32,7 @@ __all__ = [
     "Conversation",
     "ConversationMessage",
     "Customer",
+    "CustomerOtp",
     "DeploymentState",
     "INCARNATION_KEY",
     "LEGACY_INCARNATION",

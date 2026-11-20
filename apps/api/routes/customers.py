@@ -1,15 +1,28 @@
 """Customer endpoints."""
 
 import jwt
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from apps.api.deps import _oauth2_scheme, get_db, require_writer
-from apps.api.schemas.customer import CustomerCreate, CustomerResponse
+from apps.api.deps import (
+    _oauth2_scheme,
+    get_db,
+    require_customer,
+    require_writer,
+)
+from apps.api.schemas.customer import (
+    CustomerCreate,
+    CustomerOtpIssued,
+    CustomerOtpRequest,
+    CustomerOtpVerified,
+    CustomerOtpVerifyRequest,
+    CustomerResponse,
+)
 from core.exceptions import NotFoundError
-from domain.models import Customer
-from domain.services import tenant_service
+from core.security import create_access_token
+from domain.models import Customer, Order
+from domain.services import customer_identity_service, tenant_service
 
 router = APIRouter(prefix="/customers", tags=["customers"])
 
@@ -89,3 +102,85 @@ def get_customer(
         loyalty_points=customer.loyalty_points,
         created_at=customer.created_at,
     )
+
+
+@router.post(
+    "/otp",
+    response_model=CustomerOtpIssued,
+    status_code=status.HTTP_201_CREATED,
+)
+def issue_customer_otp(payload: CustomerOtpRequest, db: Session = Depends(get_db)):
+    """Mint the login challenge for a customer's phone (#309). Pre-auth by
+    design — this IS the login. V1 demo posture: the code rides the
+    response (`dev_otp`); a real deployment swaps the send, not the
+    contract. The 404 oracle tradeoff: the storefront is the owner's own
+    channel, the phone was given to that business at checkout."""
+    try:
+        customer, code = customer_identity_service.issue_otp(db, payload.phone)
+    except LookupError:
+        raise NotFoundError(f"no customer with phone {payload.phone}")
+    return CustomerOtpIssued(
+        sent=True,
+        expires_in=customer_identity_service.otp_ttl_seconds(),
+        dev_otp=code,
+    )
+
+
+@router.post("/otp/verify", response_model=CustomerOtpVerified)
+def verify_customer_otp(payload: CustomerOtpVerifyRequest, db: Session = Depends(get_db)):
+    """Verify the code, spend it, and issue the customer-scoped JWT: role
+    `customer` + the `cid` claim + the tenant binding — the same pinning
+    the staff tokens ride, scoped to exactly one customer's rows."""
+    try:
+        customer = customer_identity_service.verify_otp(db, payload.phone, payload.code)
+    except LookupError as exc:
+        raise NotFoundError(str(exc))
+    except PermissionError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+    tenant = tenant_service.resolve_default(db)
+    token = create_access_token(
+        username=f"customer:{customer.id}",
+        role="customer",
+        tenant_id=customer.tenant_id,
+        tenant_slug=tenant.slug if tenant else None,
+        customer_id=customer.id,
+    )
+    return CustomerOtpVerified(
+        access_token=token,
+        customer=CustomerResponse.model_validate(customer),
+    )
+
+
+@router.get("/me/orders", response_model=list[dict])
+def my_orders(claims: dict = Depends(require_customer), db: Session = Depends(get_db)):
+    """The customer's own orders, newest first, WITH the event log — the
+    same payload the tracking page renders. Customer-scoped by the cid
+    claim, tenant-scoped by RLS (#309)."""
+    orders = db.scalars(
+        select(Order)
+        .where(Order.customer_id == int(claims["cid"]))
+        .order_by(Order.created_at.desc())
+        .limit(100)
+    ).all()
+    result = []
+    for order in orders:
+        result.append(
+            {
+                "id": order.id,
+                "status": order.status.value if hasattr(order.status, "value") else order.status,
+                "restaurant_id": order.restaurant_id,
+                "delivery_fee": order.delivery_fee,
+                "eta_minutes": order.eta_minutes,
+                "distance_km": order.distance_km,
+                "created_at": order.created_at,
+                "events": [
+                    {
+                        "event_type": event.event_type,
+                        "payload": event.payload,
+                        "created_at": event.created_at,
+                    }
+                    for event in order.events
+                ],
+            }
+        )
+    return result

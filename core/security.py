@@ -35,7 +35,11 @@ def verify_password(plain: str, hashed: str) -> bool:
 
 
 def create_access_token(
-    username: str, role: str, tenant_id: int | None = None, tenant_slug: str | None = None
+    username: str,
+    role: str,
+    tenant_id: int | None = None,
+    tenant_slug: str | None = None,
+    customer_id: int | None = None,
 ) -> str:
     settings = get_settings()
     now = datetime.now(UTC)
@@ -53,6 +57,11 @@ def create_access_token(
         claims["tid"] = tenant_id
     if tenant_slug is not None:
         claims["tenant"] = tenant_slug
+    # Customer identity (#309): the customer's own id rides as `cid`, so the
+    # customer-owned surfaces can scope every query to the caller without a
+    # lookup, and the order path can enforce self-ordering.
+    if customer_id is not None:
+        claims["cid"] = customer_id
     return jwt.encode(claims, settings.auth_jwt_secret, algorithm="HS256")
 
 
