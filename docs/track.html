@@ -111,6 +111,7 @@
 
     let map = null;
     let routeLayer = null;
+    let routeLabels = { pickup: "pickup", dropoff: "dropoff" };
     let pollTimer = null;
     const ACTIVE = new Set(["created", "paid", "assigned", "in_transit"]);
 
@@ -221,10 +222,13 @@
       }
       routeLayer.clearLayers();
       const drop = [order.dropoff_latitude, order.dropoff_longitude];
-      window.L.marker(drop).addTo(routeLayer).bindTooltip("dropoff");
+      window.L.marker(drop).addTo(routeLayer).bindTooltip(
+        "dropoff · " + routeLabels.dropoff, { permanent: true, direction: "top", offset: [0, -10] }
+      );
       map.setView(drop, 14);
       $("map-note").textContent =
-        "No road geometry was captured for this order (OSRM unavailable at creation) — showing the dropoff only.";
+        "No road geometry was captured for this order (OSRM unavailable at creation) — showing the dropoff only · " +
+        routeLabels.dropoff;
     }
 
     async function track(orderId) {
@@ -232,6 +236,19 @@
       try {
         const order = await api("/orders/" + encodeURIComponent(orderId));
         renderStatus(order);
+        // the endpoint names (#310 precision): the pickup is the
+        // restaurant (open GET), the dropoff is the geocoder's own
+        // resolution carried in the created event's payload
+        let pickupName = "restaurant #" + order.restaurant_id;
+        try {
+          pickupName = (await api("/restaurants/" + order.restaurant_id)).name;
+        } catch { /* the generic label stays */ }
+        const created = order.events.find((e) => e.event_type === "created");
+        routeLabels = {
+          pickup: pickupName,
+          dropoff: created?.payload?.dropoff_resolved ||
+            created?.payload?.dropoff_address || "dropoff",
+        };
         if (!pollTimer && ACTIVE.has(order.status)) {
           pollTimer = setInterval(() => track(orderId), 4000); // the storefront's cadence
         }
