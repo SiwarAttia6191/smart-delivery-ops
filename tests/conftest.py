@@ -54,6 +54,18 @@ def engine() -> Generator[object, None, None]:
 
 
 @pytest.fixture(autouse=True)
+def _reset_rate_limit_state():
+    """The rate limiter (#315) keeps process-lifetime buckets — without a
+    per-test reset the whole suite shares one 'testclient' bucket and the
+    integration tests 429 once they outrun the general refill."""
+    from apps.api import rate_limit
+
+    rate_limit.reset_state()
+    yield
+    rate_limit.reset_state()
+
+
+@pytest.fixture(autouse=True)
 def default_tenant(db):
     """Every business row carries tenant_id (#35): seed the deployment's
     default tenant once per test — deterministic id 1 on the fresh schema,
