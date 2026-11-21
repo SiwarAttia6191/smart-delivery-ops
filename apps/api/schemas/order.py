@@ -19,7 +19,11 @@ class OrderCreate(BaseModel):
         max_length=300,
         description=(
             "Address text — geocoded to the dropoff coordinates (#221 "
-            "follow-up). Provide address OR coordinates, not both."
+            "follow-up). Address-only → geocoded and self-verified (#343). "
+            "Coordinates-only → raw pin. BOTH → the customer-pinned dropoff "
+            "(#343): the dragged coordinates are the truth, the typed text "
+            "is the label — the geocoder is never consulted against the "
+            "customer's own pin."
         ),
     )
     demand_ratio: float | None = Field(
@@ -55,8 +59,11 @@ class OrderCreate(BaseModel):
     @model_validator(mode="after")
     def check_dropoff(self) -> "OrderCreate":
         has_coords = self.dropoff_latitude is not None and self.dropoff_longitude is not None
-        if has_coords == (self.dropoff_address is not None):
-            raise ValueError("provide exactly one of dropoff coordinates or dropoff_address")
+        # #343: address-only / coords-only / BOTH are all valid — both means
+        # the customer dragged the pin (coords = truth, text = label). The
+        # only invalid shape is NEITHER.
+        if not has_coords and self.dropoff_address is None:
+            raise ValueError("provide dropoff coordinates, a dropoff_address, or both")
         return self
 
     coupon_code: str | None = Field(

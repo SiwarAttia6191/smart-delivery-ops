@@ -440,7 +440,7 @@ class TestAddressSeam:
         assert created.json()["dropoff_latitude"] == 36.83988
         assert created.json()["dropoff_longitude"] == 10.18789
 
-    def test_address_and_coordinates_are_mutually_exclusive(self, authed_client):
+    def test_pinned_dropoff_accepts_address_and_coordinates(self, authed_client):
         ids = _seed(authed_client)
         both = authed_client.post(
             "/pricing/quote",
@@ -451,7 +451,15 @@ class TestAddressSeam:
                 "dropoff_longitude": 10.1,
             },
         )
-        assert both.status_code == 422
+        assert both.status_code == 200
+        body = both.json()
+        # #343 replaced the XOR: BOTH address and coordinates is the
+        # customer-pinned dropoff — coords are the truth, the text rides
+        # along as the label; the quote echoes customer_pinned. The
+        # geocoder is never consulted against the customer's own pin.
+        assert body["dropoff_precision"] == "customer_pinned"
+        assert body["dropoff_resolved"] == "somewhere"
+        assert body["dropoff_latitude"] == 36.8  # the customer's point, not a geocode
 
         neither = authed_client.post("/orders", json={"customer_id": 1, "restaurant_id": 1})
         assert neither.status_code == 422

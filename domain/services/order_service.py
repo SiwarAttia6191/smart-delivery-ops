@@ -98,17 +98,28 @@ def create_order(
     if restaurant is None:
         raise NotFoundError(f"restaurant {restaurant_id} not found")
 
-    # Address seam (#232): plain text in, coordinates out — geocoded (and
-    # then cached forever) before any pricing math. The schema validator
-    # already enforces address-XOR-coordinates; this guard is defense in
-    # depth for direct service callers.
+    # Address seam (#232) with the #343 precision layer: address-only
+    # resolves (and caches, self-verified) before any pricing math; BOTH
+    # address and coordinates means the customer dragged the pin — the
+    # coordinates are the truth, the typed text is the label, and the
+    # geocoder is never consulted against the customer's own pin. The
+    # verdict rides the created event so tracking can badge it.
     geocode_note: dict[str, Any] = {}
-    if dropoff_address:
+    if dropoff_address and (dropoff_lat is None or dropoff_lon is None):
         resolved = geocoder.geocode(session, dropoff_address)
         dropoff_lat, dropoff_lon = resolved["lat"], resolved["lon"]
         geocode_note = {
             "dropoff_address": dropoff_address.strip(),
             "dropoff_resolved": resolved["display_name"],
+            "dropoff_precision": resolved["precision"],
+            "dropoff_snap_m": resolved["snap_distance_m"],
+        }
+    elif dropoff_address:
+        geocode_note = {
+            "dropoff_address": dropoff_address.strip(),
+            "dropoff_resolved": dropoff_address.strip(),
+            "dropoff_precision": "customer_pinned",
+            "pin_source": "customer",
         }
     if dropoff_lat is None or dropoff_lon is None:
         raise NotFoundError("dropoff requires coordinates or a resolvable address")

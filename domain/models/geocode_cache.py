@@ -6,6 +6,14 @@ A TECHNICAL cache like route_cache, deliberately NOT tenant data and NOT
 in the RLS set: the coordinates of an address are city facts shared by
 every tenant. Populated by the Nominatim geocoder on first miss; the
 city_update path clears it (see the service docstring).
+
+#343: rows carry the geocoder's self-verification VERDICT — precision
+(ok / number_mismatch / street_mismatch / off_network / unverified),
+the snap distance from the road network (OSRM /nearest) and the reverse
+geocode's own display name. A wrong point can still be cached (the
+witnesses advise, the customer decides) but it can never again cache
+itself as unquestioned truth: every surface that shows the point shows
+the verdict too. Pre-#343 rows read precision=NULL → "unverified".
 """
 
 from datetime import UTC, datetime
@@ -28,6 +36,10 @@ class GeocodeCache(Base):
     lat: Mapped[float] = mapped_column(Float)
     lon: Mapped[float] = mapped_column(Float)
     display_name: Mapped[str] = mapped_column(String(300))
+    # #343 verification verdict (see the class docstring) — NULL = pre-#343 row
+    precision: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    reverse_display_name: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    snap_distance_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

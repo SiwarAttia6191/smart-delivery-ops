@@ -86,6 +86,20 @@ def _no_route_capture(monkeypatch) -> None:
     monkeypatch.setattr(route_service, "_fetch_geometry", lambda base_url, key: None)
 
 
+@pytest.fixture(autouse=True)
+def _no_geocode_witnesses(monkeypatch) -> None:
+    """The geocoder self-verifies every first resolution (#343) through two
+    witnesses — Nominatim /reverse and OSRM /nearest. Tests must not call
+    the real providers (same hermetic posture as _no_route_capture): both
+    witnesses default to 'cannot testify' (the verdict reads unverified).
+    Tests that exercise the verification itself (test_geocode_precision)
+    monkeypatch _reverse/_snap and win over this."""
+    from domain.services import geocoder
+
+    monkeypatch.setattr(geocoder, "_reverse", lambda *args, **kwargs: None)
+    monkeypatch.setattr(geocoder, "_snap", lambda *args, **kwargs: (None, None))
+
+
 @pytest.fixture
 def db(engine) -> Generator[Session, None, None]:
     """Function-scoped session over a fresh schema (tables dropped per test)."""
