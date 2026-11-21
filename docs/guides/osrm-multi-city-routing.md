@@ -193,6 +193,64 @@ serves many regions in **one process** natively (its tile design is
 multi-city by construction), which is the engine-level answer to the
 per-container question.
 
+
+
+## 3b · The full lifecycle, dispatch by dispatch — every actor and every tool
+
+The Madrid live-proof as one sequence: two surfaces (the storefront, the
+courier's page), two identities (the customer's OTP token, the operator's
+staff token, the courier's driver token), one shared event log.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor C as 👤 Customer<br/>(Lucía, phone OTP)
+    participant S as 🛒 Storefront<br/>ordering-demo.html
+    participant O as 🧑‍💼 Operator<br/>ops/ops · portal
+    actor D as 🛵 Courier<br/>Carlos · driver.html
+    participant API as ⚙️ API<br/>pricing · dispatch · RLS
+    participant R as 🗺️ OSRM<br/>Madrid roads
+    participant K as 📦 Kafka → warehouse
+
+    Note over C,S: 3b · customer identity (#309) — the phone from checkout IS the login
+    C->>S: phone + Send code
+    S->>API: POST /customers/otp
+    API-->>S: 6-digit code (demo: shown inline — a real deployment texts it)
+    C->>S: code + Verify
+    S->>API: POST /customers/otp/verify
+    API-->>S: customer JWT (role=customer · cid · tid)
+
+    Note over S,R: 2 · the quote — the pricing engine reads the roads
+    S->>API: POST /pricing/quote (dropoff_address → geocoder → OSRM)
+    API->>R: match the address to the road graph
+    R-->>API: road distance → fee = (base + per-km) × surge
+    API-->>S: itemized quote (0.48 km · fee 3.00)
+
+    Note over C,S: 3 · the order rides the CUSTOMER token (#309 self-ordering)
+    C->>S: Place order (the payload's customer_id is overridden by cid)
+    S->>API: POST /orders (Bearer = customer token)
+    API->>R: capture the road geometry ONCE per pair (217 points)
+    API->>K: created event → outbox → raw layer
+    API-->>S: PENDING badge + the tracking link (#310)
+
+    Note over O,K: the operator pays and dispatches — writer-only
+    O->>API: POST /orders/{id}/pay → receipt sbx_… (sandbox)
+    O->>API: POST /orders/{id}/assign → NEAREST driver (geolocation dispatch)
+    K-->>O: ASSIGNED · driver #6 — the 4s poll renders it
+
+    Note over D,K: the courier advances THEIR OWN run (#311 — the did claim)
+    D->>API: GET /drivers/me/jobs (courier-scoped by did + RLS)
+    D->>API: POST /orders/{id}/status (in_transit)
+    K-->>C: the tracking page updates ITSELF (4s poll) — nobody touched it
+    D->>API: POST /orders/{id}/status (delivered) → loyalty +fee (#217)
+    K-->>C: DELIVERED + the review box + the tracking link
+```
+
+The two tokens NEVER cross: the customer's can place orders and read
+their own history; the staff's can pay, dispatch and transition any
+order; the courier's can advance only their own assigned run. The
+tracking page needs no token at all — the order id is the capability.
+
 ## 4 · Data freshness: a backup nobody restored is a hope, a map nobody updated is a map of the past
 
 Geofabrik refreshes the source **daily**. Your prepared graph only changes
