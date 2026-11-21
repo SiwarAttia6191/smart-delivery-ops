@@ -53,8 +53,18 @@ OVERPASS_URL = "https://overpass-api.de/api/interpreter"
 # the deep check: a point whose OWN street's nearest line is this far away
 # while ANOTHER street is closer is sitting on the wrong road
 DEEP_WAYPOINT_RADIUS_M = 120.0
-# the router probe: intra-city pairs should never detour beyond this ratio
-ROUTE_SANITY_RATIO = 3.0
+# the router probe: road distance ÷ straight-line distance for intra-city
+# pairs. TOPOLOGY-DEPENDENT, not universal: a one-way grid measures far
+# higher legitimate ratios than a highway grid — Madrid Centro's worst
+# legitimate one-way loop measured 11.8x. The probe's real target is the
+# BROKEN-graph class, which measures MILLIONS x (4,200 km for a 0.48 km
+# pair), so 15x keeps headroom for dense one-way cities while still
+# flagging any sick router with a 1000x margin. The per-order backstop
+# in route_service stays at 30x for the same reason.
+ROUTE_SANITY_RATIO = 15.0
+# the pickup audit: door nodes within this distance of a restaurant's
+# stored coordinates count as "the entrance is here"
+PICKUP_DOOR_RADIUS_M = 40.0
 
 VERDICT_BAD = {"street_mismatch", "number_mismatch", "off_network"}
 VERDICT_PASS = {"ok", "customer_pinned"}
@@ -115,6 +125,79 @@ def deep_street_check(address: str, lat: float, lon: float) -> str | None:
             f"requested street @ {requested_best:.0f} m)"
         )
     return None
+
+
+def door_numbers_near(lat: float, lon: float, radius: float = PICKUP_DOOR_RADIUS_M):
+    """The INDEPENDENT house-number witness: real OSM door nodes
+    (addr:housenumber) within `radius` of the point — no POI anchoring,
+    no interpolation, the map's own doors. Returns the sorted number list,
+    or None when Overpass is unreachable (the optional witness may be
+    offline; report honestly, never crash)."""
+    query = (
+        f"[out:json][timeout:20];node(around:{int(radius)},{lat:.6f},{lon:.6f})"
+        '["addr:housenumber"];out;'
+    )
+    request = urllib.request.Request(
+        OVERPASS_URL,
+        data=urllib.parse.urlencode({"data": query}).encode("utf-8"),
+        headers={"User-Agent": geocoder_mod.USER_AGENT},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            data = json.loads(response.read().decode("utf-8"))
+    except Exception:  # noqa: BLE001 - optional witness, honest degrade
+        return None
+    numbers = {
+        element.get("tags", {}).get("addr:housenumber")
+        for element in data.get("elements", [])
+        if element.get("tags", {}).get("addr:housenumber")
+    }
+    return sorted(numbers)
+
+
+def audit_pickups(session, settings, last_request: list[float]) -> list[dict]:
+    """The PICKUP audit (#343 discussion, 2026-11-21): restaurants are seeded
+    with raw coordinates and NO address, so nobody ever checked which street
+    and door they actually sit on — the dropoff got a precision layer while
+    the pickup stayed blind. This witness table makes pickups as auditable
+    as dropoffs: the router-graph street (snap), the reverse geocode's
+    street, and the map's own door numbers near the point. Two independent
+    streets agreeing = confirmed; a disagreement or a blank = check it."""
+    from domain.models import Restaurant
+
+    reports: list[dict] = []
+    for restaurant in session.scalars(select(Restaurant)).all():
+        _pace(last_request)
+        snap_distance, snap_road = geocoder_mod._snap(
+            settings.osrm_base_url, restaurant.latitude, restaurant.longitude
+        )
+        _pace(last_request)
+        reverse = geocoder_mod._reverse(
+            geocoder_mod.NOMINATIM_REVERSE_URL, restaurant.latitude, restaurant.longitude
+        )
+        reverse_road = (reverse or {}).get("address", {}).get("road")
+        doors = door_numbers_near(restaurant.latitude, restaurant.longitude)
+        time.sleep(1.0)  # Overpass courtesy pacing
+
+        snap_tokens = geocoder_mod._identity_tokens(snap_road)
+        rev_tokens = geocoder_mod._identity_tokens(reverse_road)
+        if snap_tokens and rev_tokens:
+            confirmed = bool(snap_tokens & rev_tokens)
+            verdict = "street_confirmed" if confirmed else "street_check"
+        else:
+            verdict = "unverified"
+        snap_note = (
+            f"{snap_road or '-'} ({snap_distance:.0f} m)" if snap_distance is not None else "-"
+        )
+        doors_note = f"doors {doors}" if doors is not None else "doors n/a (Overpass down)"
+        reports.append(
+            {
+                "address": f"pickup · {restaurant.name}",
+                "verdict": verdict,
+                "detail": f"{snap_note} · reverse: {reverse_road or '-'} · {doors_note}",
+            }
+        )
+    return reports
 
 
 def drill_address(settings, address: str, last_request: list[float], deep: bool = False) -> dict:
@@ -213,10 +296,15 @@ def probe_router(settings, points: list[tuple[float, float]], count: int) -> lis
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    source = parser.add_mutually_exclusive_group(required=True)
+    source = parser.add_mutually_exclusive_group(required=False)
     source.add_argument("--file", help="text file, one address per line")
     source.add_argument("--address", help="a single address to drill")
     source.add_argument("--cached", action="store_true", help="re-verify every geocode_cache row")
+    parser.add_argument(
+        "--restaurants",
+        action="store_true",
+        help="audit every restaurant's pickup coordinates: street witnesses + real door numbers",
+    )
     parser.add_argument(
         "--fix", action="store_true", help="write fresh verdicts back onto cache rows"
     )
@@ -227,6 +315,8 @@ def main() -> None:
         "--deep", action="store_true", help="add the Overpass street-geometry witness"
     )
     args = parser.parse_args()
+    if not (args.file or args.address or args.cached or args.restaurants):
+        parser.error("choose a source: --file / --address / --cached / --restaurants")
 
     settings = get_settings()
     last_request = [0.0]
@@ -234,7 +324,7 @@ def main() -> None:
     try:
         if args.cached:
             reports = verify_cached(session, settings, last_request, args.fix)
-        else:
+        elif args.file or args.address:
             if args.file:
                 lines = [
                     ln.strip()
@@ -251,6 +341,11 @@ def main() -> None:
                         if row is not None and row.precision != report["verdict"]:
                             row.precision = report["verdict"]
                             session.commit()
+        else:
+            reports = []
+
+        if args.restaurants:
+            reports.extend(audit_pickups(session, settings, last_request))
 
         if args.routes:
             points = [
@@ -270,6 +365,7 @@ def main() -> None:
                 "✗"
                 if (
                     r["verdict"] in VERDICT_BAD
+                    or r["verdict"] == "street_check"
                     or "error" in r["verdict"]
                     or "suspect" in r["verdict"]
                 )
