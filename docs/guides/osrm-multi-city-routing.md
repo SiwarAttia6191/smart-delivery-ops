@@ -324,7 +324,15 @@ and OSRM answers: *Calle de Valverde*, 9 m away. The router is already
 running; the check costs one request and zero infrastructure.
 
 So every first resolution is now verified before it is cached — two
-witnesses, worst verdict wins:
+witnesses, worst verdict wins. **The hierarchy matters and was learned
+live**: the first logic let one agreeing voice acquit — Nominatim's
+reverse said "Fuencarral 24" (the storefront anchor again) while the
+router graph snapped the point 77 m onto Calle de Valverde, and the
+democracy stamped "ok" on the wrong point. The fix is a hierarchy, not
+a vote: **the router graph's street name is DECISIVE** (no POI anchor to
+fool); the reverse geocode decides only when the snap abstains
+(unnamed way, router offline). One agreeing voice never acquits a
+disagreement from the witness that cannot be fooled:
 
 ```mermaid
 flowchart TD

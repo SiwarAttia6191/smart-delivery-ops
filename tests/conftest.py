@@ -29,6 +29,13 @@ os.environ["DATABASE_URL"] = f"sqlite:///{_TEST_DB}"
 # override there must not flip the suite onto the real provider — pin
 # the scripted provider the same way the database is pinned above.
 os.environ["COPILOT_PROVIDER"] = "scripted"
+# Same leak, learned live (2026-11-21): the demo-unit pinning in .env
+# (CITY=madrid, BUSINESS_TIMEZONE=Europe/Madrid for the compose stack)
+# silently re-targeted the suite — the fuel tests seeded "tn" stations and
+# suddenly the quote priced against Madrid's config. The suite's city is
+# a test constant, like the scripted provider and the throwaway DB.
+os.environ.setdefault("CITY", "tunis")
+os.environ.setdefault("BUSINESS_TIMEZONE", "Africa/Tunis")
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

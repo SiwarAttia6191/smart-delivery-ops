@@ -227,18 +227,24 @@ def _verify(
     reverse_road = (reverse or {}).get("address", {}).get("road")
 
     verdicts: list[str] = []
-    # witness 1 + 2: street identity — requested vs reverse road vs snap road
-    votes: list[bool] = []
-    for witness_name in (reverse_road, snap_road):
-        match = _streets_match(address, witness_name)
-        if match is not None:
-            votes.append(match)
-    if votes and not any(votes):
-        # every witness that spoke disagrees with the requested street
+    # Witness hierarchy, learned LIVE (2026-11-21): the snap road — the
+    # router graph's own answer — is the DECISIVE street witness. The
+    # reverse geocode anchors to POIs: asked about the Valverde point it
+    # cheerfully returned "Calle de Fuencarral 24" (a storefront on the
+    # requested street), and a democracy where the unreliable witness's
+    # yes acquits is how "ok" gets stamped on a wrong point. So: the snap
+    # vote, when it can speak, decides street identity; the reverse vote
+    # decides only when the snap abstains (unnamed way / router offline).
+    snap_match = _streets_match(address, snap_road)
+    if snap_match is False:
         verdicts.append(PRECISION_STREET_MISMATCH)
-    elif reverse_road is None and not snap_road:
-        # nobody could testify (offline drill environments, unnamed ways)
-        verdicts.append(PRECISION_UNVERIFIED)
+    elif snap_match is None:
+        reverse_match = _streets_match(address, reverse_road)
+        if reverse_match is False:
+            verdicts.append(PRECISION_STREET_MISMATCH)
+        elif reverse_match is None and not snap_road and reverse_road is None:
+            # nobody could testify (offline drill environments, unnamed ways)
+            verdicts.append(PRECISION_UNVERIFIED)
 
     # witness 1 bonus: the house number the reverse interpolates — a street
     # match with the WRONG number is interpolation drift, a lesser offense
