@@ -82,6 +82,36 @@ def test_street_mismatch_the_valverde_signature(db, settings, monkeypatch):
     assert verdict["precision"] == "street_mismatch"
 
 
+def test_snap_outranks_an_agreeing_reverse(db, settings, monkeypatch):
+    # THE LIVE CASE (2026-11-21): the reverse geocode anchored to a
+    # storefront on the requested street and said "Fuencarral 24" — but the
+    # router graph snapped the point 77 m onto Calle de Valverde. The
+    # router graph has no POI anchor to fool: its vote is decisive, one
+    # agreeing voice must not acquit. The first logic let the reverse
+    # outvote the snap and stamped "ok" on the wrong point; this freezes
+    # the correction.
+    monkeypatch.setattr(
+        geocoder,
+        "_reverse",
+        lambda url, lat, lon: _witness(
+            "Calle de Fuencarral", "Calle de Fuencarral", reverse_number="24"
+        )[0],
+    )
+    monkeypatch.setattr(geocoder, "_snap", lambda base_url, lat, lon: (77.2, "Calle de Valverde"))
+    verdict = geocoder._verify(settings, "Calle de Fuencarral 24", 40.4221, -3.7008)
+    assert verdict["precision"] == "street_mismatch"
+
+
+def test_reverse_decides_only_when_the_snap_abstains(db, settings, monkeypatch):
+    # unnamed way / router offline: the reverse becomes the street witness
+    monkeypatch.setattr(
+        geocoder, "_reverse", lambda url, lat, lon: _witness("Calle de Valverde", None)[0]
+    )
+    monkeypatch.setattr(geocoder, "_snap", lambda base_url, lat, lon: (10.0, ""))
+    verdict = geocoder._verify(settings, "Calle de Fuencarral 24", 40.4221, -3.7008)
+    assert verdict["precision"] == "street_mismatch"
+
+
 def test_ok_when_both_witnesses_agree(db, settings, monkeypatch):
     monkeypatch.setattr(
         geocoder,
