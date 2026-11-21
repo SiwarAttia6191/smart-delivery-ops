@@ -198,11 +198,18 @@
         window.L.polyline(line, { color: "#274b7a", weight: 4 }).addTo(routeLayer);
         const first = line[0];
         const last = line[line.length - 1];
-        window.L.marker(last).addTo(routeLayer).bindTooltip("dropoff");
-        window.L.marker(first).addTo(routeLayer).bindTooltip("pickup");
-        map.fitBounds(line, { padding: [24, 24] });
+        // the pins carry the REAL endpoint names (#310 precision, completed):
+        // permanent labels - the restaurant for the pickup, the geocoder's
+        // resolved address for the dropoff - visible without hovering
+        window.L.marker(last).addTo(routeLayer).bindTooltip(
+          "dropoff · " + routeLabels.dropoff, { permanent: true, direction: "top", offset: [0, -10] }
+        );
+        window.L.marker(first).addTo(routeLayer).bindTooltip(
+          "pickup · " + routeLabels.pickup, { permanent: true, direction: "bottom", offset: [0, 10] }
+        );
+        map.fitBounds(line, { padding: [48, 48] });
         $("map-note").textContent = "Road geometry captured at creation (OSRM) — " +
-          coords.length + " points.";
+          coords.length + " points · from " + routeLabels.pickup + " to " + routeLabels.dropoff;
       } else {
         throw new Error("no coordinates in the route payload");
       }

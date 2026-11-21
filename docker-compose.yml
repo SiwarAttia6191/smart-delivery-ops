@@ -215,14 +215,20 @@ services:
         # ${OSRM_EXTRACT_ID:-tunisia} is interpolated by COMPOSE into the
         # literal value; $$EXTRACT stays a shell variable ($$ = literal $).
         EXTRACT=${OSRM_EXTRACT_ID:-tunisia}
-        if [ -f /data/$$EXTRACT-latest.osrm ]; then
-          echo "OSRM data already prepared - skipping"
+        # the success STAMP, not leftover files: a partial prepare leaves
+        # siblings behind and the old file-check would skip forever on a
+        # MIXED-GENERATION family (routes that span regions - the
+        # route-divergence investigation, 2026-11-20)
+        if [ -f /data/$$EXTRACT-latest.osrm.customized ]; then
+          echo "OSRM data already prepared and customized - skipping"
           exit 0
         fi
         [ -f /data/$$EXTRACT-latest.osm.pbf ] || { echo "missing /data/$$EXTRACT-latest.osm.pbf - run scripts/fetch_osrm_extract.py first"; exit 1; }
         osrm-extract -p /opt/car.lua /data/$$EXTRACT-latest.osm.pbf
         osrm-partition /data/$$EXTRACT-latest.osrm
         osrm-customize /data/$$EXTRACT-latest.osrm
+        # the stamp lands LAST: customize completed = the family is whole
+        touch /data/$$EXTRACT-latest.osrm.customized
 
   osrm:
     mem_limit: 1g
