@@ -38,6 +38,14 @@
     .events time { color: var(--muted, #5b6472); font-variant-numeric: tabular-nums; flex: 0 0 auto; }
     #map { height: 380px; border-radius: 12px; }
     .map-note { font-size: .82rem; color: var(--muted, #5b6472); margin: .5rem 0 0; }
+    /* the #343 precision verdict: the geocoder is guilty until proven
+       innocent, and the tracking page shows the verdict it earned */
+    .precision-badge { display: none; margin: .5rem 0 0; padding: .45rem .8rem; border-radius: 8px;
+                       font-size: .82rem; border: 1px solid; }
+    .precision-badge.show { display: block; }
+    .precision-badge[data-level="ok"] { background: #e7f6ec; color: #1c7c46; border-color: #bfe6cd; }
+    .precision-badge[data-level="warn"] { background: #fdf3e4; color: #8a5a13; border-color: #f0d9ae; }
+    .precision-badge[data-level="info"] { background: #eef4fd; color: #274b7a; border-color: #c4d8f2; }
     .track-foot { text-align: center; font-size: .85rem; color: var(--muted, #5b6472); padding: 0 1.25rem 3rem; }
     .track-foot a { color: #8ab4ff; }
   </style>
@@ -89,6 +97,7 @@
         </p>
         <div id="map" aria-label="Order route map"></div>
         <p class="map-note" id="map-note">Load an order to draw its route.</p>
+        <p class="precision-badge" id="precision-badge"></p>
       </section>
     </div>
   </main>
@@ -112,8 +121,33 @@
     let map = null;
     let routeLayer = null;
     let routeLabels = { pickup: "pickup", dropoff: "dropoff" };
+    let routePrecision = null;
     let pollTimer = null;
     const ACTIVE = new Set(["created", "paid", "assigned", "in_transit"]);
+
+    // the #343 verdict, in plain words: what did the geocoder's own
+    // self-check say about this dropoff point?
+    function renderPrecision() {
+      const badge = $("precision-badge");
+      const verdicts = {
+        ok: ["ok", "✓ Door-precise — the point passed the geocoder's street self-check " +
+          "(reverse geocode + the router graph agree with the address)."],
+        customer_pinned: ["ok", "✓ Customer-pinned — this point was placed by hand on the map " +
+          "at checkout; coordinates are the truth, the label is the note."],
+        number_mismatch: ["warn", "⚠ Approximate — the street matched but the door number may " +
+          "drift (house-number interpolation). Check the pin against the label."],
+        street_mismatch: ["warn", "⚠ Street check FAILED — the point sits on a different street " +
+          "than the label claims (the parallel-street trap). Trust the map, not the text."],
+        off_network: ["warn", "⚠ Off-road — the point is far from any drivable street. " +
+          "The address probably resolved to the wrong area."],
+        unverified: ["info", "Self-check unavailable for this order (created before the " +
+          "precision layer, or both geocode witnesses were offline at creation)."],
+      };
+      const v = verdicts[routePrecision] || verdicts.unverified;
+      badge.textContent = v[1];
+      badge.dataset.level = v[0];
+      badge.className = "precision-badge show";
+    }
 
     function showBanner(text, info = false) {
       const banner = $("banner");
@@ -256,6 +290,9 @@
           dropoff: created?.payload?.dropoff_resolved ||
             created?.payload?.dropoff_address || "dropoff",
         };
+        // the geocoder's self-verified verdict (#343) rides the created event
+        routePrecision = created?.payload?.dropoff_precision || null;
+        renderPrecision();
         if (!pollTimer && ACTIVE.has(order.status)) {
           pollTimer = setInterval(() => track(orderId), 4000); // the storefront's cadence
         }

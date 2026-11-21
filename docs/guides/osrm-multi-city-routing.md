@@ -294,6 +294,83 @@ The sequence that produced our favorite bug, all of it reproducible:
 Sound-bite: *a corrupted graph doesn't crash — it lies. The gate exists
 because lies need a detector.*
 
+## 5b · The geocoder is guilty until proven innocent (#343)
+
+A week after the 5,569 km war story, the SIBLING bug appeared — same
+family, different organ. This time the router was innocent and the
+**geocoder** lied. A customer ordered to "Calle de Fuencarral 24, Chueca"
+in Madrid; the pin landed **on Calle de Valverde, the parallel street one
+block north**. The label said the right street; the coordinates said the
+wrong one. The worst part: it was *cached* — geocode_cache stores every
+first resolution forever, so the wrong answer would repeat for every
+future order to that address.
+
+The diagnosis humbled us twice:
+
+1. **Nominatim's house-number interpolation** resolves "Fuencarral 24" by
+   walking the street's number range — and dropped the interpolated door
+   on the wrong street. Queried fresh, it returns the identical offset
+   point. Upstream, not our stack.
+2. **The reverse geocode did NOT catch it.** Reverse-geocode the wrong
+   point and Nominatim anchors to a storefront ON Fuencarral — "Calle de
+   Fuencarral" comes back, agreeing with the forward result. Two wrongs
+   citing each other. A witness anchored to the same data provider is not
+   an independent witness.
+
+The witness that caught it lives in our own stack: **OSRM `/nearest`**.
+The router graph knows which street a coordinate actually sits on — it
+has no POI anchor to be fooled by. Snap "Fuencarral 24"'s wrong point
+and OSRM answers: *Calle de Valverde*, 9 m away. The router is already
+running; the check costs one request and zero infrastructure.
+
+So every first resolution is now verified before it is cached — two
+witnesses, worst verdict wins:
+
+```mermaid
+flowchart TD
+    A["typed address"] --> B["Nominatim /search<br/>forward geocode"]
+    B --> C{"first resolution?"}
+    C -- cache hit --> H["return point + stored verdict<br/>(pre-#343 rows: unverified)"]
+    C -- miss --> D["Nominatim /reverse<br/>witness 1: which street<br/>+ house number?"]
+    C -- miss --> E["OSRM /nearest<br/>witness 2: router-graph street name<br/>+ snap distance from the road"]
+    D --> F{"compare against<br/>the requested street"}
+    E --> F
+    F -->|both agree + number matches| G["precision: ok"]
+    F -->|street named differently| S["precision: street_mismatch<br/>— THE VALVERDE TRAP"]
+    F -->|street ok, door number differs| N["precision: number_mismatch"]
+    E -->|"snap > 150 m"| O["precision: off_network"]
+    F -->|witnesses offline| U["precision: unverified"]
+    G & S & N & O & U --> K["cache the point WITH its verdict<br/>(verdicts, not bans — a flagged point<br/>still resolves, never lying quietly)"]
+    K --> L["quote echoes verdict + resolved coords<br/>created event carries it →<br/>tracking page badges it →<br/>checkout lets the customer DRAG the pin<br/>(the customer is the final witness)"]
+```
+
+And because "works for Madrid" is not a property a routing platform can
+sell, the drill is city-agnostic by design — `scripts/verify_city_addresses.py`
+re-runs the whole inquest for ANY city:
+
+```bash
+# the onboarding gate: every address a city pack ships with, fresh-resolved
+python scripts/verify_city_addresses.py --file data/city-addresses/madrid.txt
+
+# --deep adds the third witness: Overpass street geometry — is the point
+# actually closer to the requested street's lines than to another street's?
+python scripts/verify_city_addresses.py --file madrid.txt --deep
+
+# --routes 10 probes the ROUTER for the same city: N pairs through /route,
+# flagging detour ratios no sane graph produces (the 5,569 km class)
+python scripts/verify_city_addresses.py --file madrid.txt --routes 10 --deep
+
+# re-verify rows cached before #343 and write the fresh verdicts back
+python scripts/verify_city_addresses.py --cached --fix
+```
+
+Exit code 1 when anything is flagged — CI-able as the city-onboarding
+gate. Sound-bite: *the router lied first (5,569 km), so we gated the
+captures; the geocoder lied next (the parallel street), so we gated the
+resolutions — every component that answers questions about the physical
+world owes a verification trail, because its cache is a liability, not
+an asset, the moment it stores a confident wrong answer.*
+
 ## 6 · Time-aware ETAs: comparing yesterday at the same hour
 
 Static OSRM speeds are the honest gap: the engine routes as if traffic
@@ -390,7 +467,7 @@ its actual courier fleet. That dataset compounds.
 
 - **#332** — multi-city platform core (the cities registry + per-region routing) — *M*
 - **#333** — the routing provider seam (OSRM default; Valhalla/HERE/Google behind config) — *S–M*
-- **#334** — the city-onboarding one-command pipeline (§3's flow, gotchas institutionalized) — *S*
+- **#334** — the city-onboarding one-command pipeline (§3's flow, gotchas institutionalized — the §5b drill is its verification step) — *S*
 - **#335** — the weekly refresh DAG with the verified swap (§4) — *S–M*
 - **time-aware ETAs** (§6) — the profile experiment, then the segment-speed workflow — *M*
 - **LEZ-aware dispatch + vehicle recommendation** (§7) — Madrid first — *M*

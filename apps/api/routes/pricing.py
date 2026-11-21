@@ -39,16 +39,23 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         pickup_lat = payload.pickup_latitude
         pickup_lon = payload.pickup_longitude
 
-    # Address seam (#232): a typed dropoff resolves (and caches) before the
-    # math. Unresolvable → 422, provider down → 503 (DomainError mapping).
+    # Address seam (#232) with the #343 precision layer: a typed dropoff
+    # resolves (and caches, self-verified) before the math; BOTH address and
+    # coordinates is the customer-pinned dropoff — coords are the truth, the
+    # text is the label. Unresolvable → 422, provider down → 503.
     resolved_name: str | None = None
+    resolved_precision: str | None = None
     dropoff_lat, dropoff_lon = payload.dropoff_latitude, payload.dropoff_longitude
-    if payload.dropoff_address:
+    if payload.dropoff_address and dropoff_lat is None:
         resolved = geocoder.geocode(db, payload.dropoff_address)
         dropoff_lat, dropoff_lon = resolved["lat"], resolved["lon"]
         resolved_name = resolved["display_name"]
-    # the schema validator guarantees address-XOR-coordinates — one of the
-    # two branches above always sets both (same guarantee as the pickup assert)
+        resolved_precision = resolved["precision"]
+    elif payload.dropoff_address:
+        resolved_name = payload.dropoff_address.strip()
+        resolved_precision = "customer_pinned"
+    # one of the branches above always sets both (same guarantee as the
+    # pickup assert)
     assert dropoff_lat is not None and dropoff_lon is not None
 
     demand_ratio = payload.demand_ratio
@@ -104,6 +111,9 @@ def quote(payload: QuoteRequest, db: Session = Depends(get_db)) -> QuoteResponse
         coupon_code=applied_code,
         final_total=round(quote.breakdown.total - discount, 2) if applied_code else None,
         dropoff_resolved=resolved_name,
+        dropoff_precision=resolved_precision,
+        dropoff_latitude=dropoff_lat,
+        dropoff_longitude=dropoff_lon,
         fuel_estimate=fuel,
     )
 

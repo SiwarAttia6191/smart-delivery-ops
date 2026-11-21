@@ -74,8 +74,14 @@ backfilled onto all rows); the resolution point is
 layer (#36) will replace with JWT-claim resolution. Event payloads carry
 `tenant_id` too (the envelope), so the warehouse's raw layer inherits the
 dimension as-received. Deliberately tenant-agnostic for now: `users`
-(binding arrives with #36's claims), `route_cache` and `demand_forecasts`
-(deployment-level aggregates).
+(binding arrives with #36's claims), `route_cache`, `geocode_cache` and
+`demand_forecasts` (deployment-level aggregates). The two caches carry
+their own integrity verdicts: `route_cache` rows passed the 30×-detour
+capture gate, and `geocode_cache` rows (#343) carry `precision`
+(`ok` / `number_mismatch` / `street_mismatch` / `off_network` /
+`unverified`), the road-network `snap_distance_m`, and the reverse
+geocode's own display name — a wrong point can be cached, but it can
+never cache itself as unquestioned truth.
 
 ## Order lifecycle
 

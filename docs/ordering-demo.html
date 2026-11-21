@@ -6,6 +6,7 @@
   <title>Ordering demo — Smart Delivery Ops</title>
   <meta name="description" content="A minimal customer storefront over the live Smart Delivery Ops API: pick a restaurant, price the delivery fee (coupon codes included), place the order, watch dispatch and the lifecycle happen for real." />
   <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     .store-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
     .store-lead { max-width: 62ch; color: var(--muted, #5b6472); }
@@ -95,7 +96,7 @@
           the demand forecasts.</p>
         <div class="field-grid two">
           <div class="field" style="grid-column: 1 / -1;">
-            <label for="addr"><span>Dropoff address (optional — a typed address wins over the coordinates)</span></label>
+            <label for="addr"><span>Dropoff address (typed text is geocoded and self-checked; after a quote you can drag the pin — the pin wins)</span></label>
             <input id="addr" type="text" placeholder="e.g. Plaza Mayor 1, Madrid" />
           </div>
           <div class="field">
@@ -120,6 +121,10 @@
           <button class="btn btn-primary btn-sm" id="btn-quote" type="button">Quote the fee</button>
         </div>
         <table class="bd-table" id="breakdown" hidden></table>
+        <!-- the #343 checkout: the resolved point is SHOWN before ordering —
+             see where the text landed, drag the pin if it missed the door -->
+        <div id="pinmap" style="height:280px;border-radius:12px;margin-top:1rem;display:none" aria-label="Dropoff pin"></div>
+        <p class="hint" id="pin-hint" style="display:none"></p>
       </section>
 
       <section class="card step" aria-labelledby="h-place">
@@ -228,7 +233,7 @@
     // live drive): an empty same-origin input read as a broken white bar
     if (params.get("api")) apiInput.hidden = false;
 
-    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null, custToken: null, custName: null, custId: null };
+    const state = { customers: [], restaurants: [], token: null, role: null, order: null, timer: null, receipt: null, lastStatus: null, custToken: null, custName: null, custId: null, pin: null, pinMap: null, pinMarker: null };
 
     const $ = (id) => document.getElementById(id);
     const banner = $("banner");
@@ -338,11 +343,53 @@
     }
 
     function dropoffFields() {
-      // address seam (#232): a typed address wins over the coordinate
-      // inputs — the geocoder resolves (and caches) it server-side
+      // address seam (#232) + the #343 checkout: a typed address alone is
+      // geocoded (and self-verified) server-side; after a DRAG the pin wins
+      // — coordinates are the truth, the typed text rides along as the label
       const addr = $("addr").value.trim();
+      if (state.pin && state.pin.dragged) {
+        const fields = { dropoff_latitude: state.pin.lat, dropoff_longitude: state.pin.lon };
+        if (addr) fields.dropoff_address = addr;
+        return fields;
+      }
       if (addr) return { dropoff_address: addr };
       return { dropoff_latitude: Number($("lat").value), dropoff_longitude: Number($("lon").value) };
+    }
+
+    // ── the #343 pin: see where the address landed BEFORE ordering, drag if
+    // it missed the door — the Uber pattern, over our own API ──
+    function showPinMap(lat, lon) {
+      const el = $("pinmap");
+      el.style.display = "block";
+      if (!state.pinMap) {
+        state.pinMap = window.L.map(el);
+        window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap contributors",
+        }).addTo(state.pinMap);
+      }
+      if (state.pinMarker) state.pinMarker.remove();
+      setTimeout(() => state.pinMap.invalidateSize(), 60); // the container was hidden
+      state.pinMap.setView([lat, lon], 17);
+      state.pinMarker = window.L.marker([lat, lon], { draggable: true }).addTo(state.pinMap);
+      state.pinMarker.on("dragend", () => {
+        const p = state.pinMarker.getLatLng();
+        state.pin = { lat: p.lat, lon: p.lng, dragged: true };
+        $("pin-hint").textContent = "Pin moved — the courier rides to YOUR point now. Quote again to reprice, then place the order.";
+      });
+      $("pin-hint").style.display = "block";
+      $("pin-hint").textContent = "This is where your address landed. If it missed the door, drag the pin — the courier rides to the pin, not the text.";
+    }
+
+    function pinVerdict(precision) {
+      return {
+        ok: "✓ self-check passed — reverse geocode + router graph agree with the address",
+        customer_pinned: "✓ placed by hand on the map",
+        number_mismatch: "⚠ approximate — street matched, door number may drift; check the pin",
+        street_mismatch: "⚠ street check FAILED — the point sits on a DIFFERENT street than the text; drag the pin",
+        off_network: "⚠ off-road — far from any drivable street; drag the pin or fix the address",
+        unverified: "· self-check unavailable for this point",
+      }[precision] || "· self-check unavailable for this point";
     }
 
     function quotePayload() {
@@ -373,6 +420,9 @@
       if (quote.dropoff_resolved) {
         rows.unshift(["Address resolved to", quote.dropoff_resolved]);
       }
+      if (quote.dropoff_precision) {
+        rows.unshift(["Self-check (#343)", pinVerdict(quote.dropoff_precision)]);
+      }
       let html = rows.map(([k, v]) => "<tr><td>" + k + "</td><td>" + v + "</td></tr>").join("");
       if (quote.coupon_code) {
         html += '<tr class="disc"><td>Coupon ' + quote.coupon_code + "</td><td>−" +
@@ -388,7 +438,14 @@
     async function quote() {
       hideBanner();
       try {
-        renderBreakdown(await api("/pricing/quote", { method: "POST", json: quotePayload() }));
+        const q = await api("/pricing/quote", { method: "POST", json: quotePayload() });
+        renderBreakdown(q);
+        // the #343 checkout: draw the resolved point and arm the pin — the
+        // customer sees where the text landed BEFORE paying for it
+        if (q.dropoff_latitude != null && q.dropoff_longitude != null) {
+          state.pin = { lat: q.dropoff_latitude, lon: q.dropoff_longitude, dragged: false };
+          showPinMap(q.dropoff_latitude, q.dropoff_longitude);
+        }
       } catch (error) {
         showBanner("Quote failed: " + error.message);
       }
@@ -717,5 +774,6 @@
       }
     });
   </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
