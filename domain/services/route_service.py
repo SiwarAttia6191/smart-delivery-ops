@@ -19,8 +19,15 @@ from sqlalchemy.orm import Session
 from core.config import get_settings
 from domain.models import RouteCache
 from domain.models.route_cache import COORD_DECIMALS
+from domain.rules.geo import haversine_km
 
 logger = logging.getLogger(__name__)
+
+# the integrity gate: a legitimate one-way loop measured 11.8x the
+# straight-line distance (Madrid Centro); a corrupted MLD graph measured
+# MILLIONS x. 30x separates them with headroom (route-divergence
+# investigation, 2026-11-20).
+ROUTE_MAX_DETOUR_RATIO = 30.0
 
 
 def _rounded(pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float):
@@ -60,7 +67,16 @@ def capture_for_order(
 ) -> None:
     """Cache the pair's geometry if not already cached. Never raises; called
     inside create_order AFTER the order commit so an OSRM stall cannot hold
-    the order transaction open."""
+    the order transaction open.
+
+    The integrity gate (route-divergence investigation, 2026-11-20): a
+    captured route may not exceed ROUTE_MAX_DETOUR_RATIO times the pair's
+    straight-line distance. A healthy router's worst one-way loop measured
+    11.8x (Madrid Centro); a corrupted MLD graph measured MILLIONS x
+    (4,200 km for a 0.48 km pair). Without this gate such a capture would
+    persist in route_cache forever and every future order on the pair
+    would draw it."""
+
     settings = get_settings()
     key = _rounded(pickup_lat, pickup_lon, dropoff_lat, dropoff_lon)
     try:
@@ -68,6 +84,17 @@ def capture_for_order(
             return
         geometry = _fetch_geometry(settings.osrm_base_url, key)
         if geometry is None:
+            return
+        straight_m = haversine_km(key[0], key[1], key[2], key[3]) * 1000.0
+        if geometry["distance_m"] > straight_m * ROUTE_MAX_DETOUR_RATIO:
+            logger.warning(
+                "route capture REJECTED: OSRM returned %.0f m for a %.0f m pair "
+                "(%.0fx detour) - the router graph is suspect; the order "
+                "proceeds without geometry and the poison is not cached",
+                geometry["distance_m"],
+                straight_m,
+                geometry["distance_m"] / max(straight_m, 1.0),
+            )
             return
         session.add(
             RouteCache(
