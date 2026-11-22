@@ -125,7 +125,7 @@ jobs:
       - uses: actions/checkout@v7
       # #288 item 3: GHA layer cache — unchanged dependency layers restore
       # instead of rebuilding; mode=max keeps every intermediate layer
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
       - uses: docker/build-push-action@v6
         with:
           context: .
