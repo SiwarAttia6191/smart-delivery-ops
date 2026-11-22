@@ -126,7 +126,7 @@ jobs:
       # #288 item 3: GHA layer cache — unchanged dependency layers restore
       # instead of rebuilding; mode=max keeps every intermediate layer
       - uses: docker/setup-buildx-action@v3
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: infra/docker/Dockerfile.api
