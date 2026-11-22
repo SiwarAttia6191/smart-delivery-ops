@@ -4,6 +4,6 @@ pytest-cov>=7.1.0
 pytest-xdist>=3.8.0
 ruff>=0.17.3
 mypy>=2.4.1
-pandas-stubs>=2.2  # type-check the ETA model serving feature frame
+pandas-stubs>=3.1.0.261029  # type-check the ETA model serving feature frame
 pip-audit>=2.7
 qrcode>=7.4
