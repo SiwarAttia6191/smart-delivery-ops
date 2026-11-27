@@ -182,8 +182,17 @@ def audit_pickups(session, settings, last_request: list[float]) -> list[dict]:
         snap_tokens = geocoder_mod._identity_tokens(snap_road)
         rev_tokens = geocoder_mod._identity_tokens(reverse_road)
         if snap_tokens and rev_tokens:
-            confirmed = bool(snap_tokens & rev_tokens)
-            verdict = "street_confirmed" if confirmed else "street_check"
+            if snap_tokens & rev_tokens:
+                verdict = "street_confirmed"
+            elif "plaza" in (reverse_road or "").lower() or "plaza" in (snap_road or "").lower():
+                # a pedestrian-square address (#346): the restaurant's real
+                # entrance is ON a plaza — the snap reaches the nearest
+                # drivable EDGE street, so the two witnesses legitimately
+                # name different streets. A real address shape in Madrid-
+                # class cities; pass with a note, never flag it.
+                verdict = "plaza_pickup"
+            else:
+                verdict = "street_check"
         else:
             verdict = "unverified"
         snap_note = (

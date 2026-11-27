@@ -370,6 +370,11 @@ python scripts/verify_city_addresses.py --file madrid.txt --routes 10 --deep
 
 # re-verify rows cached before #343 and write the fresh verdicts back
 python scripts/verify_city_addresses.py --cached --fix
+
+# the PICKUP audit: restaurants are seeded with raw coordinates and no
+# address — this checks which street and door numbers each pickup point
+# actually sits on (plaza addresses read plaza_pickup, not a flag)
+python scripts/verify_city_addresses.py --restaurants
 ```
 
 Exit code 1 when anything is flagged — CI-able as the city-onboarding
