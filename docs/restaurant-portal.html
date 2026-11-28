@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Restaurant portal — Smart Delivery Ops</title>
   <meta name="description" content="The restaurant's view of the platform: manage the menu (prices, availability) and watch incoming orders arrive in real time — every action a real API call." />
-  <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     .portal-main { max-width: 1080px; margin: 0 auto; padding: 3rem 1.25rem 4rem; }
     .portal-lead { max-width: 62ch; color: var(--muted, #5b6472); }
@@ -101,6 +102,25 @@
           <input id="mi-price" type="number" placeholder="Price" required min="0.01" step="0.01" />
           <button class="btn btn-primary btn-sm" type="submit">Add item</button>
         </form>
+      </section>
+
+      <section class="card">
+        <h2>Your door on the map <span class="badge-new" id="pp-source">—</span></h2>
+        <p class="hint">The pickup identity (#358): every fee, route and ETA for your restaurant starts
+          at this point. Drag the pin onto your actual entrance, type your address as the label, and
+          save — the point is YOURS (<code>PATCH /restaurants/{id}/pickup-point</code>), and the city
+          drill keeps auditing it like every pickup.</p>
+        <div style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:end">
+          <div style="flex:1 1 320px">
+            <label for="pp-address"><span>Your address (the label the pin carries)</span></label>
+            <input id="pp-address" type="text" maxlength="300"
+                   placeholder="e.g. Calle del Espíritu Santo 12, Madrid" />
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-save-point" type="button">Save my door</button>
+        </div>
+        <div id="pp-map" style="height:300px;border-radius:12px;margin-top:.75rem"></div>
+        <p class="hint" id="pp-note" style="margin:.5rem 0 0">The pin is where the platform thinks your
+          door is — drag it if that's not your entrance.</p>
       </section>
 
       <section class="card">
@@ -225,6 +245,74 @@
         await loadOrders();
         if (state.timer) clearInterval(state.timer);
         state.timer = setInterval(loadOrders, 5000);
+        await loadPickupPoint();
+      }
+    }
+
+    // ── the pickup identity (#358): your door on the map ──
+    // The owner's hand is the final witness: drag the pin onto the real
+    // entrance, save, and the point carries owner_verified — the same
+    // human-verification principle the customer checkout uses.
+    let ppMap = null, ppMarker = null, ppMoved = false;
+    function ppShow(lat, lng) {
+      const el = $("pp-map");
+      el.style.display = "block";
+      if (!ppMap) {
+        ppMap = window.L.map(el);
+        window.L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: "© OpenStreetMap contributors",
+        }).addTo(ppMap);
+      }
+      if (ppMarker) ppMarker.remove();
+      ppMarker = window.L.marker([lat, lng], { draggable: true }).addTo(ppMap);
+      ppMap.setView([lat, lng], 16);
+      setTimeout(() => ppMap.invalidateSize(), 60);
+      ppMarker.on("dragend", () => {
+        ppMoved = true;
+        $("pp-note").textContent = "Pin moved — save to make it your official door.";
+      });
+    }
+    async function loadPickupPoint() {
+      ppMoved = false;
+      try {
+        const r = await api("/restaurants/" + state.restId);
+        $("pp-address").value = r.address || "";
+        $("pp-source").textContent = r.pin_source || "imported";
+        ppShow(r.latitude, r.longitude);
+        $("pp-note").textContent = "The pin is where the platform thinks your door is — drag it if that's not your entrance.";
+      } catch { /* the card stays empty when the read fails */ }
+    }
+    async function savePickupPoint() {
+      hideBanner();
+      const payload = {};
+      if (ppMoved && ppMarker) {
+        const p = ppMarker.getLatLng();
+        payload.pickup_latitude = p.lat;
+        payload.pickup_longitude = p.lng;
+      }
+      const addr = $("pp-address").value.trim();
+      if (addr) payload.address = addr;
+      if (!Object.keys(payload).length) {
+        $("pp-note").textContent = "Nothing to save — drag the pin or type an address first.";
+        return;
+      }
+      try {
+        const saved = await api("/restaurants/" + state.restId + "/pickup-point", {
+          method: "PATCH", json: payload,
+        });
+        $("pp-source").textContent = saved.pin_source;
+        const verdicts = {
+          owner_verified: "✓ saved — this door is YOURS now (the drill keeps auditing it)",
+          ok: "✓ saved — the geocoder's point passed the street self-check",
+          street_mismatch: "⚠ saved, but the street check FAILED — drag the pin onto your real entrance and save again",
+          number_mismatch: "⚠ saved — street matched, door number may drift; check the pin",
+          off_network: "⚠ saved — the point is far from any road; drag it onto your street",
+          unverified: "· saved — self-check unavailable right now",
+        };
+        $("pp-note").textContent = verdicts[saved.precision] || "· saved";
+      } catch (error) {
+        showBanner("Save failed: " + error.message);
       }
     }
 
@@ -407,7 +495,9 @@
       await loadReviews();
       await loadWeeklyReport();
       loadQr();
+      await loadPickupPoint();
     });
+    $("btn-save-point").addEventListener("click", savePickupPoint);
 
     function loadQr() {
       const link = location.origin + "/storefront/ordering-demo.html?restaurant=" +
@@ -416,5 +506,6 @@
       $("qr-img").src = "/restaurants/" + state.restId + "/qr?url=" + encodeURIComponent(link);
     }
   </script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </body>
 </html>
