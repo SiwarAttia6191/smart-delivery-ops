@@ -214,7 +214,7 @@
         .join("");
     }
 
-    function drawRoute(geojson) {
+    function drawRoute(geojson, order) {
       if (!window.L) throw new Error("Leaflet failed to load.");
       const coords = geojson.features?.[0]?.geometry?.coordinates ||
         geojson.geometry?.coordinates || null;
@@ -230,18 +230,20 @@
       if (coords && coords.length >= 2) {
         const line = coords.map(([lon, lat]) => [lat, lon]);
         window.L.polyline(line, { color: "#274b7a", weight: 4 }).addTo(routeLayer);
-        const first = line[0];
-        const last = line[line.length - 1];
-        // the pins carry the REAL endpoint names (#310 precision, completed):
-        // permanent labels - the restaurant for the pickup, the geocoder's
-        // resolved address for the dropoff - visible without hovering
-        window.L.marker(last).addTo(routeLayer).bindTooltip(
+        // the pins carry the order's STORED points (#373) - the same places
+        // the checkout drew them: the geocoder's answer or the customer's
+        // drag. The LINE stays the road's geometry (OSRM snaps doors onto
+        // the drivable road), so the visible line-vs-pin distance is the
+        // honest measured gap, never a moved pin.
+        const pickupPoint = [order.pickup_latitude, order.pickup_longitude];
+        const dropoffPoint = [order.dropoff_latitude, order.dropoff_longitude];
+        window.L.marker(dropoffPoint).addTo(routeLayer).bindTooltip(
           "dropoff · " + routeLabels.dropoff, { permanent: true, direction: "top", offset: [0, -10] }
         );
-        window.L.marker(first).addTo(routeLayer).bindTooltip(
+        window.L.marker(pickupPoint).addTo(routeLayer).bindTooltip(
           "pickup · " + routeLabels.pickup, { permanent: true, direction: "bottom", offset: [0, 10] }
         );
-        map.fitBounds(line, { padding: [48, 48] });
+        map.fitBounds(line.concat([pickupPoint, dropoffPoint]), { padding: [48, 48] });
         // #371: the line is the ROAD's geometry - OSRM snaps the requested
         // doors onto the drivable road, so the line legitimately stops short
         // of the raw pins. Say so, with the measured numbers, never silence.
@@ -317,7 +319,7 @@
         }
         try {
           const geojson = await api("/orders/" + encodeURIComponent(orderId) + "/route");
-          drawRoute(geojson);
+          drawRoute(geojson, order);
         } catch (routeError) {
           drawDropoffOnly(order);
         }
