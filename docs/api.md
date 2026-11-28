@@ -155,7 +155,7 @@ The customer version of the knowledge bridge (#154): a tenant uploads markdown d
 | Method | Path | Description |
 |---|---|---|
 | GET | `/routes/demo` | Return the saved Tunis demo route as a GeoJSON FeatureCollection |
-| GET | `/orders/{id}/route` | The order's captured road geometry (GeoJSON LineString, cached per pickup→dropoff pair); 404 if OSRM was unavailable at creation |
+| GET | `/orders/{id}/route` | The order's captured road geometry (GeoJSON LineString, cached per pickup→dropoff pair); 404 if OSRM was unavailable at creation. The properties carry `pickup_snap_m` / `dropoff_snap_m` (#371) — the measured distance from the requested doors to the line's endpoints (OSRM snaps doors onto the drivable road; the map explains the gap instead of hiding it). Captures whose endpoints land >150 m from the requested points are rejected at capture — the mixed-generation-graph signature |
 
 ## Bulk import (onboarding R1)
 

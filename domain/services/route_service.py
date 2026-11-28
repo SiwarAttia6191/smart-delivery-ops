@@ -29,6 +29,15 @@ logger = logging.getLogger(__name__)
 # investigation, 2026-11-20).
 ROUTE_MAX_DETOUR_RATIO = 30.0
 
+# the endpoint-integrity gate (#371, owner-caught on the live map): OSRM
+# snaps requested points onto the drivable road, so the line NEVER touches
+# the raw door/plaza point - a pedestrian-plaza pickup measured 106 m is
+# legitimate physics. What ISN'T legitimate is an endpoint landing far from
+# the requested point entirely: the mixed-generation-graph signature (the
+# 5,569 km line surely started nowhere near its pickup). Aligned with the
+# geocoder's 150 m off-network constant.
+ROUTE_MAX_ENDPOINT_GAP = 150.0
+
 
 def _rounded(pickup_lat: float, pickup_lon: float, dropoff_lat: float, dropoff_lon: float):
     return (
@@ -56,6 +65,25 @@ def _fetch_geometry(base_url: str, key: tuple) -> dict[str, Any] | None:
     except Exception as exc:  # noqa: BLE001 - route capture is best-effort
         logger.warning("route geometry unavailable (%s); order proceeds without it", exc)
         return None
+
+
+def _endpoint_gaps_m(
+    geometry: dict[str, Any],
+    pickup_lat: float,
+    pickup_lon: float,
+    dropoff_lat: float,
+    dropoff_lon: float,
+) -> tuple[float, float]:
+    """The #371 measurement: meters from the REQUESTED points to the
+    captured line's actual first/last points. OSRM snaps inputs onto the
+    drivable road, so this is the road's reach - never zero at real doors,
+    and the ground-truth version of the drill's post-hoc estimate."""
+    coords = geometry["coordinates"]
+    first_lon, first_lat = coords[0]
+    last_lon, last_lat = coords[-1]
+    pickup_gap = haversine_km(pickup_lat, pickup_lon, first_lat, first_lon) * 1000.0
+    dropoff_gap = haversine_km(dropoff_lat, dropoff_lon, last_lat, last_lon) * 1000.0
+    return pickup_gap, dropoff_gap
 
 
 def capture_for_order(
@@ -96,12 +124,33 @@ def capture_for_order(
                 geometry["distance_m"] / max(straight_m, 1.0),
             )
             return
+
+        # the endpoint-integrity gate (#371): the captured line must START
+        # near the requested pickup and END near the requested dropoff.
+        # OSRM legitimately snaps doors/plazas onto the road (a measured
+        # 106 m at a pedestrian plaza), but an endpoint landing far from
+        # the requested point is the mixed-generation-graph signature.
+        pickup_gap, dropoff_gap = _endpoint_gaps_m(geometry, key[0], key[1], key[2], key[3])
+        if max(pickup_gap, dropoff_gap) > ROUTE_MAX_ENDPOINT_GAP:
+            logger.warning(
+                "route capture REJECTED: endpoints land %.0f m / %.0f m from "
+                "the requested pickup/dropoff (max %.0f) - the line does not "
+                "connect the points it was asked to connect; the poison is "
+                "not cached",
+                pickup_gap,
+                dropoff_gap,
+                ROUTE_MAX_ENDPOINT_GAP,
+            )
+            return
+
         session.add(
             RouteCache(
                 pickup_lat=key[0],
                 pickup_lon=key[1],
                 dropoff_lat=key[2],
                 dropoff_lon=key[3],
+                pickup_snap_m=pickup_gap,
+                dropoff_snap_m=dropoff_gap,
                 **geometry,
             )
         )
@@ -128,6 +177,10 @@ def geojson_for_order(
                 "properties": {
                     "distance_m": cache.distance_m,
                     "duration_s": cache.duration_s,
+                    # #371: the road's reach, measured at capture - the map
+                    # explains why the line does not touch the raw pins
+                    "pickup_snap_m": cache.pickup_snap_m,
+                    "dropoff_snap_m": cache.dropoff_snap_m,
                 },
             }
         ],

@@ -242,8 +242,23 @@
           "pickup · " + routeLabels.pickup, { permanent: true, direction: "bottom", offset: [0, 10] }
         );
         map.fitBounds(line, { padding: [48, 48] });
+        // #371: the line is the ROAD's geometry - OSRM snaps the requested
+        // doors onto the drivable road, so the line legitimately stops short
+        // of the raw pins. Say so, with the measured numbers, never silence.
+        const props = geojson.features?.[0]?.properties || {};
+        let snapNote = "";
+        if (props.pickup_snap_m != null) {
+          snapNote += "The line starts " + Math.round(props.pickup_snap_m) +
+            " m from the restaurant door";
+          if (props.dropoff_snap_m != null) {
+            snapNote += " and ends " + Math.round(props.dropoff_snap_m) +
+              " m from your door — the road's reach; the last meters are walked";
+          }
+          snapNote += ".";
+        }
         $("map-note").textContent = "Road geometry captured at creation (OSRM) — " +
-          coords.length + " points · from " + routeLabels.pickup + " to " + routeLabels.dropoff;
+          coords.length + " points · from " + routeLabels.pickup + " to " + routeLabels.dropoff +
+          (snapNote ? " · " + snapNote : "");
       } else {
         throw new Error("no coordinates in the route payload");
       }
