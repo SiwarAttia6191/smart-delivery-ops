@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The demo runbook — Smart Delivery Ops</title>
+  <meta name="description" content="The presenter's script for the platform's differentiators: five scenes, every one a real API flow, with the evidence captures attached." />
+  <link rel="stylesheet" href="../styles.css" />
+  <style>
+    .rb-main { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+    .rb-body h1 { font-size: 1.7rem; margin: 0 0 .75rem; }
+    .rb-body h2 { font-size: 1.25rem; margin: 2rem 0 .5rem; border-top: 1px solid #e3e6ec; padding-top: 1.25rem; }
+    .rb-body h3 { font-size: 1.05rem; margin: 1.25rem 0 .4rem; }
+    .rb-body table { border-collapse: collapse; width: 100%; margin: .75rem 0; font-size: .88rem; }
+    .rb-body th, .rb-body td { border: 1px solid #d9dde3; padding: .4rem .6rem; text-align: left; vertical-align: top; }
+    .rb-body th { background: #eef1f5; }
+    .rb-body pre { background: #1b2029; color: #d7dce6; padding: .8rem 1rem; border-radius: 8px;
+                   overflow-x: auto; font-size: .82rem; line-height: 1.45; }
+    .rb-body code { background: #eef1f5; padding: .08rem .3rem; border-radius: 4px; font-size: .86em; }
+    .rb-body pre code { background: none; padding: 0; }
+    .rb-body blockquote { border-left: 3px solid #274b7a; margin: .75rem 0; padding: .3rem 0 .3rem 1rem;
+                          color: #274b7a; background: #f4f7fb; border-radius: 0 8px 8px 0; }
+    .rb-body ul, .rb-body ol { padding-left: 1.4rem; }
+    .rb-body li { margin: .25rem 0; }
+  </style>
+</head>
+<body>
+  <header class="hero" style="padding-bottom:1.25rem">
+    <div class="rb-main" style="padding-bottom:0">
+      <p class="eyebrow">Presenter script · five scenes · ~15 minutes</p>
+      <h1>The demo runbook</h1>
+      <p class="rb-lead">The strong points, shown live: the lie detector, the city drill, the data
+        trail, the owner's door, the architecture story. Rendered from the canonical
+        <code>demo-runbook.md</code> — one source, always current.</p>
+    </div>
+  </header>
+  <main class="rb-main">
+    <div id="rb-body" class="rb-body">Loading the runbook…</div>
+    <p class="hint" style="margin-top:1.5rem">Canonical source:
+      <a href="demo-runbook.md">demo-runbook.md</a> · surfaces:
+      <a href="../demos.html">demos hub</a></p>
+  </main>
+  <script src="https://unpkg.com/marked@12/marked.min.js"></script>
+  <script>
+    fetch("demo-runbook.md")
+      .then((r) => r.text())
+      .then((md) => {
+        document.getElementById("rb-body").innerHTML = marked.parse(md);
+        // the capture blocks are the evidence — make sure they never wrap
+        document.querySelectorAll("pre").forEach((p) => { p.style.whiteSpace = "pre"; });
+      })
+      .catch((e) => {
+        document.getElementById("rb-body").textContent =
+          "The runbook could not be loaded: " + e.message + " — is the API up?";
+      });
+  </script>
+</body>
+</html>

@@ -26,6 +26,7 @@ docs/*
 !docs/styles.css
 !docs/guides
 !docs/guides/*.md
+!docs/guides/*.html
 !docs/guides/assets
 !docs/guides/assets/*.png
 !docs/product.html
