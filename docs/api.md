@@ -58,6 +58,7 @@ comes from X-Forwarded-For.
 | POST | `/restaurants` | Create a restaurant (pickup point) |
 | GET | `/restaurants` | List restaurants |
 | GET | `/restaurants/{id}` | Get one restaurant |
+| PATCH | `/restaurants/{id}/pickup-point` | **The owner sets their door (#358)**: coordinates alone = the dragged pin (`owner_verified` — the geocoder is never consulted against the owner's hand); address alone = geocoded + self-verified (`geocoded`, with the witnesses' verdict); both = the dragged coordinates are the truth, the typed text rides along as the label. Response carries `pin_source` + `precision` so the portal badges it like the checkout. Writer token; tenant-scoped |
 | GET | `/restaurants/{id}/qr` | The restaurant's shareable ordering link as an SVG QR code (#230): pass the public `url` to encode (the portal builds it from its own origin). Pure-python generation, no external service; tenant-scoped |
 | GET | `/restaurants/{id}/reviews` | The restaurant's reviews (#216): newest first with the running average (open GET, tenant-scoped). Ratings are captured on the storefront after delivery — one per order, database-enforced |
 | GET | `/restaurants/{id}/sales-snapshot` | The restaurant's OWN numbers for the business day (#219): `delivered_orders`, `revenue`, `avg_delivery_minutes` (computed in the deployment's business timezone; delivered-only), `rating_average` (null until reviews land). A live ops-slice per request — the analytical version belongs to the dashboard and the marts |

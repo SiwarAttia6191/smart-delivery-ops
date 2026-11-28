@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from apps.api.schemas.common import LatLonMixin, ORMModel
 
@@ -17,8 +17,45 @@ class RestaurantResponse(ORMModel):
     name: str
     latitude: float
     longitude: float
+    # the pickup identity (#358): the typed address is the label, the
+    # coordinates are the truth, and pin_source records who vouched -
+    # imported / geocoded / owner_verified (NULL = pre-#358 row)
+    address: str | None = None
+    pin_source: str | None = None
     is_active: bool
     created_at: datetime
+
+
+class PickupPointUpdate(BaseModel):
+    """The owner sets their door (#358). Coordinates alone = the dragged
+    pin (owner_verified - the geocoder is never consulted against the
+    owner's hand). Address alone = geocoded + self-verified. BOTH = the
+    dragged coordinates are the truth, the typed text rides along as the
+    label - the same contract the customer checkout uses."""
+
+    pickup_latitude: float | None = Field(None, ge=-90, le=90)
+    pickup_longitude: float | None = Field(None, ge=-180, le=180)
+    address: str | None = Field(None, max_length=300)
+
+    @model_validator(mode="after")
+    def check_pickup(self) -> "PickupPointUpdate":
+        has_coords = self.pickup_latitude is not None and self.pickup_longitude is not None
+        if not has_coords and self.address is None:
+            raise ValueError("provide pickup coordinates, an address, or both")
+        if has_coords != (self.pickup_longitude is not None):
+            raise ValueError("pickup coordinates come as a pair")
+        return self
+
+
+class PickupPointResponse(BaseModel):
+    """What the door now is, with the verification verdict attached - the
+    portal badges it exactly like the customer's checkout."""
+
+    latitude: float
+    longitude: float
+    address: str | None = None
+    pin_source: str
+    precision: str
 
 
 class SalesSnapshot(BaseModel):

@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 from apps.api.deps import get_db, require_writer
 from apps.api.schemas.order import RestaurantReviews
 from apps.api.schemas.restaurant import (
+    PickupPointResponse,
+    PickupPointUpdate,
     RestaurantCreate,
     RestaurantResponse,
     SalesSnapshot,
@@ -14,7 +16,7 @@ from apps.api.schemas.restaurant import (
 )
 from core.exceptions import NotFoundError
 from domain.models import Restaurant
-from domain.services import review_service, sales_service, tenant_service
+from domain.services import geocoder, review_service, sales_service, tenant_service
 
 router = APIRouter(prefix="/restaurants", tags=["restaurants"])
 
@@ -42,6 +44,58 @@ def create_restaurant(payload: RestaurantCreate, db: Session = Depends(get_db)) 
 @router.get("", response_model=list[RestaurantResponse])
 def list_restaurants(db: Session = Depends(get_db)) -> list[Restaurant]:
     return list(db.scalars(select(Restaurant).order_by(Restaurant.id)))
+
+
+@router.patch(
+    "/{restaurant_id}/pickup-point",
+    response_model=PickupPointResponse,
+    dependencies=[Depends(require_writer)],
+)
+def update_pickup_point(
+    restaurant_id: int,
+    payload: PickupPointUpdate,
+    db: Session = Depends(get_db),
+) -> PickupPointResponse:
+    """The owner sets their door (#358): the pickup identity, verified the
+    same way the dropoff is. Coordinates alone = the dragged pin — the
+    geocoder is never consulted against the owner's hand (`owner_verified`).
+    Address alone = geocoded + self-verified (`geocoded`, with the witnesses'
+    verdict — the portal tells the owner to check the pin when it flags).
+    BOTH = the dragged coordinates are the truth, the typed text rides along
+    as the label. Tenant-scoped like every write: another tenant's
+    restaurant is the uniform 404."""
+    tid = tenant_service.context_tenant_id(db)
+    restaurant = (
+        db.query(Restaurant)
+        .filter(Restaurant.id == restaurant_id, Restaurant.tenant_id == tid)
+        .one_or_none()
+    )
+    if restaurant is None:
+        raise NotFoundError(f"restaurant {restaurant_id} not found")
+
+    new_lat = payload.pickup_latitude
+    new_lon = payload.pickup_longitude
+    if new_lat is not None and new_lon is not None:
+        restaurant.latitude = new_lat
+        restaurant.longitude = new_lon
+        restaurant.pin_source = "owner_verified"
+        precision = "owner_verified"
+    else:
+        resolved = geocoder.geocode(db, payload.address or "")
+        restaurant.latitude = resolved["lat"]
+        restaurant.longitude = resolved["lon"]
+        restaurant.pin_source = "geocoded"
+        precision = resolved["precision"]
+    restaurant.address = payload.address
+
+    db.commit()
+    return PickupPointResponse(
+        latitude=restaurant.latitude,
+        longitude=restaurant.longitude,
+        address=restaurant.address,
+        pin_source=restaurant.pin_source,
+        precision=precision,
+    )
 
 
 @router.get("/{restaurant_id}", response_model=RestaurantResponse)

@@ -20,6 +20,12 @@ class Restaurant(Base):
     name: Mapped[str] = mapped_column(String(120), index=True)
     latitude: Mapped[float] = mapped_column(Float)
     longitude: Mapped[float] = mapped_column(Float)
+    # the pickup identity (#358): where the door actually is, and who vouched
+    # for it - "imported" (onboarding data), "geocoded" (resolved from the
+    # typed address) or "owner_verified" (the owner dragged the pin onto
+    # their door: the person who knows the door is the final witness)
+    address: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    pin_source: Mapped[str | None] = mapped_column(String(20), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
 

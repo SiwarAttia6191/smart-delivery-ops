@@ -195,15 +195,25 @@ def audit_pickups(session, settings, last_request: list[float]) -> list[dict]:
                 verdict = "street_check"
         else:
             verdict = "unverified"
+        # the owner's hand is the final witness (#358): a point the owner
+        # personally set reads owner_verified — the witnesses' opinion is
+        # SHOWN (the operator still wants to see it) but a disagreement is
+        # a note, not a flag. The person who knows the door outranks both.
+        owner_set = restaurant.pin_source == "owner_verified"
+        if owner_set and verdict == "street_check":
+            verdict = "owner_verified"
         snap_note = (
             f"{snap_road or '-'} ({snap_distance:.0f} m)" if snap_distance is not None else "-"
         )
         doors_note = f"doors {doors}" if doors is not None else "doors n/a (Overpass down)"
+        provenance = f"pin: {restaurant.pin_source or 'imported'}"
         reports.append(
             {
                 "address": f"pickup · {restaurant.name}",
                 "verdict": verdict,
-                "detail": f"{snap_note} · reverse: {reverse_road or '-'} · {doors_note}",
+                "detail": (
+                    f"{snap_note} · reverse: {reverse_road or '-'} · {doors_note} · {provenance}"
+                ),
             }
         )
     return reports
