@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 
 from apps.api.rate_limit import RateLimitMiddleware
 from apps.api.routes import (
+    addresses,
     analytics,
     auth,
     city_config,
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
         return JSONResponse(status_code=exc.status_code, content={"error": body})
 
     for router in (
+        addresses.router,
         health.router,
         auth.router,
         menu.router,

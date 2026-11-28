@@ -96,8 +96,10 @@
           the demand forecasts.</p>
         <div class="field-grid two">
           <div class="field" style="grid-column: 1 / -1;">
-            <label for="addr"><span>Dropoff address (typed text is geocoded and self-checked; after a quote you can drag the pin — the pin wins)</span></label>
-            <input id="addr" type="text" placeholder="e.g. Plaza Mayor 1, Madrid" />
+            <label for="addr"><span>Dropoff address (typeahead suggests real addresses; the text is geocoded and self-checked; after a quote you can drag the pin — the pin wins)</span></label>
+            <input id="addr" type="text" list="addr-suggestions" autocomplete="off"
+                   placeholder="e.g. Plaza Mayor 1, Madrid" />
+            <datalist id="addr-suggestions"></datalist>
           </div>
           <div class="field">
             <label for="lat"><span>Dropoff latitude</span></label>
@@ -434,6 +436,25 @@
       table.innerHTML = html;
       table.hidden = false;
     }
+
+    // ── the #365 typeahead: suggest REAL addresses while typing — prevent
+    // the typo before the geocoder resolves it. The selection only fills
+    // the field: the resolution still goes through the two-witness
+    // verification, so prevention and detection never bypass each other. ──
+    let sugTimer = null;
+    $("addr").addEventListener("input", () => {
+      if (sugTimer) clearTimeout(sugTimer);
+      const q = $("addr").value.trim();
+      if (q.length < 3) return;
+      sugTimer = setTimeout(async () => {
+        try {
+          const body = await api("/address-suggestions?q=" + encodeURIComponent(q));
+          $("addr-suggestions").innerHTML = (body.suggestions || [])
+            .map((label) => '<option value="' + label.replace(/"/g, "&quot;") + '"></option>')
+            .join("");
+        } catch { /* the typeahead never breaks typing */ }
+      }, 300);
+    });
 
     async function quote() {
       hideBanner();
