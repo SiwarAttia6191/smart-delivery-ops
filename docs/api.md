@@ -63,6 +63,12 @@ comes from X-Forwarded-For.
 | GET | `/restaurants/{id}/reviews` | The restaurant's reviews (#216): newest first with the running average (open GET, tenant-scoped). Ratings are captured on the storefront after delivery — one per order, database-enforced |
 | GET | `/restaurants/{id}/sales-snapshot` | The restaurant's OWN numbers for the business day (#219): `delivered_orders`, `revenue`, `avg_delivery_minutes` (computed in the deployment's business timezone; delivered-only), `rating_average` (null until reviews land). A live ops-slice per request — the analytical version belongs to the dashboard and the marts |
 
+## Addresses
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/address-suggestions?q=` | **The typeahead (#365)**: top-5 completion LABELS for a partially typed address, over the same Nominatim provider the geocoder uses (same country bias, same fair-use posture; hot prefixes cached 60 s). Labels only — a selection fills the field and the resolution still runs through the two-witness verification (#343); typeahead PREVENTS, the layer DETECTS, neither bypasses the other. Queries shorter than 3 characters are 422; provider down = **200 with an empty list** (the typeahead never breaks typing) |
+
 ## Drivers
 
 | Method | Path | Description |
