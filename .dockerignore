@@ -24,6 +24,10 @@ docs/*
 !docs/onboarding-wizard.html
 !docs/demos.html
 !docs/styles.css
+!docs/guides
+!docs/guides/*.md
+!docs/guides/assets
+!docs/guides/assets/*.png
 !docs/product.html
 tests
 .github
