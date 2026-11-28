@@ -378,7 +378,38 @@ python scripts/verify_city_addresses.py --restaurants
 ```
 
 Exit code 1 when anything is flagged — CI-able as the city-onboarding
-gate. Sound-bite: *the router lied first (5,569 km), so we gated the
+gate.
+
+### Does this generalize beyond Madrid — and beyond OSRM?
+
+Yes, by construction, and it is worth being precise about where the
+generality comes from:
+
+- **Any city** — nothing in the pipeline knows Madrid. The witnesses ask
+  a generic question ("which street is this point on, how far from any
+  road?") and compare token sets with generic street-word stripping; the
+  same code verifies "Avenue Habib Bourguiba" or a medina alley as
+  verifies Fuencarral. The decisive witness — the router graph — is
+  loaded FROM the city's own extract, so its knowledge is whatever
+  city's map you fed it. The numbers are topology knobs, documented as
+  such: the 150 m off-network threshold, the 15× router-probe ratio
+  (dense one-way centers run higher legitimate ratios), and the
+  pedestrian-square word list for the plaza address shape — extend it
+  per language (piazza, platz, square, ساحة…).
+- **Any routing provider** — the snap witness's QUESTION is
+  provider-free, and every serious engine answers it: OSRM `/nearest`
+  today; Valhalla `/locate`, Google and HERE snapped-road lookups behind
+  the same seam. The coupling to keep honest is the endpoint SHAPE,
+  which is OSRM's today — issue #333 (the routing provider seam) is
+  where `_snap()` becomes `provider.snap_point(lat, lon)` and the
+  geocoder stops caring which engine answered.
+- **The strongest witness is provider-free entirely** — the dragged pin:
+  the customer at checkout, the owner at onboarding. A human placing
+  their own door needs no map data at all, in every city, over every
+  engine. When the machines disagree or abstain, the human is the
+  verification.
+
+Sound-bite: *the router lied first (5,569 km), so we gated the
 captures; the geocoder lied next (the parallel street), so we gated the
 resolutions — every component that answers questions about the physical
 world owes a verification trail, because its cache is a liability, not
