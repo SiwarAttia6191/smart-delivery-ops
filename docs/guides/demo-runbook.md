@@ -7,6 +7,11 @@ attached as evidence. Total run: ~15 minutes. Pre-flight: the stack is up
 (`GET /health` returns ok), and open each surface fresh (the pages always
 revalidate, so a reload is always current).
 
+> **On demo day you open one page: `/storefront/guides/demo-runbook.html` —
+> the script, the talking points, the evidence, all rendered — and click
+> through the scenes from there. The demos hub (`/storefront/demos.html`)
+> links everything else.**
+
 ## How to pitch it — the day-of narrative
 
 **The opening line (before clicking anything):**
