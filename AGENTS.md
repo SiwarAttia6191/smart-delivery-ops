@@ -51,7 +51,10 @@ have each cost a real debugging round — they are not style preferences.
    comparison table** in `local/competitive-analysis-yoyumm.md` (the
    competitive re-score lives in the dated re-score block and NEVER leaves
    `local/` — see rule 7): after each work round, move the rows the work
-   changed and date the snapshot.
+   changed and date the snapshot. The same duty covers the **demo runbook**
+   (`docs/guides/demo-runbook.md`): when a round ships a customer-visible
+   feature, add or update a scene in the SAME commit — the demo must always
+   show the platform as it is, never as it was.
 9. **Never commit on main directly** — branch first, even for "tiny"
    changes. (This has slipped seven times; the recovery is
    `git branch <name> <sha>` at the commit, `git reset --hard origin/main`,
