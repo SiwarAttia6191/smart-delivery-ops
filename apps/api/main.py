@@ -137,6 +137,20 @@ def create_app() -> FastAPI:
     docs_dir = Path(__file__).resolve().parents[2] / "docs"
     app.mount("/storefront", StaticFiles(directory=str(docs_dir)), name="storefront")
 
+    # The storefront pages are SMALL html files that change on every deploy,
+    # and StaticFiles sends no Cache-Control — a browser then heuristically
+    # caches them (10% of the file's age) and runs STALE JavaScript for
+    # hours after a deploy, silently reverting shipped fixes (#356 caught
+    # live because of exactly this). no-cache = always revalidate: the ETag
+    # still avoids re-downloading unchanged files, so the cost is one
+    # conditional request per page load.
+    @app.middleware("http")
+    async def _storefront_pages_always_revalidate(request, call_next):
+        response = await call_next(request)
+        if request.url.path.startswith("/storefront") and request.url.path.endswith((".html", "/")):
+            response.headers["Cache-Control"] = "no-cache"
+        return response
+
     # The front door (#258): the API's surfaces live under /storefront/* and
     # /docs, so a bare host used to return a blank 404 — the last member of
     # the hardcoded-host/missing-door class the #219 live drive exposed.
