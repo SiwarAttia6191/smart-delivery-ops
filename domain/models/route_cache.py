@@ -37,6 +37,12 @@ class RouteCache(Base):
     coordinates: Mapped[list] = mapped_column(JSON)
     distance_m: Mapped[float] = mapped_column(Float)
     duration_s: Mapped[float] = mapped_column(Float)
+    # #371: the road's reach, measured at capture - OSRM snaps the requested
+    # points onto the drivable road, so the stored line starts/ends at the
+    # road, not at the door. These are the measured distances from the
+    # requested points to the line's actual endpoints (NULL = pre-#371 row).
+    pickup_snap_m: Mapped[float | None] = mapped_column(Float, nullable=True)
+    dropoff_snap_m: Mapped[float | None] = mapped_column(Float, nullable=True)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid

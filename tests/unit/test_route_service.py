@@ -1,5 +1,7 @@
 """route_service — per-pair capture, dedupe, and GeoJSON serving (#58)."""
 
+import pytest
+
 from domain.models import RouteCache
 from domain.services import route_service
 
@@ -50,7 +52,13 @@ def test_geojson_for_order(db, monkeypatch):
     feature = geojson["features"][0]
     assert feature["geometry"]["type"] == "LineString"
     assert feature["geometry"]["coordinates"] == GEOMETRY["coordinates"]
-    assert feature["properties"] == {"distance_m": 7645.2, "duration_s": 510.6}
+    # #371: the endpoint gaps ride the properties (measured at capture)
+    assert feature["properties"] == {
+        "distance_m": 7645.2,
+        "duration_s": 510.6,
+        "pickup_snap_m": pytest.approx(0.2, abs=1.0),
+        "dropoff_snap_m": pytest.approx(0.0, abs=1.0),
+    }
 
 
 def test_geojson_missing_pair_returns_none(db):
