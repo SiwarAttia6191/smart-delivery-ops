@@ -443,7 +443,17 @@
         // the #343 checkout: draw the resolved point and arm the pin — the
         // customer sees where the text landed BEFORE paying for it
         if (q.dropoff_latitude != null && q.dropoff_longitude != null) {
-          state.pin = { lat: q.dropoff_latitude, lon: q.dropoff_longitude, dragged: false };
+          // the customer's hand outranks a re-price click (#356, caught
+          // live): when the previous pin was DRAGGED and this quote echoes
+          // exactly those coordinates, the drag survives — resetting it
+          // here silently reverted the order to the address-only path and
+          // geocoded the wrong point the customer had already corrected
+          const prev = state.pin;
+          const dragEchoed =
+            prev && prev.dragged &&
+            Math.abs(prev.lat - q.dropoff_latitude) < 1e-6 &&
+            Math.abs(prev.lon - q.dropoff_longitude) < 1e-6;
+          state.pin = { lat: q.dropoff_latitude, lon: q.dropoff_longitude, dragged: !!dragEchoed };
           showPinMap(q.dropoff_latitude, q.dropoff_longitude);
         }
       } catch (error) {
