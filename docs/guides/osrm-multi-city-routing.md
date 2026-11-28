@@ -409,6 +409,37 @@ generality comes from:
   engine. When the machines disagree or abstain, the human is the
   verification.
 
+The whole stack on one page — machines advise, the human decides:
+
+```mermaid
+flowchart TD
+    subgraph MACHINE["machine witnesses — automatic, once per address, verdict cached"]
+        A["typed address"] --> B["Nominatim /search<br/>forward geocode"]
+        B --> C["witness 1 · Nominatim /reverse<br/>which street + door number?<br/>(can be fooled by POI anchors)"]
+        B --> D["witness 2 · OSRM /nearest<br/>ROUTER-GRAPH street name<br/>+ snap distance from the road<br/>(no POI anchor to fool)"]
+        C --> E{"verdict"}
+        D --> E
+        E --> F["ok"]
+        E --> G["street_mismatch"]
+        E --> H["number_mismatch"]
+        E --> I["off_network"]
+        E --> J["unverified"]
+    end
+    subgraph HUMAN["the human witness — provider-free, every city, every engine"]
+        F & G & H & I & J --> K["CUSTOMER at checkout<br/>sees the point + the verdict badge,<br/>DRAGS the pin onto their door"]
+        F & G & H & I & J --> L["OWNER at onboarding<br/>types the restaurant address,<br/>DRAGS the pin onto the storefront door"]
+        K --> M["customer_pinned<br/>coords = truth · text = label"]
+        L --> N["owner_verified<br/>the pickup identity, set by the<br/>person who knows the door"]
+    end
+    M --> O["the courier rides to the point<br/>a HUMAN confirmed"]
+    N --> O
+    O --> P["the city drill re-checks<br/>everything on demand (#343)"]
+```
+
+Every machine verdict — even `ok` — still ends at a human who can move
+the point: no witness is perfect, and the person who knows the door is
+the one witness that cannot be fooled.
+
 Sound-bite: *the router lied first (5,569 km), so we gated the
 captures; the geocoder lied next (the parallel street), so we gated the
 resolutions — every component that answers questions about the physical
